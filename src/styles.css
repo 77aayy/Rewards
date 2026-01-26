@@ -14,6 +14,23 @@ display: none !important;
 tfoot .col-fund {
 display: table-cell !important;
 }
+/* Hide rate column (الفئة) in table body and header - to reduce column congestion */
+tbody .col-rate,
+thead .col-rate {
+display: none !important;
+}
+/* Keep rate column visible in footer if needed */
+tfoot .col-rate {
+display: none !important; /* إخفاء من footer أيضاً */
+}
+/* Show rate column in print */
+@media print {
+tbody .col-rate,
+thead .col-rate,
+tfoot .col-rate {
+display: table-cell !important;
+}
+}
 /* Prevent unnecessary word wrapping in bonus rows and footer labels */
 #commitmentBonusText,
 #excellenceBonusText {
@@ -634,6 +651,12 @@ background: linear-gradient(90deg, rgba(64, 224, 208, 0.2) 0%, rgba(64, 224, 208
 transform: translateX(-3px);
 box-shadow: 0 2px 8px rgba(64, 224, 208, 0.2);
 }
+/* Disable hover effect on badges-row to prevent unwanted movement */
+tbody tr.badges-row:hover {
+background: linear-gradient(90deg, rgba(64, 224, 208, 0.08) 0%, rgba(64, 224, 208, 0.02) 100%) !important;
+transform: none !important;
+box-shadow: 0 1px 0 rgba(255, 255, 255, 0.1) !important;
+}
 .col-m {
 width: 60px;
 }
@@ -643,10 +666,10 @@ width: 50px;
 /* Custom checkbox size - Responsive for mobile */
 .emp-checkbox,
 .checkbox-custom {
-width: 18px !important;
-height: 18px !important;
-min-width: 18px !important;
-min-height: 18px !important;
+width: 9px !important;
+height: 9px !important;
+min-width: 9px !important;
+min-height: 9px !important;
 flex-shrink: 0;
 cursor: pointer;
 }
@@ -654,10 +677,10 @@ cursor: pointer;
 /* Larger touch target on mobile */
 .emp-checkbox,
 .checkbox-custom {
-width: 20px !important;
-height: 20px !important;
-min-width: 20px !important;
-min-height: 20px !important;
+width: 10px !important;
+height: 10px !important;
+min-width: 10px !important;
+min-height: 10px !important;
 }
 }
 .col-name {
@@ -676,12 +699,14 @@ width: 90px;
 }
 .col-rate {
 width: 80px;
+display: none !important; /* إخفاء عمود الفئة من الواجهة لتقليل الازدحام */
 }
 .col-fund {
 width: 110px;
 }
 .col-net {
-width: 150px;
+width: 250px; /* تكبير عمود الصافي لاستيعاب الملاحظات (حوافز، خصومات، إلخ) */
+min-width: 200px;
 }
 /* Filter Pills - Mobile First */
 .filter-pill, .filter-reports-pill {
@@ -804,6 +829,7 @@ font-size: 6px !important;
 .col-rate {
 width: 5% !important;
 max-width: 5% !important;
+display: table-cell !important; /* إظهار في الطباعة فقط */
 }
 .col-fund {
 width: 8% !important;
@@ -954,17 +980,23 @@ footer p span {
 color: #666 !important;
 opacity: 0.6 !important;
 }
-/* Approval Stamp for Print */
+/* Approval Stamp for Print - Hidden in screen view */
 .approval-stamp {
 display: none !important;
+visibility: hidden !important;
+opacity: 0 !important;
+position: absolute !important;
+left: -9999px !important;
 }
 @media print {
 .approval-stamp {
 display: flex !important;
-position: fixed;
-bottom: 20mm;
-left: 50%;
-transform: translateX(-50%);
+visibility: visible !important;
+opacity: 1 !important;
+position: fixed !important;
+bottom: 20mm !important;
+left: 50% !important;
+transform: translateX(-50%) !important;
 text-align: center;
 width: 120px;
 height: 120px;
@@ -1522,4 +1554,169 @@ header img:hover {
     font-size: 0.75rem !important;
     padding: 0.5rem 0.75rem !important;
   }
+}
+
+/* Discount Modal Select Styling - Dark Theme */
+#discountsModal select,
+#manageDiscountTypesModal select {
+  background-color: rgba(15, 23, 41, 0.95) !important;
+  color: #e2e8f0 !important;
+  border-color: rgba(255, 255, 255, 0.2) !important;
+  position: relative !important;
+  z-index: 10 !important;
+}
+
+/* Fix overlap issue - ensure select dropdown container has proper z-index */
+#discountsModal .glass {
+  position: relative !important;
+  z-index: 1 !important;
+  overflow: visible !important;
+}
+
+#discountsModal .glass > div {
+  position: relative !important;
+  z-index: 2 !important;
+  overflow: visible !important;
+}
+
+/* Fix grid container to allow dropdown overflow */
+#discountsModal .grid {
+  overflow: visible !important;
+  position: relative !important;
+}
+
+/* Ensure select dropdown appears above other elements */
+#discountsModal select {
+  position: relative !important;
+  z-index: 10 !important;
+}
+
+#discountsModal select:focus {
+  z-index: 30 !important;
+}
+
+/* Ensure the discount type container has higher z-index when focused */
+#discountsModal .glass:has(select:focus) {
+  z-index: 25 !important;
+}
+
+/* Ensure button next to select is always visible */
+#discountsModal button[onclick*="showManageDiscountTypesModal"] {
+  position: relative !important;
+  z-index: 35 !important;
+}
+
+/* Fix overlap on smaller screens - make grid vertical */
+@media (max-width: 768px) {
+  #discountsModal .grid.grid-cols-1.sm\\:grid-cols-2 {
+    grid-template-columns: 1fr !important;
+  }
+  
+  /* Add more spacing between grid items on mobile */
+  #discountsModal .grid.gap-3.sm\\:gap-4 {
+    gap: 1rem !important;
+  }
+}
+
+#discountsModal select option,
+#manageDiscountTypesModal select option {
+  background-color: rgba(15, 23, 41, 0.95) !important;
+  color: #e2e8f0 !important;
+  padding: 8px 12px !important;
+}
+
+#discountsModal select:focus,
+#manageDiscountTypesModal select:focus {
+  background-color: rgba(15, 23, 41, 0.95) !important;
+  color: #e2e8f0 !important;
+  border-color: rgba(239, 68, 68, 0.5) !important;
+  outline: none !important;
+}
+
+#discountsModal select:hover,
+#manageDiscountTypesModal select:hover {
+  background-color: rgba(15, 23, 41, 0.98) !important;
+  border-color: rgba(255, 255, 255, 0.3) !important;
+}
+
+/* For browsers that support styling select dropdown */
+#discountsModal select::-ms-expand,
+#manageDiscountTypesModal select::-ms-expand {
+  display: none;
+}
+
+/* Force statistics content to be visible when not hidden */
+#statisticsReportsContent:not(.hidden) {
+  display: block !important;
+  visibility: visible !important;
+  opacity: 1 !important;
+}
+
+#currentPeriodStats {
+  display: grid !important;
+  visibility: visible !important;
+  opacity: 1 !important;
+}
+
+/* Webkit browsers (Chrome, Safari) */
+#discountsModal select::-webkit-scrollbar,
+#manageDiscountTypesModal select::-webkit-scrollbar {
+  width: 8px;
+}
+
+#discountsModal select::-webkit-scrollbar-track,
+#manageDiscountTypesModal select::-webkit-scrollbar-track {
+  background: rgba(15, 23, 41, 0.5);
+}
+
+#discountsModal select::-webkit-scrollbar-thumb,
+#manageDiscountTypesModal select::-webkit-scrollbar-thumb {
+  background: rgba(64, 224, 208, 0.5);
+  border-radius: 4px;
+}
+
+#discountsModal select::-webkit-scrollbar-thumb:hover,
+#manageDiscountTypesModal select::-webkit-scrollbar-thumb:hover {
+  background: rgba(64, 224, 208, 0.7);
+}
+
+/* Discount Modal Date Input Styling - Dark Theme */
+#discountsModal input[type="date"],
+#manageDiscountTypesModal input[type="date"] {
+  background-color: rgba(15, 23, 41, 0.95) !important;
+  color: #e2e8f0 !important;
+  border-color: rgba(255, 255, 255, 0.2) !important;
+}
+
+#discountsModal input[type="date"]::-webkit-calendar-picker-indicator,
+#manageDiscountTypesModal input[type="date"]::-webkit-calendar-picker-indicator {
+  filter: invert(1);
+  cursor: pointer;
+}
+
+#discountsModal input[type="date"]:focus,
+#manageDiscountTypesModal input[type="date"]:focus {
+  background-color: rgba(15, 23, 41, 0.95) !important;
+  color: #e2e8f0 !important;
+  border-color: rgba(239, 68, 68, 0.5) !important;
+  outline: none !important;
+}
+
+#discountsModal input[type="date"]:hover,
+#manageDiscountTypesModal input[type="date"]:hover {
+  background-color: rgba(15, 23, 41, 0.98) !important;
+  border-color: rgba(255, 255, 255, 0.3) !important;
+}
+
+/* Force statistics content to be visible when not hidden */
+#statisticsReportsContent:not(.hidden) {
+  display: block !important;
+  visibility: visible !important;
+  opacity: 1 !important;
+}
+
+#currentPeriodStats {
+  display: grid !important;
+  visibility: visible !important;
+  opacity: 1 !important;
 }

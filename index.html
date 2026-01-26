@@ -51,6 +51,12 @@
                 </div>
             </div>
             <div class="flex flex-wrap gap-2 sm:gap-3 w-full sm:w-auto justify-end" id="actionBtns" style="display: none;">
+                <button onclick="showAdminManagementModal()"
+                    class="btn-modern px-4 sm:px-5 md:px-6 py-2 sm:py-2.5 md:py-3 bg-gradient-to-r from-purple-500/80 to-purple-600/80 text-white rounded-lg sm:rounded-xl text-xs sm:text-sm font-bold border border-purple-400/50 flex items-center gap-2 hover:shadow-lg hover:from-purple-500 hover:to-purple-600 transition-all backdrop-blur-sm" style="font-size: clamp(0.75rem, 2vw, 0.875rem);">
+                    <span class="text-base sm:text-lg">👥</span>
+                    <span class="hidden sm:inline">إدارة الإداريين</span>
+                    <span class="sm:hidden">إداريين</span>
+                </button>
                 <button onclick="returnToUpload()"
                     class="btn-modern px-4 sm:px-5 md:px-6 py-2 sm:py-2.5 md:py-3 bg-gradient-to-r from-red-500/80 to-red-600/80 text-white rounded-lg sm:rounded-xl text-xs sm:text-sm font-bold border border-red-400/50 flex items-center gap-2 hover:shadow-lg hover:from-red-500 hover:to-red-600 transition-all backdrop-blur-sm" style="font-size: clamp(0.75rem, 2vw, 0.875rem);">
                     <span class="text-base sm:text-lg">🚪</span>
@@ -79,6 +85,12 @@
                     <span class="text-base sm:text-lg">📊</span>
                     <span class="hidden sm:inline">التقارير</span>
                     <span class="sm:hidden">تقارير</span>
+                </button>
+                <button onclick="showDiscountsModal()"
+                    class="btn-modern px-4 sm:px-5 md:px-6 py-2 sm:py-2.5 md:py-3 bg-white/10 text-gray-200 rounded-lg sm:rounded-xl text-xs sm:text-sm font-bold border border-white/20 flex items-center gap-2 hover:bg-white/15 hover:border-red-400/40 transition-all backdrop-blur-sm" style="font-size: clamp(0.75rem, 2vw, 0.875rem);">
+                    <span class="text-base sm:text-lg">💰</span>
+                    <span class="hidden sm:inline">الخصومات</span>
+                    <span class="sm:hidden">خصومات</span>
                 </button>
                 <button onclick="showClosePeriodModal()"
                     class="btn-modern px-4 sm:px-5 md:px-6 py-2 sm:py-2.5 md:py-3 bg-gradient-to-r from-red-500/80 to-red-600/80 text-white rounded-lg sm:rounded-xl text-xs sm:text-sm font-bold border border-red-400/50 flex items-center gap-2 hover:shadow-lg hover:from-red-500 hover:to-red-600 transition-all backdrop-blur-sm" style="font-size: clamp(0.75rem, 2vw, 0.875rem);">
@@ -237,7 +249,7 @@
                         <tbody id="mainTable" class="divide-y divide-white/10"></tbody>
                         <tfoot class="bg-gradient-to-r from-white/[0.08] to-white/[0.05] font-black border-t-2 border-white/20">
                             <!-- Commitment Bonus Row -->
-                            <tr id="commitmentBonusRow" class="footer-row text-white border-b border-white/10" style="display: none;">
+                            <tr id="commitmentBonusRow" class="footer-row text-white border-b border-white/10" style="display: none !important;">
                                 <td class="checkbox-col no-print p-2"></td>
                                 <td class="col-m p-2"></td>
                                 <td class="col-name p-2 text-right text-sm font-black text-turquoise">
@@ -251,7 +263,7 @@
                                 <td id="commitmentBonusValue" class="col-net p-2 text-left px-8 text-turquoise font-bold text-base number-display">+50.00</td>
                             </tr>
                             <!-- Excellence Bonus Row -->
-                            <tr id="excellenceBonusRow" class="footer-row text-white border-b border-white/10" style="display: none;">
+                            <tr id="excellenceBonusRow" class="footer-row text-white border-b border-white/10" style="display: none !important;">
                                 <td class="checkbox-col no-print p-2"></td>
                                 <td class="col-m p-2"></td>
                                 <td class="col-name p-2 text-right text-sm font-black text-turquoise">
@@ -404,14 +416,16 @@
                         <span>📊</span>
                         <span>تقارير الموظفين</span>
                     </h2>
-                    <div class="flex items-center gap-2">
-                        <button onclick="showEmployeeCodesModal()" class="px-3 py-2 bg-turquoise/20 text-turquoise rounded-lg text-sm font-bold hover:bg-turquoise/30 transition-colors flex items-center gap-1">
-                            <span>🔑</span>
-                            <span class="hidden sm:inline font-extrabold text-lg">الأكواد</span>
+                    <div class="flex items-center gap-4">
+                        <button onclick="showEmployeeCodesModal()" class="btn-modern px-4 sm:px-5 md:px-6 py-2 sm:py-2.5 md:py-3 bg-gradient-to-r from-turquoise/80 to-teal-500/80 text-white rounded-lg sm:rounded-xl text-xs sm:text-sm font-bold border border-turquoise/30 flex items-center gap-2 hover:shadow-lg hover:from-turquoise hover:to-teal-500 transition-all backdrop-blur-sm" style="font-size: clamp(0.75rem, 2vw, 0.875rem);">
+                            <span class="text-base sm:text-lg">🔑</span>
+                            <span class="hidden sm:inline">الأكواد</span>
+                            <span class="sm:hidden">كود</span>
                         </button>
-                        <button onclick="hideReportsPage()" class="text-gray-400 hover:text-white transition-colors text-xl font-bold flex items-center gap-2">
-                            <span>←</span>
-                            <span class="text-sm">رجوع</span>
+                        <button onclick="hideReportsPage()" class="btn-modern px-4 sm:px-5 md:px-6 py-2 sm:py-2.5 md:py-3 bg-white/10 text-gray-200 rounded-lg sm:rounded-xl text-xs sm:text-sm font-bold border border-white/20 flex items-center gap-2 hover:bg-white/15 hover:border-gray-300/50 hover:text-white transition-all backdrop-blur-sm" style="font-size: clamp(0.75rem, 2vw, 0.875rem);">
+                            <span class="text-base sm:text-lg">←</span>
+                            <span class="hidden sm:inline">رجوع</span>
+                            <span class="sm:hidden">رجوع</span>
                         </button>
                     </div>
                 </div>
@@ -423,6 +437,9 @@
                     </button>
                     <button onclick="switchReportsTab('archived')" id="reportsTabArchived" class="px-4 py-2 text-sm font-bold text-gray-400 border-b-2 border-transparent hover:text-white transition-colors">
                         الفترات المغلقة
+                    </button>
+                    <button onclick="switchReportsTab('statistics')" id="reportsTabStatistics" class="px-4 py-2 text-sm font-bold text-gray-400 border-b-2 border-transparent hover:text-white transition-colors">
+                        الإحصائيات
                     </button>
                 </div>
                 
@@ -461,6 +478,54 @@
                             <option value="">-- اختر فترة --</option>
                         </select>
                     </div>
+                
+                <!-- Statistics Content -->
+                <div id="statisticsReportsContent" class="hidden">
+                    <!-- Current Period Statistics -->
+                    <div class="mb-8">
+                        <h3 class="text-xl font-black text-turquoise mb-4 flex items-center gap-2">
+                            <span>📊</span>
+                            <span>إحصائيات الفترة الحالية</span>
+                        </h3>
+                        <div id="currentPeriodStats" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
+                            <!-- Stats cards will be populated here -->
+                        </div>
+                        
+                        <!-- Employee Performance Table -->
+                        <div class="glass p-4 rounded-xl border border-turquoise/30 mt-6">
+                            <h4 class="text-lg font-bold text-white mb-4">جدول تقييم الموظفين</h4>
+                            <div class="overflow-x-auto">
+                                <table id="employeePerformanceTable" class="w-full text-sm">
+                                    <thead>
+                                        <tr class="bg-white/10 border-b border-white/20">
+                                            <th class="p-3 text-right font-bold text-turquoise">الترتيب</th>
+                                            <th class="p-3 text-right font-bold text-turquoise">اسم الموظف</th>
+                                            <th class="p-3 text-center font-bold text-turquoise">الفرع</th>
+                                            <th class="p-3 text-center font-bold text-turquoise">عدد الحجوزات</th>
+                                            <th class="p-3 text-center font-bold text-turquoise">التقييمات</th>
+                                            <th class="p-3 text-center font-bold text-turquoise">الصافي المستحق</th>
+                                            <th class="p-3 text-center font-bold text-turquoise">التقييم</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody id="employeePerformanceTableBody">
+                                        <!-- Rows will be populated here -->
+                                    </tbody>
+                                </table>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <!-- Archived Periods Statistics -->
+                    <div class="mt-8">
+                        <h3 class="text-xl font-black text-turquoise mb-4 flex items-center gap-2">
+                            <span>📈</span>
+                            <span>إحصائيات الفترات السابقة</span>
+                        </h3>
+                        <div id="archivedPeriodsStatsContainer" class="space-y-6">
+                            <!-- Each archived period will be displayed here separately -->
+                        </div>
+                    </div>
+                </div>
                     <div id="archivedPeriodInfo" class="mb-4 p-4 bg-white/5 rounded-xl border border-white/10 hidden">
                         <p class="text-sm text-gray-300">
                             <span class="font-bold text-turquoise">الفترة:</span> <span id="archivedPeriodText">-</span>
@@ -582,6 +647,44 @@
                         </li>
                     </ul>
                 </div>
+
+                <!-- قسم خصومات التقصير -->
+                <div class="bg-red-500/10 rounded-xl p-4 border border-red-500/30">
+                    <h3 class="text-lg font-bold text-red-400 mb-3 flex items-center gap-2">
+                        <span>💰</span>
+                        <span>خصومات التقصير</span>
+                    </h3>
+                    <ul class="space-y-3 text-sm text-gray-300">
+                        <li class="flex items-start gap-3">
+                            <span class="text-red-400 font-bold mt-0.5">•</span>
+                            <span class="text-red-300 font-semibold">تطبق خصومات التقصير من خلال إدارة التشغيل على الموظفين الذين يخالفون التعليمات واللوائح المعمول بها</span>
+                        </li>
+                        <li class="flex items-start gap-3">
+                            <span class="text-red-400 font-bold mt-0.5">•</span>
+                            <span>نسبة الخصم: <strong class="text-red-300">من 15% إلى 50%</strong> من المبلغ الصافي المستحق</span>
+                        </li>
+                        <li class="flex items-start gap-3">
+                            <span class="text-red-400 font-bold mt-0.5">•</span>
+                            <span>يتم تحديد نسبة الخصم الدقيقة حسب تقدير إدارة التشغيل لتأثير التقصير على سير العمل وجودة الخدمة المقدمة</span>
+                        </li>
+                        <li class="flex items-start gap-3">
+                            <span class="text-red-400 font-bold mt-0.5">•</span>
+                            <span>الحد الأدنى للخصم: <strong class="text-red-300">15%</strong> - للتقصيرات البسيطة التي لا تؤثر بشكل كبير على العمل</span>
+                        </li>
+                        <li class="flex items-start gap-3">
+                            <span class="text-red-400 font-bold mt-0.5">•</span>
+                            <span>الحد الأقصى للخصم: <strong class="text-red-300">50%</strong> - للتقصيرات الجسيمة التي تؤثر سلبياً على العمل والخدمة</span>
+                        </li>
+                        <li class="flex items-start gap-3">
+                            <span class="text-red-400 font-bold mt-0.5">•</span>
+                            <span>يتم تطبيق الخصم على المبلغ الصافي النهائي (بعد جميع الحوافز والمكافآت) ويظهر في تقرير الموظف مع بيان سبب الخصم</span>
+                        </li>
+                        <li class="flex items-start gap-3">
+                            <span class="text-red-400 font-bold mt-0.5">•</span>
+                            <span class="text-red-200 font-semibold">تسجل الخصومات في أرشيف الموظف</span>
+                        </li>
+                    </ul>
+                </div>
             </div>
                     <div class="mt-4 sm:mt-6 flex flex-col sm:flex-row gap-2 sm:gap-3 justify-end">
                         <button onclick="printConditions()" class="glass px-4 sm:px-6 py-2.5 sm:py-2 rounded-lg text-sm font-bold text-white hover:bg-white/10 transition-colors flex items-center justify-center gap-2 min-h-[44px]">
@@ -667,11 +770,204 @@
                 </h2>
                 <button onclick="closeEmployeeCodesModal()" class="text-gray-400 hover:text-white transition-colors text-2xl sm:text-3xl font-bold min-w-[44px] min-h-[44px] flex items-center justify-center">&times;</button>
             </div>
-            <div id="employeeCodesContent" class="space-y-4">
-                <!-- Employee codes will be populated here -->
+            <div id="employeeCodesContent" class="space-y-6">
+                <!-- Employee Codes Section -->
+                <div>
+                    <h3 class="text-lg font-bold text-turquoise mb-4 flex items-center gap-2">
+                        <span>👤</span>
+                        <span>أكواد الموظفين</span>
+                    </h3>
+                    <div id="employeeCodesList" class="space-y-3">
+                        <!-- Employee codes will be populated here -->
+                    </div>
+                </div>
+                
+                <!-- Admin Links Section -->
+                <div class="border-t border-white/10 pt-6">
+                    <h3 class="text-lg font-bold text-purple-400 mb-4 flex items-center gap-2">
+                        <span>👥</span>
+                        <span>روابط الإداريين</span>
+                    </h3>
+                    <div id="adminLinksList" class="space-y-3">
+                        <!-- Admin links will be populated here -->
+                    </div>
+                </div>
             </div>
             <div class="mt-4 sm:mt-6 flex justify-end">
                 <button onclick="closeEmployeeCodesModal()" class="glass px-4 sm:px-6 py-2.5 sm:py-2 rounded-lg text-sm font-bold text-gray-300 hover:bg-white/10 transition-colors min-h-[44px]">
+                    إغلاق
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Admin Management Modal -->
+    <div id="adminManagementModal" class="fixed inset-0 z-[1004] hidden items-center justify-center bg-black/70 backdrop-blur-sm" onclick="closeAdminManagementModal(event)" style="z-index: 1004 !important;">
+        <div class="glass rounded-2xl p-4 sm:p-6 md:p-8 max-w-5xl w-full mx-2 sm:mx-4 max-h-[95vh] overflow-y-auto" onclick="event.stopPropagation()" style="background: linear-gradient(135deg, rgba(15, 23, 41, 0.95) 0%, rgba(26, 31, 53, 0.95) 100%); border: 2px solid rgba(168, 85, 247, 0.5);">
+            <div class="flex items-center justify-between mb-4 sm:mb-6">
+                <h2 class="text-lg sm:text-xl md:text-2xl font-black text-purple-400 flex items-center gap-2">
+                    <span>👥</span>
+                    <span>إدارة الإداريين</span>
+                </h2>
+                <button onclick="closeAdminManagementModal()" class="text-gray-400 hover:text-white transition-colors text-2xl sm:text-3xl font-bold min-w-[44px] min-h-[44px] flex items-center justify-center">&times;</button>
+            </div>
+            <div id="adminManagementContent" class="space-y-6">
+                <!-- Admin management content will be populated here -->
+            </div>
+            <div class="mt-4 sm:mt-6 flex justify-end">
+                <button onclick="closeAdminManagementModal()" class="glass px-4 sm:px-6 py-2.5 sm:py-2 rounded-lg text-sm font-bold text-gray-300 hover:bg-white/10 transition-colors min-h-[44px]">
+                    إغلاق
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Discounts Modal -->
+    <div id="discountsModal" class="fixed inset-0 z-[1003] hidden items-center justify-center bg-black/70 backdrop-blur-sm" onclick="closeDiscountsModal(event)" style="z-index: 1003 !important;">
+        <div class="glass rounded-xl sm:rounded-2xl p-4 sm:p-5 md:p-6 max-w-3xl w-full mx-2 sm:mx-4 max-h-[90vh] overflow-y-auto" onclick="event.stopPropagation()" style="background: linear-gradient(135deg, rgba(15, 23, 41, 0.98) 0%, rgba(26, 31, 53, 0.98) 100%); border: 2px solid rgba(239, 68, 68, 0.4); box-shadow: 0 20px 60px rgba(239, 68, 68, 0.2);">
+            <!-- Header -->
+            <div class="flex items-center justify-between mb-5 pb-3 border-b border-white/10">
+                <h2 class="text-lg sm:text-xl font-black text-red-400 flex items-center gap-2">
+                    <span class="text-xl">💰</span>
+                    <span>إدارة الخصومات</span>
+                </h2>
+                <button onclick="closeDiscountsModal()" class="text-gray-400 hover:text-white transition-colors text-2xl font-bold min-w-[36px] min-h-[36px] flex items-center justify-center hover:bg-white/10 rounded-lg">&times;</button>
+            </div>
+            
+            <!-- Add Discount Form -->
+            <div class="mb-6 space-y-3">
+                <!-- Employee Selection -->
+                <div class="glass p-2.5 sm:p-3 rounded-lg border border-white/10">
+                    <label class="block text-xs font-bold text-gray-200 mb-1.5 flex items-center gap-1.5">
+                        <span class="text-turquoise">👤</span>
+                        <span>الموظف:</span>
+                    </label>
+                    <select id="discountEmployeeSelect" onchange="updateDiscountEmployeeInfo()" class="w-full px-2.5 py-2 rounded-lg text-xs sm:text-sm text-white bg-white/10 border border-white/20 focus:outline-none focus:border-red-400 focus:ring-2 focus:ring-red-400/30 transition-all min-h-[36px]">
+                        <option value="">-- اختر الموظف --</option>
+                    </select>
+                    <p class="text-[9px] text-gray-400 mt-1 flex items-center gap-1">
+                        <span>ℹ️</span>
+                        <span>الخصم يُطبق على الموظف من كل الفروع (مثل صفحة "الكل")</span>
+                    </p>
+                </div>
+                
+                <!-- Selected Employee Info -->
+                <div id="selectedEmployeeInfo" class="hidden glass p-2.5 sm:p-3 rounded-lg border border-turquoise/30 bg-gradient-to-r from-turquoise/10 to-transparent">
+                    <div class="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-1.5">
+                        <div class="space-y-1">
+                            <p class="text-xs text-gray-200">
+                                <span class="font-bold text-turquoise">الموظف:</span> 
+                                <span id="selectedEmployeeName" class="text-white font-semibold">-</span>
+                            </p>
+                            <p class="text-xs text-gray-200">
+                                <span class="font-bold text-turquoise">الصافي الحالي (مجمع):</span> 
+                                <span id="selectedEmployeeNet" class="text-white font-bold text-sm">-</span> 
+                                <span class="text-gray-400">ريال</span>
+                            </p>
+                        </div>
+                    </div>
+                </div>
+                
+                <!-- Discount Type and Percentage -->
+                <div class="grid grid-cols-1 sm:grid-cols-2 gap-2.5 sm:gap-3">
+                    <!-- Discount Type -->
+                    <div class="glass p-2.5 sm:p-3 rounded-lg border border-white/10" style="position: relative; z-index: 30;">
+                        <label class="block text-xs font-bold text-gray-200 mb-1.5 flex items-center gap-1.5">
+                            <span class="text-red-400">🏷️</span>
+                            <span>نوع الخصم:</span>
+                        </label>
+                        <div class="flex gap-1.5" style="position: relative; z-index: 30;">
+                            <select id="discountTypeSelect" class="flex-1 px-2 py-1.5 rounded-lg text-xs sm:text-sm text-white bg-white/10 border border-white/20 focus:outline-none focus:border-red-400 focus:ring-2 focus:ring-red-400/30 transition-all min-h-[36px]" style="position: relative; z-index: 30;">
+                                <option value="">-- اختر نوع الخصم --</option>
+                            </select>
+                            <button onclick="showManageDiscountTypesModal()" class="btn-modern px-2 py-1.5 bg-white/10 text-gray-200 rounded-lg text-xs font-bold border border-white/20 hover:bg-white/15 hover:border-turquoise/40 transition-all min-h-[36px] min-w-[36px] flex items-center justify-center relative z-[35]" title="إدارة أنواع الخصومات" style="z-index: 35 !important;">
+                                ⚙️
+                            </button>
+                        </div>
+                    </div>
+                    
+                    <!-- Discount Percentage -->
+                    <div class="glass p-2.5 sm:p-3 rounded-lg border border-white/10" style="position: relative; z-index: 1;">
+                        <label class="block text-xs font-bold text-gray-200 mb-1.5 flex items-center gap-1.5">
+                            <span class="text-red-400">📊</span>
+                            <span>نسبة الخصم (%):</span>
+                        </label>
+                        <input type="number" id="discountPercentageInput" min="15" max="50" step="0.1" placeholder="مثال: 15" class="w-full px-2.5 py-2 rounded-lg text-xs sm:text-sm text-white bg-white/10 border border-white/20 focus:outline-none focus:border-red-400 focus:ring-2 focus:ring-red-400/30 transition-all min-h-[36px]">
+                        <p class="text-[9px] text-gray-400 mt-1">الحد الأدنى: <span class="text-red-400 font-bold">15%</span> | الحد الأقصى: <span class="text-red-400 font-bold">50%</span></p>
+                    </div>
+                </div>
+                
+                <!-- Event Date -->
+                <div class="glass p-2.5 sm:p-3 rounded-lg border border-white/10">
+                    <label class="block text-xs font-bold text-gray-200 mb-1.5 flex items-center gap-1.5">
+                        <span class="text-red-400">📅</span>
+                        <span>تاريخ الحدث:</span>
+                    </label>
+                    <input type="date" id="discountEventDateInput" class="w-full px-2.5 py-2 rounded-lg text-xs sm:text-sm text-white bg-white/10 border border-white/20 focus:outline-none focus:border-red-400 focus:ring-2 focus:ring-red-400/30 transition-all min-h-[36px]">
+                    <p class="text-[9px] text-gray-400 mt-1">تاريخ حدوث التقصير أو المخالفة</p>
+                </div>
+                
+                <!-- Add Button -->
+                <button onclick="addDiscount()" class="btn-modern w-full px-3 py-2.5 bg-gradient-to-r from-red-500/80 to-red-600/80 text-white rounded-lg text-xs sm:text-sm font-bold border border-red-400/50 hover:shadow-lg hover:from-red-500 hover:to-red-600 transition-all backdrop-blur-sm min-h-[40px] flex items-center justify-center gap-2">
+                    <span class="text-base">➕</span>
+                    <span>إضافة خصم</span>
+                </button>
+            </div>
+            
+            <!-- Discounts List -->
+            <div class="mt-6 border-t border-white/10 pt-4">
+                <h3 class="text-sm sm:text-base font-bold text-white mb-3 flex items-center gap-2">
+                    <span class="text-red-400">📋</span>
+                    <span>الخصومات المطبقة:</span>
+                </h3>
+                <div id="discountsList" class="space-y-2 max-h-[280px] overflow-y-auto pr-2">
+                    <!-- Discounts will be populated here -->
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Manage Discount Types Modal -->
+    <div id="manageDiscountTypesModal" class="fixed inset-0 z-[1004] hidden items-center justify-center bg-black/70 backdrop-blur-sm" onclick="closeManageDiscountTypesModal(event)" style="z-index: 1004 !important;">
+        <div class="glass rounded-xl sm:rounded-2xl p-4 sm:p-5 md:p-6 max-w-2xl w-full mx-2 sm:mx-4 max-h-[90vh] overflow-y-auto" onclick="event.stopPropagation()" style="background: linear-gradient(135deg, rgba(15, 23, 41, 0.98) 0%, rgba(26, 31, 53, 0.98) 100%); border: 2px solid rgba(239, 68, 68, 0.4); box-shadow: 0 20px 60px rgba(239, 68, 68, 0.2);">
+            <!-- Header -->
+            <div class="flex items-center justify-between mb-4 sm:mb-5 pb-3 border-b border-white/10">
+                <h2 class="text-lg sm:text-xl md:text-2xl font-black text-red-400 flex items-center gap-2">
+                    <span class="text-xl sm:text-2xl">⚙️</span>
+                    <span>إدارة أنواع الخصومات</span>
+                </h2>
+                <button onclick="closeManageDiscountTypesModal()" class="text-gray-400 hover:text-white transition-colors text-2xl sm:text-3xl font-bold min-w-[40px] min-h-[40px] flex items-center justify-center hover:bg-white/10 rounded-lg">&times;</button>
+            </div>
+            
+            <!-- Add New Type -->
+            <div class="mb-5 glass p-3 sm:p-4 rounded-lg border border-white/10">
+                <label class="block text-xs sm:text-sm font-bold text-gray-200 mb-2 flex items-center gap-2">
+                    <span class="text-turquoise">➕</span>
+                    <span>إضافة نوع خصم جديد:</span>
+                </label>
+                <div class="flex gap-2">
+                    <input type="text" id="newDiscountTypeInput" placeholder="أدخل نوع خصم جديد..." class="flex-1 px-3 py-2.5 rounded-lg text-sm text-white bg-white/10 border border-white/20 focus:outline-none focus:border-red-400 focus:ring-2 focus:ring-red-400/30 transition-all min-h-[40px]">
+                    <button onclick="addDiscountType()" class="btn-modern px-4 py-2.5 bg-gradient-to-r from-red-500/80 to-red-600/80 text-white rounded-lg text-xs sm:text-sm font-bold border border-red-400/50 hover:shadow-lg hover:from-red-500 hover:to-red-600 transition-all backdrop-blur-sm min-h-[40px] flex items-center justify-center gap-2">
+                        <span>➕</span>
+                        <span class="hidden sm:inline">إضافة</span>
+                    </button>
+                </div>
+            </div>
+            
+            <!-- Types List -->
+            <div class="mb-5">
+                <h3 class="text-base sm:text-lg font-bold text-white mb-4 flex items-center gap-2">
+                    <span class="text-red-400">📋</span>
+                    <span>أنواع الخصومات المتاحة:</span>
+                </h3>
+                <div id="discountTypesList" class="space-y-2 max-h-[300px] overflow-y-auto pr-2">
+                    <!-- Discount types will be populated here -->
+                </div>
+            </div>
+            
+            <!-- Footer Buttons -->
+            <div class="mt-4 sm:mt-5 pt-4 border-t border-white/10 flex justify-end gap-2">
+                <button onclick="closeManageDiscountTypesModal()" class="btn-modern px-4 py-2 bg-white/10 text-gray-200 rounded-lg text-xs sm:text-sm font-bold border border-white/20 hover:bg-white/15 hover:border-gray-300/50 hover:text-white transition-all backdrop-blur-sm min-h-[40px]">
                     إغلاق
                 </button>
             </div>

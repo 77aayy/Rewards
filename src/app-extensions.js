@@ -1,3 +1,295 @@
+// === Admin Management Functions ===
+let adminTokens = {}; // Structure: { periodId: { supervisor: {token, name, createdAt, active}, hr: {...}, accounting: {...}, manager: {...} } }
+let currentPeriodId = null;
+
+// Generate unique token
+function generateAdminToken() {
+  return Date.now().toString(36) + Math.random().toString(36).substr(2, 9) + Math.random().toString(36).substr(2, 9);
+}
+
+// Get current period ID (based on header period range)
+function getCurrentPeriodId() {
+  const periodText = document.getElementById('headerPeriodRange')?.innerText || '';
+  if (!periodText || periodText === '-') {
+    // Generate period ID from current date
+    const now = new Date();
+    return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
+  }
+  // Use period text as ID (or generate from it)
+  return periodText.replace(/\s+/g, '-').replace(/[^a-zA-Z0-9-]/g, '');
+}
+
+// Load admin tokens from localStorage
+function loadAdminTokens() {
+  try {
+    const saved = localStorage.getItem('adora_admin_tokens');
+    if (saved) {
+      adminTokens = JSON.parse(saved);
+    }
+  } catch (error) {
+    console.error('❌ Error loading admin tokens:', error);
+    adminTokens = {};
+  }
+}
+
+// Save admin tokens to localStorage
+function saveAdminTokens() {
+  try {
+    localStorage.setItem('adora_admin_tokens', JSON.stringify(adminTokens));
+  } catch (error) {
+    console.error('❌ Error saving admin tokens:', error);
+  }
+}
+
+// Initialize admin tokens for current period
+function initializeAdminTokensForPeriod() {
+  const periodId = getCurrentPeriodId();
+  currentPeriodId = periodId;
+  
+  if (!adminTokens[periodId]) {
+    adminTokens[periodId] = {
+      supervisor: {
+        token: generateAdminToken(),
+        name: '',
+        createdAt: new Date().toISOString(),
+        active: true
+      },
+      hr: {
+        token: generateAdminToken(),
+        name: '',
+        createdAt: new Date().toISOString(),
+        active: true
+      },
+      accounting: {
+        token: generateAdminToken(),
+        name: '',
+        createdAt: new Date().toISOString(),
+        active: true
+      },
+      manager: {
+        token: generateAdminToken(),
+        name: '',
+        createdAt: new Date().toISOString(),
+        active: true
+      }
+    };
+    saveAdminTokens();
+  }
+}
+
+// Show admin management modal
+function showAdminManagementModal() {
+  const modal = document.getElementById('adminManagementModal');
+  if (!modal) return;
+  
+  initializeAdminTokensForPeriod();
+  populateAdminManagementModal();
+  
+  modal.classList.remove('hidden');
+  modal.style.display = 'flex';
+}
+
+// Close admin management modal
+function closeAdminManagementModal(event) {
+  if (event && event.target !== event.currentTarget) return;
+  const modal = document.getElementById('adminManagementModal');
+  if (modal) {
+    modal.classList.add('hidden');
+    modal.style.display = 'none';
+  }
+}
+
+// Populate admin management modal
+function populateAdminManagementModal() {
+  const container = document.getElementById('adminManagementContent');
+  if (!container) return;
+  
+  const periodId = getCurrentPeriodId();
+  const tokens = adminTokens[periodId] || {};
+  
+  const roles = [
+    { key: 'supervisor', label: 'المشرف', icon: '👨‍💼', description: 'إدخال تقييمات بوكينج وجوجل' },
+    { key: 'hr', label: 'HR', icon: '👔', description: 'تفعيل 26 يوم وإدخال أيام الحضور' },
+    { key: 'accounting', label: 'الحسابات', icon: '💰', description: 'عرض التقارير والطباعة' },
+    { key: 'manager', label: 'المدير العام', icon: '👑', description: 'عرض الإحصائيات فقط' }
+  ];
+  
+  let html = '<div class="grid grid-cols-1 md:grid-cols-2 gap-4">';
+  
+  roles.forEach(role => {
+    const admin = tokens[role.key] || { token: generateAdminToken(), name: '', createdAt: new Date().toISOString(), active: true };
+    const baseUrl = window.location.origin + window.location.pathname;
+    const link = `${baseUrl}?role=${role.key}&token=${admin.token}&period=${periodId}`;
+    
+    html += `
+      <div class="glass p-4 rounded-xl border border-purple-400/30">
+        <div class="flex items-center gap-2 mb-3">
+          <span class="text-2xl">${role.icon}</span>
+          <div>
+            <h3 class="text-lg font-bold text-purple-400">${role.label}</h3>
+            <p class="text-xs text-gray-400">${role.description}</p>
+          </div>
+        </div>
+        <div class="mb-3">
+          <label class="block text-sm font-bold text-gray-300 mb-1">اسم الإداري (اختياري):</label>
+          <input type="text" id="adminName_${role.key}" value="${admin.name || ''}" 
+            placeholder="أدخل اسم الإداري..." 
+            class="w-full px-3 py-2 rounded-lg text-sm text-white bg-white/10 border border-white/20 focus:outline-none focus:border-purple-400"
+            onchange="updateAdminName('${role.key}', this.value)">
+        </div>
+        <div class="mb-3">
+          <label class="block text-sm font-bold text-gray-300 mb-1">الرابط:</label>
+          <div class="flex gap-2">
+            <input type="text" id="adminLink_${role.key}" value="${link}" readonly
+              class="flex-1 px-3 py-2 rounded-lg text-xs text-gray-300 bg-white/5 border border-white/10">
+            <button onclick="copyAdminLink('${role.key}')" 
+              class="px-3 py-2 bg-purple-500/20 text-purple-400 rounded-lg hover:bg-purple-500/30 transition-colors text-sm font-bold">
+              📋 نسخ
+            </button>
+          </div>
+        </div>
+        <div class="flex gap-2">
+          <button onclick="regenerateAdminToken('${role.key}')" 
+            class="flex-1 px-3 py-2 bg-yellow-500/20 text-yellow-400 rounded-lg hover:bg-yellow-500/30 transition-colors text-sm font-bold">
+            🔄 إعادة توليد
+          </button>
+          <button onclick="testAdminLink('${role.key}')" 
+            class="flex-1 px-3 py-2 bg-green-500/20 text-green-400 rounded-lg hover:bg-green-500/30 transition-colors text-sm font-bold">
+            🔗 اختبار
+          </button>
+        </div>
+      </div>
+    `;
+  });
+  
+  html += '</div>';
+  container.innerHTML = html;
+}
+
+// Update admin name
+function updateAdminName(role, name) {
+  const periodId = getCurrentPeriodId();
+  if (!adminTokens[periodId]) {
+    initializeAdminTokensForPeriod();
+  }
+  if (!adminTokens[periodId][role]) {
+    adminTokens[periodId][role] = { token: generateAdminToken(), name: '', createdAt: new Date().toISOString(), active: true };
+  }
+  adminTokens[periodId][role].name = name;
+  saveAdminTokens();
+  showToast('✅ تم تحديث اسم الإداري', 'success');
+}
+
+// Copy admin link
+function copyAdminLink(role) {
+  const input = document.getElementById(`adminLink_${role}`);
+  if (input) {
+    input.select();
+    document.execCommand('copy');
+    showToast('✅ تم نسخ الرابط', 'success');
+  }
+}
+
+// Regenerate admin token
+function regenerateAdminToken(role) {
+  if (!confirm(`هل أنت متأكد من إعادة توليد رابط ${role}؟ الرابط القديم لن يعمل بعد الآن.`)) return;
+  
+  const periodId = getCurrentPeriodId();
+  if (!adminTokens[periodId]) {
+    initializeAdminTokensForPeriod();
+  }
+  adminTokens[periodId][role].token = generateAdminToken();
+  adminTokens[periodId][role].createdAt = new Date().toISOString();
+  saveAdminTokens();
+  
+  populateAdminManagementModal();
+  showToast('✅ تم إعادة توليد الرابط بنجاح', 'success');
+}
+
+// Test admin link
+function testAdminLink(role) {
+  const periodId = getCurrentPeriodId();
+  const admin = adminTokens[periodId]?.[role];
+  if (!admin) return;
+  
+  const baseUrl = window.location.origin + window.location.pathname;
+  const link = `${baseUrl}?role=${role}&token=${admin.token}&period=${periodId}`;
+  window.open(link, '_blank');
+}
+
+// Deactivate all tokens for a period (when closing period)
+function deactivatePeriodTokens(periodId) {
+  if (adminTokens[periodId]) {
+    Object.keys(adminTokens[periodId]).forEach(role => {
+      adminTokens[periodId][role].active = false;
+    });
+    saveAdminTokens();
+  }
+}
+
+// Validate admin token and role
+function validateAdminAccess(role, token, periodId) {
+  if (!adminTokens[periodId]) {
+    return { valid: false, reason: 'الفترة غير موجودة' };
+  }
+  
+  const admin = adminTokens[periodId][role];
+  if (!admin) {
+    return { valid: false, reason: 'الدور غير موجود' };
+  }
+  
+  if (admin.token !== token) {
+    return { valid: false, reason: 'الرابط غير صحيح' };
+  }
+  
+  if (!admin.active) {
+    return { valid: false, reason: 'الفترة مغلقة - الرابط غير نشط' };
+  }
+  
+  // Check if period is still current
+  const currentPeriod = getCurrentPeriodId();
+  if (periodId !== currentPeriod) {
+    return { valid: false, reason: 'الفترة المحددة لم تعد نشطة' };
+  }
+  
+  return { valid: true, admin: admin };
+}
+
+// Log admin action (audit log)
+function logAdminAction(role, action, details) {
+  const log = {
+    role: role,
+    action: action,
+    details: details,
+    timestamp: new Date().toISOString(),
+    periodId: getCurrentPeriodId()
+  };
+  
+  try {
+    let logs = [];
+    const saved = localStorage.getItem('adora_admin_logs');
+    if (saved) {
+      logs = JSON.parse(saved);
+    }
+    logs.push(log);
+    // Keep only last 1000 logs
+    if (logs.length > 1000) {
+      logs = logs.slice(-1000);
+    }
+    localStorage.setItem('adora_admin_logs', JSON.stringify(logs));
+    
+    // Also try to save to Firebase if available
+    // (Firebase code would go here)
+  } catch (error) {
+    console.error('❌ Error logging admin action:', error);
+  }
+}
+
+// Initialize admin tokens on load
+if (typeof loadAdminTokens === 'function') {
+  loadAdminTokens();
+}
+
 // === Close Period Functions ===
 function showClosePeriodModal() {
   const modal = document.getElementById('closePeriodModal');
@@ -27,6 +319,9 @@ async function confirmClosePeriod() {
     
     const periodId = reportStartDate ? reportStartDate.substring(0, 7).replace('-', '_') : 
                      new Date().toISOString().substring(0, 7).replace('-', '_');
+    
+    // Deactivate all admin tokens for this period
+    deactivatePeriodTokens(periodId);
     const periodText = document.getElementById('headerPeriodRange')?.innerText || 'غير محدد';
     const closedAt = new Date().toISOString();
     
@@ -42,22 +337,51 @@ async function confirmClosePeriod() {
         evalRate: currentEvalRate,
         startDate: reportStartDate,
         periodText: periodText,
-        employeeCodes: employeeCodesMap
+        employeeCodes: employeeCodesMap,
+        discounts: discounts || [], // Include discounts in archived period
+        discountTypes: discountTypes || [] // Include discount types in archived period
       }
     };
     
     // Upload to Firebase Storage using CDN
-    if (storage) {
+    if (storage && typeof storage.ref === 'function') {
       try {
         const storageRef = storage.ref(`periods/${periodId}.json`);
         const blob = new Blob([JSON.stringify(periodData)], { type: 'application/json' });
+        
+        // Use put() method with proper error handling
         await storageRef.put(blob);
         console.log('✅ Period uploaded to Firebase Storage');
+        
+        // Also save to localStorage as backup
+        const archivedPeriods = JSON.parse(localStorage.getItem('adora_archived_periods') || '[]');
+        const existingIndex = archivedPeriods.findIndex(p => p.periodId === periodId);
+        if (existingIndex >= 0) {
+          archivedPeriods[existingIndex] = periodData;
+        } else {
+          archivedPeriods.push(periodData);
+        }
+        if (archivedPeriods.length > 24) {
+          archivedPeriods.shift();
+        }
+        localStorage.setItem('adora_archived_periods', JSON.stringify(archivedPeriods));
+        console.log('✅ Period also saved to localStorage as backup');
       } catch (error) {
         console.error('❌ Firebase upload error:', error);
+        console.error('Error details:', {
+          code: error.code,
+          message: error.message,
+          stack: error.stack
+        });
+        
         // Fallback to localStorage
         const archivedPeriods = JSON.parse(localStorage.getItem('adora_archived_periods') || '[]');
-        archivedPeriods.push(periodData);
+        const existingIndex = archivedPeriods.findIndex(p => p.periodId === periodId);
+        if (existingIndex >= 0) {
+          archivedPeriods[existingIndex] = periodData;
+        } else {
+          archivedPeriods.push(periodData);
+        }
         if (archivedPeriods.length > 24) {
           archivedPeriods.shift();
         }
@@ -66,8 +390,14 @@ async function confirmClosePeriod() {
       }
     } else {
       // Fallback: Save to localStorage
+      console.warn('⚠️ Firebase Storage not available, using localStorage only');
       const archivedPeriods = JSON.parse(localStorage.getItem('adora_archived_periods') || '[]');
-      archivedPeriods.push(periodData);
+      const existingIndex = archivedPeriods.findIndex(p => p.periodId === periodId);
+      if (existingIndex >= 0) {
+        archivedPeriods[existingIndex] = periodData;
+      } else {
+        archivedPeriods.push(periodData);
+      }
       if (archivedPeriods.length > 24) {
         archivedPeriods.shift();
       }
@@ -88,80 +418,157 @@ async function confirmClosePeriod() {
 // === Employee Codes Modal Functions ===
 function showEmployeeCodesModal() {
   const modal = document.getElementById('employeeCodesModal');
-  const content = document.getElementById('employeeCodesContent');
-  if (!modal || !content) return;
+  const employeeCodesList = document.getElementById('employeeCodesList');
+  const adminLinksList = document.getElementById('adminLinksList');
+  if (!modal) return;
   
-  const uniqueEmployees = new Map();
-  db.forEach(emp => {
-    if (!uniqueEmployees.has(emp.name)) {
-      uniqueEmployees.set(emp.name, emp);
-    }
-  });
+  // Load admin tokens
+  if (typeof loadAdminTokens === 'function') {
+    loadAdminTokens();
+  }
+  if (typeof initializeAdminTokensForPeriod === 'function') {
+    initializeAdminTokensForPeriod();
+  }
   
-  const sortedEmployees = Array.from(uniqueEmployees.values()).sort((a, b) => a.name.localeCompare(b.name));
-  
-  // Get period text for WhatsApp message
-  const periodText = document.getElementById('headerPeriodRange')?.innerText || 'غير محدد';
-  
-  let html = '<div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">';
-  sortedEmployees.forEach(emp => {
-    const code = emp.employeeCode || employeeCodesMap[emp.name] || 'N/A';
-    const url = `${window.location.origin}${window.location.pathname}?code=${code}`;
-    html += `
-      <div class="glass p-5 rounded-xl border border-white/20 hover:border-turquoise/50 transition-all">
-        <div class="text-center">
-          <div class="text-lg font-bold text-white mb-2">${emp.name}</div>
-          <div class="text-2xl font-black text-turquoise mb-4">${code}</div>
-          <div class="flex justify-center mb-3">
-            <div class="qr-code-container">
-              <div id="qrcode-${code}" class="qr-code-wrapper"></div>
-              <div class="qr-code-overlay">
-                <div class="qr-logo">💎</div>
-              </div>
-            </div>
-          </div>
-          <button onclick="sendWhatsAppMessage('${code}', '${emp.name}', '${periodText}', '${url}')" 
-            class="mt-3 w-full bg-green-500 hover:bg-green-600 text-white font-bold py-2 px-4 rounded-lg flex items-center justify-center gap-2 transition-all">
-            <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor">
-              <path d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51-.173-.008-.371-.01-.57-.01-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347m-5.421 7.403h-.004a9.87 9.87 0 01-5.031-1.378l-.361-.214-3.741.982.998-3.648-.235-.374a9.86 9.86 0 01-1.51-5.26c.001-5.45 4.436-9.884 9.888-9.884 2.64 0 5.122 1.03 6.988 2.898a9.825 9.825 0 012.893 6.994c-.003 5.45-4.437 9.884-9.885 9.884m8.413-18.297A11.815 11.815 0 0012.05 0C5.495 0 .16 5.335.157 11.892c0 2.096.547 4.142 1.588 5.945L.057 24l6.305-1.654a11.882 11.882 0 005.683 1.448h.005c6.554 0 11.89-5.335 11.893-11.893a11.821 11.821 0 00-3.48-8.413Z"/>
-            </svg>
-            <span>إرسال عبر واتساب</span>
-          </button>
-          <a href="${url}" target="_blank" class="mt-2 text-xs text-turquoise hover:underline inline-flex items-center gap-1">
-            <span>افتح الرابط</span>
-            <span>🔗</span>
-          </a>
-        </div>
-      </div>
-    `;
-  });
-  html += '</div>';
-  
-  content.innerHTML = html;
-  
-  setTimeout(() => {
-    sortedEmployees.forEach(emp => {
-      const code = emp.employeeCode || employeeCodesMap[emp.name];
-      if (code && typeof QRCode !== 'undefined') {
-        const qrElement = document.getElementById(`qrcode-${code}`);
-        if (qrElement && !qrElement.querySelector('canvas')) {
-          const url = `${window.location.origin}${window.location.pathname}?code=${code}`;
-          new QRCode(qrElement, {
-            text: url,
-            width: 200,
-            height: 200,
-            colorDark: '#0f172a',
-            colorLight: '#ffffff',
-            correctLevel: QRCode.CorrectLevel.H,
-            margin: 3
-          });
-        }
+  // Populate employee codes
+  if (employeeCodesList) {
+    const uniqueEmployees = new Map();
+    db.forEach(emp => {
+      if (!uniqueEmployees.has(emp.name)) {
+        uniqueEmployees.set(emp.name, emp);
       }
     });
-  }, 100);
+    
+    const sortedEmployees = Array.from(uniqueEmployees.values()).sort((a, b) => a.name.localeCompare(b.name));
+    const periodText = document.getElementById('headerPeriodRange')?.innerText || 'غير محدد';
+    
+    let html = '<div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">';
+    sortedEmployees.forEach(emp => {
+      const code = emp.employeeCode || employeeCodesMap[emp.name] || 'N/A';
+      const url = `${window.location.origin}${window.location.pathname}?code=${code}`;
+      html += `
+        <div class="glass p-5 rounded-xl border border-white/20 hover:border-turquoise/50 transition-all">
+          <div class="text-center">
+            <div class="text-lg font-bold text-white mb-2">${emp.name}</div>
+            <div class="text-2xl font-black text-turquoise mb-4">${code}</div>
+            <div class="flex justify-center mb-3">
+              <div class="qr-code-container">
+                <div id="qrcode-${code}" class="qr-code-wrapper"></div>
+                <div class="qr-code-overlay">
+                  <div class="qr-logo">💎</div>
+                </div>
+              </div>
+            </div>
+            <button onclick="sendWhatsAppMessage('${code}', '${emp.name}', '${periodText}', '${url}')" 
+              class="mt-3 w-full bg-green-500 hover:bg-green-600 text-white font-bold py-2 px-4 rounded-lg flex items-center justify-center gap-2 transition-all">
+              <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor">
+                <path d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51-.173-.008-.371-.01-.57-.01-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347m-5.421 7.403h-.004a9.87 9.87 0 01-5.031-1.378l-.361-.214-3.741.982.998-3.648-.235-.374a9.86 9.86 0 01-1.51-5.26c.001-5.45 4.436-9.884 9.888-9.884 2.64 0 5.122 1.03 6.988 2.898a9.825 9.825 0 012.893 6.994c-.003 5.45-4.437 9.884-9.885 9.884m8.413-18.297A11.815 11.815 0 0012.05 0C5.495 0 .16 5.335.157 11.892c0 2.096.547 4.142 1.588 5.945L.057 24l6.305-1.654a11.882 11.882 0 005.683 1.448h.005c6.554 0 11.89-5.335 11.893-11.893a11.821 11.821 0 00-3.48-8.413Z"/>
+              </svg>
+              <span>إرسال عبر واتساب</span>
+            </button>
+            <a href="${url}" target="_blank" class="mt-2 text-xs text-turquoise hover:underline inline-flex items-center gap-1">
+              <span>افتح الرابط</span>
+              <span>🔗</span>
+            </a>
+          </div>
+        </div>
+      `;
+    });
+    html += '</div>';
+    employeeCodesList.innerHTML = html;
+    
+    setTimeout(() => {
+      sortedEmployees.forEach(emp => {
+        const code = emp.employeeCode || employeeCodesMap[emp.name];
+        if (code && typeof QRCode !== 'undefined') {
+          const qrElement = document.getElementById(`qrcode-${code}`);
+          if (qrElement && !qrElement.querySelector('canvas')) {
+            const url = `${window.location.origin}${window.location.pathname}?code=${code}`;
+            new QRCode(qrElement, {
+              text: url,
+              width: 200,
+              height: 200,
+              colorDark: '#0f172a',
+              colorLight: '#ffffff',
+              correctLevel: QRCode.CorrectLevel.H,
+              margin: 3
+            });
+          }
+        }
+      });
+    }, 100);
+  }
+  
+  // Populate admin links
+  if (adminLinksList && typeof getCurrentPeriodId === 'function') {
+    const periodId = getCurrentPeriodId();
+    const tokens = adminTokens[periodId] || {};
+    
+    const roles = [
+      { key: 'supervisor', label: 'المشرف', icon: '👨‍💼' },
+      { key: 'hr', label: 'HR', icon: '👔' },
+      { key: 'accounting', label: 'الحسابات', icon: '💰' },
+      { key: 'manager', label: 'المدير العام', icon: '👑' }
+    ];
+    
+    let html = '<div class="grid grid-cols-1 md:grid-cols-2 gap-4">';
+    roles.forEach(role => {
+      const admin = tokens[role.key];
+      if (admin) {
+        const baseUrl = window.location.origin + window.location.pathname;
+        const link = `${baseUrl}?role=${role.key}&token=${admin.token}&period=${periodId}`;
+        html += `
+          <div class="glass p-4 rounded-xl border border-purple-400/30">
+            <div class="flex items-center gap-2 mb-3">
+              <span class="text-2xl">${role.icon}</span>
+              <h4 class="text-lg font-bold text-purple-400">${role.label}</h4>
+              ${admin.name ? `<span class="text-xs text-gray-400">(${admin.name})</span>` : ''}
+            </div>
+            <div class="mb-3">
+              <div class="flex gap-2">
+                <input type="text" value="${link}" readonly
+                  class="flex-1 px-3 py-2 rounded-lg text-xs text-gray-300 bg-white/5 border border-white/10">
+                <button onclick="copyAdminLinkFromCodes('${role.key}')" 
+                  class="px-3 py-2 bg-purple-500/20 text-purple-400 rounded-lg hover:bg-purple-500/30 transition-colors text-sm font-bold">
+                  📋
+                </button>
+              </div>
+            </div>
+            <a href="${link}" target="_blank" class="block text-center px-3 py-2 bg-purple-500/20 text-purple-400 rounded-lg hover:bg-purple-500/30 transition-colors text-sm font-bold">
+              🔗 فتح الرابط
+            </a>
+          </div>
+        `;
+      }
+    });
+    html += '</div>';
+    adminLinksList.innerHTML = html;
+  }
   
   modal.classList.remove('hidden');
   modal.style.display = 'flex';
+}
+
+function copyAdminLinkFromCodes(role) {
+  const periodId = getCurrentPeriodId();
+  const admin = adminTokens[periodId]?.[role];
+  if (!admin) return;
+  
+  const baseUrl = window.location.origin + window.location.pathname;
+  const link = `${baseUrl}?role=${role}&token=${admin.token}&period=${periodId}`;
+  
+  navigator.clipboard.writeText(link).then(() => {
+    showToast('✅ تم نسخ الرابط', 'success');
+  }).catch(() => {
+    // Fallback
+    const input = document.createElement('input');
+    input.value = link;
+    document.body.appendChild(input);
+    input.select();
+    document.execCommand('copy');
+    document.body.removeChild(input);
+    showToast('✅ تم نسخ الرابط', 'success');
+  });
 }
 
 function closeEmployeeCodesModal(event) {
@@ -357,25 +764,75 @@ function switchReportsTab(tab) {
   currentReportsTab = tab;
   const currentTab = document.getElementById('reportsTabCurrent');
   const archivedTab = document.getElementById('reportsTabArchived');
+  const statisticsTab = document.getElementById('reportsTabStatistics');
   const currentContent = document.getElementById('currentReportsContent');
   const archivedContent = document.getElementById('archivedReportsContent');
+  const statisticsContent = document.getElementById('statisticsReportsContent');
+  
+  // Ensure actionBtns stays hidden when reports page is open
+  const actionBtns = document.getElementById('actionBtns');
+  if (actionBtns) {
+    actionBtns.style.display = 'none';
+    actionBtns.style.setProperty('display', 'none', 'important');
+  }
+  
+  // Reset all tabs
+  [currentTab, archivedTab, statisticsTab].forEach(t => {
+    if (t) {
+      t.classList.remove('text-turquoise', 'border-turquoise');
+      t.classList.add('text-gray-400', 'border-transparent');
+    }
+  });
+  
+  // Hide all content
+  [currentContent, archivedContent, statisticsContent].forEach(c => {
+    if (c) c.classList.add('hidden');
+  });
   
   if (tab === 'current') {
-    currentTab.classList.add('text-turquoise', 'border-turquoise');
-    currentTab.classList.remove('text-gray-400', 'border-transparent');
-    archivedTab.classList.remove('text-turquoise', 'border-turquoise');
-    archivedTab.classList.add('text-gray-400', 'border-transparent');
-    currentContent.classList.remove('hidden');
-    archivedContent.classList.add('hidden');
+    if (currentTab) {
+      currentTab.classList.add('text-turquoise', 'border-turquoise');
+      currentTab.classList.remove('text-gray-400', 'border-transparent');
+    }
+    if (currentContent) currentContent.classList.remove('hidden');
     populateReportsPage();
-  } else {
-    archivedTab.classList.add('text-turquoise', 'border-turquoise');
-    archivedTab.classList.remove('text-gray-400', 'border-transparent');
-    currentTab.classList.remove('text-turquoise', 'border-turquoise');
-    currentTab.classList.add('text-gray-400', 'border-transparent');
-    archivedContent.classList.remove('hidden');
-    currentContent.classList.add('hidden');
+  } else if (tab === 'archived') {
+    if (archivedTab) {
+      archivedTab.classList.add('text-turquoise', 'border-turquoise');
+      archivedTab.classList.remove('text-gray-400', 'border-transparent');
+    }
+    if (archivedContent) archivedContent.classList.remove('hidden');
     loadArchivedPeriodsList();
+  } else if (tab === 'statistics') {
+    if (statisticsTab) {
+      statisticsTab.classList.add('text-turquoise', 'border-turquoise');
+      statisticsTab.classList.remove('text-gray-400', 'border-transparent');
+    }
+    if (statisticsContent) {
+      // Force remove hidden class and ensure visibility
+      statisticsContent.classList.remove('hidden');
+      statisticsContent.style.display = '';
+      statisticsContent.style.visibility = '';
+      statisticsContent.style.opacity = '';
+      console.log('✅ statisticsContent is now visible, display:', window.getComputedStyle(statisticsContent).display);
+      // Force immediate load (no delay needed)
+      loadStatisticsPage();
+    } else {
+      console.error('❌ statisticsContent element not found');
+      // Try to find it again after a short delay
+      setTimeout(() => {
+        const retryContent = document.getElementById('statisticsReportsContent');
+        if (retryContent) {
+          retryContent.classList.remove('hidden');
+          retryContent.style.display = '';
+          retryContent.style.visibility = '';
+          retryContent.style.opacity = '';
+          loadStatisticsPage();
+        } else {
+          console.error('❌ statisticsContent still not found after retry');
+        }
+      }, 200);
+    }
   }
 }
 
@@ -389,20 +846,44 @@ async function loadArchivedPeriodsList() {
   try {
     let periods = [];
     
-    if (storage) {
+    if (storage && typeof storage.ref === 'function') {
       try {
         const periodsRef = storage.ref('periods/');
-        const result = await periodsRef.listAll();
         
-        for (const itemRef of result.items) {
-          const url = await itemRef.getDownloadURL();
-          const response = await fetch(url);
-          const data = await response.json();
-          periods.push(data);
+        // Check if listAll() method exists
+        if (typeof periodsRef.listAll === 'function') {
+          const result = await periodsRef.listAll();
+          
+          if (result && result.items && result.items.length > 0) {
+            for (const itemRef of result.items) {
+              try {
+                const url = await itemRef.getDownloadURL();
+                const response = await fetch(url);
+                if (response.ok) {
+                  const data = await response.json();
+                  periods.push(data);
+                } else {
+                  console.warn(`⚠️ Failed to fetch period: ${response.status}`);
+                }
+              } catch (itemError) {
+                console.warn('⚠️ Error fetching period item:', itemError.message);
+                // Continue with other items
+              }
+            }
+          }
+        } else {
+          console.warn('⚠️ listAll() method not available on storage reference');
         }
       } catch (error) {
-        console.log('⚠️ Firebase Storage not available, using localStorage');
+        console.error('❌ Firebase Storage list error:', error);
+        console.error('Error details:', {
+          code: error.code,
+          message: error.message
+        });
+        console.log('⚠️ Falling back to localStorage');
       }
+    } else {
+      console.log('⚠️ Firebase Storage not available, using localStorage');
     }
     
     if (periods.length === 0) {
@@ -435,15 +916,36 @@ async function loadArchivedPeriod(periodId) {
     
     let periodData = null;
     
-    if (storage) {
+    if (storage && typeof storage.ref === 'function') {
       try {
         const storageRef = storage.ref(`periods/${periodId}.json`);
-        const url = await storageRef.getDownloadURL();
-        const response = await fetch(url);
-        periodData = await response.json();
+        
+        // Check if getDownloadURL() method exists
+        if (typeof storageRef.getDownloadURL === 'function') {
+          const url = await storageRef.getDownloadURL();
+          const response = await fetch(url);
+          
+          if (response.ok) {
+            periodData = await response.json();
+            console.log('✅ Period loaded from Firebase Storage');
+          } else {
+            console.warn(`⚠️ Failed to fetch period: ${response.status}`);
+            throw new Error(`HTTP ${response.status}`);
+          }
+        } else {
+          console.warn('⚠️ getDownloadURL() method not available');
+          throw new Error('getDownloadURL method not available');
+        }
       } catch (error) {
-        console.log('⚠️ Firebase Storage not available, using localStorage');
+        console.error('❌ Firebase Storage load error:', error);
+        console.error('Error details:', {
+          code: error.code,
+          message: error.message
+        });
+        console.log('⚠️ Falling back to localStorage');
       }
+    } else {
+      console.log('⚠️ Firebase Storage not available, using localStorage');
     }
     
     if (!periodData) {
@@ -468,6 +970,15 @@ async function loadArchivedPeriod(periodId) {
     currentEvalRate = periodData.data.evalRate || 20;
     reportStartDate = periodData.data.startDate || null;
     employeeCodesMap = periodData.data.employeeCodes || {};
+    // Restore discounts and discount types from archived period
+    if (periodData.data.discounts) {
+      discounts = periodData.data.discounts;
+      saveDiscounts();
+    }
+    if (periodData.data.discountTypes) {
+      discountTypes = periodData.data.discountTypes;
+      saveDiscountTypes();
+    }
     
     populateArchivedReportsGrid();
     
@@ -561,23 +1072,36 @@ async function checkMobileEmployeeCode() {
   let employee = db.find(emp => (emp.employeeCode || employeeCodesMap[emp.name]) === code);
   
   // If not found in current db, try to load from Firebase Storage (last closed period)
-  if (!employee && storage) {
+  if (!employee && storage && typeof storage.ref === 'function') {
     try {
       showToast('⏳ جاري تحميل البيانات...', 'info');
       
       // Get list of all periods
       const periodsRef = storage.ref('periods/');
-      const result = await periodsRef.listAll();
       
-      if (result.items.length > 0) {
-        // Get the most recent period (last one)
-        const periods = [];
-        for (const itemRef of result.items) {
-          const url = await itemRef.getDownloadURL();
-          const response = await fetch(url);
-          const data = await response.json();
-          periods.push(data);
-        }
+      if (typeof periodsRef.listAll === 'function') {
+        const result = await periodsRef.listAll();
+        
+        if (result && result.items && result.items.length > 0) {
+          // Get the most recent period (last one)
+          const periods = [];
+          for (const itemRef of result.items) {
+            try {
+              if (typeof itemRef.getDownloadURL === 'function') {
+                const url = await itemRef.getDownloadURL();
+                const response = await fetch(url);
+                if (response.ok) {
+                  const data = await response.json();
+                  periods.push(data);
+                } else {
+                  console.warn(`⚠️ Failed to fetch period item: ${response.status}`);
+                }
+              }
+            } catch (itemError) {
+              console.warn('⚠️ Error fetching period item:', itemError.message);
+              // Continue with other items
+            }
+          }
         
         // Sort by closedAt (newest first)
         periods.sort((a, b) => new Date(b.closedAt) - new Date(a.closedAt));
@@ -638,10 +1162,19 @@ async function checkMobileEmployeeCode() {
           // Restore original data if employee not found
           db = originalDb;
           employeeCodesMap = originalEmployeeCodes;
+          }
+        } else {
+          console.warn('⚠️ No periods found in Firebase Storage or listAll() failed');
         }
+      } else {
+        console.warn('⚠️ listAll() method not available on storage reference');
       }
     } catch (error) {
       console.error('❌ Error loading from Firebase:', error);
+      console.error('Error details:', {
+        code: error.code,
+        message: error.message
+      });
     }
   }
   
@@ -752,3 +1285,1644 @@ window.addEventListener('load', () => {
     }
   }, 1000);
 });
+
+// === Discounts Management Functions ===
+// Load discounts from localStorage
+function loadDiscounts() {
+  try {
+    const saved = localStorage.getItem('adora_rewards_discounts');
+    if (saved) {
+      const loadedDiscounts = JSON.parse(saved);
+      // Update both local and window scope
+      if (typeof discounts !== 'undefined') {
+        discounts = loadedDiscounts;
+      }
+      if (typeof window !== 'undefined') {
+        window.discounts = loadedDiscounts;
+      }
+    } else {
+      // Initialize empty array
+      if (typeof discounts !== 'undefined') {
+        discounts = [];
+      }
+      if (typeof window !== 'undefined') {
+        window.discounts = [];
+      }
+    }
+  } catch (error) {
+    console.error('❌ Error loading discounts:', error);
+    // Initialize empty array on error
+    if (typeof discounts !== 'undefined') {
+      discounts = [];
+    }
+    if (typeof window !== 'undefined') {
+      window.discounts = [];
+    }
+  }
+}
+
+// Save discounts to localStorage
+function saveDiscounts() {
+  try {
+    // Get discounts from window
+    const discountsToSave = (typeof window !== 'undefined' && window.discounts) ? window.discounts : [];
+    localStorage.setItem('adora_rewards_discounts', JSON.stringify(discountsToSave));
+    // Ensure window.discounts is updated
+    if (typeof window !== 'undefined') {
+      window.discounts = discountsToSave;
+    }
+    // Update local discounts if defined
+    if (typeof discounts !== 'undefined') {
+      discounts = discountsToSave;
+    }
+  } catch (error) {
+    console.error('❌ Error saving discounts:', error);
+  }
+}
+
+// Load discount types from localStorage
+function loadDiscountTypes() {
+  try {
+    const defaultTypes = [
+      'تلقائية',
+      'تقييم سيء من نزيل',
+      'تأخير عن الحضور للعمل',
+      'عدم اتباع التعليمات المكتوبة من الإدارة',
+      'الامتناع عن إيصال ملاحظة للشفت التالي (أثرت على رضاء العميل)',
+      'عدم إبلاغ الإدارة بمشكلة في الفرع'
+    ];
+    
+    const saved = localStorage.getItem('adora_rewards_discountTypes');
+    if (saved) {
+      const savedTypes = JSON.parse(saved);
+      // Remove old types (مخالفة، قرار إداري، عدم التزام)
+      const oldTypes = ['مخالفة', 'قرار إداري', 'عدم التزام', 'تأخير'];
+      const cleanedTypes = savedTypes.filter(type => !oldTypes.includes(type));
+      
+      // Start with default types
+      discountTypes = [...defaultTypes];
+      // Add user-added types that are not in defaults
+      cleanedTypes.forEach(type => {
+        if (!defaultTypes.includes(type) && !discountTypes.includes(type)) {
+          discountTypes.push(type);
+        }
+      });
+      // Save cleaned types
+      saveDiscountTypes();
+    } else {
+      // No saved types - use defaults and save them
+      discountTypes = [...defaultTypes];
+      saveDiscountTypes();
+    }
+  } catch (error) {
+    console.error('❌ Error loading discount types:', error);
+    // Use default types
+    discountTypes = [
+      'تلقائية',
+      'تقييم سيء من نزيل',
+      'تأخير عن الحضور للعمل',
+      'عدم اتباع التعليمات المكتوبة من الإدارة',
+      'الامتناع عن إيصال ملاحظة للشفت التالي (أثرت على رضاء العميل)',
+      'عدم إبلاغ الإدارة بمشكلة في الفرع'
+    ];
+    saveDiscountTypes();
+  }
+}
+
+// Save discount types to localStorage
+function saveDiscountTypes() {
+  try {
+    localStorage.setItem('adora_rewards_discountTypes', JSON.stringify(discountTypes));
+  } catch (error) {
+    console.error('❌ Error saving discount types:', error);
+  }
+}
+
+// Get discount amount for employee in a specific branch
+// This applies discount to the branch's net, not the aggregated net
+function getDiscountForEmployeeInBranch(employeeName, branchNet) {
+  // Ensure discounts is loaded
+  if (typeof window === 'undefined' || !window.discounts) {
+    loadDiscounts();
+  }
+  const currentDiscounts = (typeof window !== 'undefined' && window.discounts) ? window.discounts : [];
+  if (!currentDiscounts || currentDiscounts.length === 0 || !branchNet || branchNet <= 0) return 0;
+  
+  // Get all discounts for this employee
+  const employeeDiscounts = currentDiscounts.filter(d => d.employeeName === employeeName);
+  if (employeeDiscounts.length === 0) return 0;
+  
+  // Calculate discount amount for this branch (apply percentage to branch net)
+  const discountAmount = employeeDiscounts.reduce((sum, discount) => {
+    return sum + (branchNet * (discount.discountPercentage / 100));
+  }, 0);
+  
+  return discountAmount;
+}
+
+// Get total discount amount for employee (sum of discounts from all branches)
+// This is used in "الكل" view to show total discount
+function getTotalDiscountForEmployee(employeeName, netBeforeDiscounts = null) {
+  // Ensure discounts is loaded
+  if (typeof window === 'undefined' || !window.discounts) {
+    loadDiscounts();
+  }
+  const currentDiscounts = (typeof window !== 'undefined' && window.discounts) ? window.discounts : [];
+  if (!currentDiscounts || currentDiscounts.length === 0) return 0;
+  
+  // Get all discounts for this employee
+  const employeeDiscounts = currentDiscounts.filter(d => d.employeeName === employeeName);
+  if (employeeDiscounts.length === 0) return 0;
+  
+  // Get all branches where this employee exists
+  const allEmpBranches = db.filter(e => e.name === employeeName);
+  if (allEmpBranches.length === 0) return 0;
+  
+  // Calculate discount for each branch separately, then sum them
+  let totalDiscount = 0;
+  allEmpBranches.forEach(emp => {
+    // Calculate net for this branch (before discounts)
+    const rate = emp.count > 100 ? 3 : (emp.count > 50 ? 2 : 1);
+    const evBooking = emp.evaluationsBooking || 0;
+    const evGoogle = emp.evaluationsGoogle || 0;
+    const gross = (emp.count * rate) + (evBooking * 20) + (evGoogle * 10);
+    const fund = gross * 0.15;
+    let branchNet = gross - fund;
+    
+    // Add attendance bonus if applicable
+    const attendance26Days = emp.attendance26Days === true;
+    const attendanceBonus = attendance26Days ? branchNet * 0.25 : 0;
+    branchNet = branchNet + attendanceBonus;
+    
+    // Calculate excellence and commitment bonuses for this branch
+    // (simplified - we'll use the bonuses from calcStats if available)
+    // For now, just use branchNet as base
+    
+    // Apply discount to this branch's net
+    const branchDiscount = employeeDiscounts.reduce((sum, discount) => {
+      return sum + (branchNet * (discount.discountPercentage / 100));
+    }, 0);
+    
+    totalDiscount += branchDiscount;
+  });
+  
+  return totalDiscount;
+}
+
+// Get discount details for employee (for display)
+function getDiscountDetailsForEmployee(employeeName) {
+  // Ensure discounts is loaded
+  if (typeof window === 'undefined' || !window.discounts) {
+    loadDiscounts();
+  }
+  const currentDiscounts = (typeof window !== 'undefined' && window.discounts) ? window.discounts : [];
+  if (!currentDiscounts || currentDiscounts.length === 0) return [];
+  
+  return currentDiscounts.filter(d => d.employeeName === employeeName);
+}
+
+// Calculate aggregated net for employee (same logic as "الكل" view)
+function calculateAggregatedNetForEmployee(employeeName) {
+  // Get all employees with this name (from all branches)
+  const allEmpBranches = db.filter(e => e.name === employeeName);
+  if (allEmpBranches.length === 0) return 0;
+  
+  // Calculate aggregated stats (same as getAggregatedStats in renderUI)
+  const aggregatedCount = allEmpBranches.reduce((sum, e) => sum + (e.count || 0), 0);
+  const aggregatedEvalBooking = allEmpBranches.reduce((sum, e) => sum + (e.evaluationsBooking || 0), 0);
+  const aggregatedEvalGoogle = allEmpBranches.reduce((sum, e) => sum + (e.evaluationsGoogle || 0), 0);
+  
+  // Calculate aggregated gross
+  const aggregatedRate = aggregatedCount > 100 ? 3 : (aggregatedCount > 50 ? 2 : 1);
+  const aggregatedGross = (aggregatedCount * aggregatedRate) + (aggregatedEvalBooking * 20) + (aggregatedEvalGoogle * 10);
+  const aggregatedFund = aggregatedGross * 0.15;
+  let baseNet = aggregatedGross - aggregatedFund;
+  
+  // Calculate aggregated attendance bonus
+  const firstEmp = allEmpBranches[0];
+  let totalDays = 0;
+  if (firstEmp && firstEmp.attendanceDaysPerBranch) {
+    totalDays = Object.values(firstEmp.attendanceDaysPerBranch).reduce((sum, d) => sum + (parseInt(d) || 0), 0);
+  } else {
+    totalDays = firstEmp?.totalAttendanceDays || (firstEmp?.attendance26Days === true ? 26 : 0);
+  }
+  const aggregatedAttendanceBonus = totalDays >= 26 && firstEmp?.attendance26Days === true ? baseNet * 0.25 : 0;
+  baseNet = baseNet + aggregatedAttendanceBonus;
+  
+  // Calculate excellence and commitment bonuses (need to recalculate branch winners)
+  const branchWinners = {};
+  [...branches].forEach(b => {
+    branchWinners[b] = { net: {val: -1, ids: []}, eval: {val: -1, ids: []}, book: {val: -1, ids: []}, attendance: {val: -1, ids: []} };
+  });
+  
+  // Recalculate branch winners (simplified version)
+  db.forEach(emp => {
+    const rate = emp.count > 100 ? 3 : (emp.count > 50 ? 2 : 1);
+    const evBooking = emp.evaluationsBooking || 0;
+    const evGoogle = emp.evaluationsGoogle || 0;
+    const gross = (emp.count * rate) + (evBooking * 20) + (evGoogle * 10);
+    const fund = gross * 0.15;
+    let net = gross - fund;
+    const attendance26Days = emp.attendance26Days === true;
+    const attendanceBonus = attendance26Days ? net * 0.25 : 0;
+    net = net + attendanceBonus;
+    
+    const bw = branchWinners[emp.branch];
+    if (!bw) return;
+    if (net > bw.net.val) { bw.net.val = net; bw.net.ids = [emp.id]; }
+    else if (net === bw.net.val) { bw.net.ids.push(emp.id); }
+    if (evBooking > bw.eval.val) { bw.eval.val = evBooking; bw.eval.ids = [emp.id]; }
+    else if (evBooking === bw.eval.val) { bw.eval.ids.push(emp.id); }
+    if (emp.count > bw.book.val) { bw.book.val = emp.count; bw.book.ids = [emp.id]; }
+    else if (emp.count === bw.book.val) { bw.book.ids.push(emp.id); }
+    if (attendance26Days) {
+      if (bw.attendance.val === -1) { bw.attendance.val = 1; bw.attendance.ids = [emp.id]; }
+      else { bw.attendance.ids.push(emp.id); }
+    }
+  });
+  
+  // Check for excellence and commitment bonuses
+  let excellenceBonus = 0;
+  let commitmentBonus = 0;
+  
+  // Check if employee has excellence bonus in any branch
+  allEmpBranches.forEach(emp => {
+    const bw = branchWinners[emp.branch];
+    if (bw?.book.ids.includes(emp.id) && bw?.eval.ids.includes(emp.id) && bw.book.val > 0 && bw.eval.val > 0) {
+      excellenceBonus = 50;
+    }
+    if (totalDays >= 26 && firstEmp?.attendance26Days === true && bw?.attendance.ids.includes(emp.id)) {
+      const isMostEval = bw?.eval.ids.includes(emp.id) && bw.eval.val > 0;
+      const isMostBook = bw?.book.ids.includes(emp.id) && bw.book.val > 0;
+      if (isMostEval || isMostBook) {
+        commitmentBonus = 50;
+      }
+    }
+  });
+  
+  const finalNet = baseNet + excellenceBonus + commitmentBonus;
+  return finalNet;
+}
+
+// Show discounts modal
+function showDiscountsModal() {
+  console.log('showDiscountsModal called');
+  const modal = document.getElementById('discountsModal');
+  if (!modal) {
+    console.error('discountsModal not found!');
+    return;
+  }
+  console.log('Modal found, showing...');
+  
+  // Load discounts and discount types
+  loadDiscounts();
+  loadDiscountTypes();
+  
+  // Populate employees list (all unique names from all branches - like "الكل" view)
+  updateDiscountEmployeesList();
+  
+  // Populate discount types
+  updateDiscountTypesSelect();
+  
+  // Populate discounts list
+  populateDiscountsList();
+  
+  // Show modal
+  modal.classList.remove('hidden');
+  modal.style.setProperty('display', 'flex', 'important');
+  modal.style.setProperty('z-index', '1003', 'important');
+  modal.style.setProperty('visibility', 'visible', 'important');
+  modal.style.setProperty('opacity', '1', 'important');
+  console.log('Modal should be visible now. Classes:', modal.className, 'Display:', window.getComputedStyle(modal).display);
+}
+
+// Close discounts modal
+function closeDiscountsModal(event) {
+  if (event && event.target !== event.currentTarget && !event.target.closest('.glass')) {
+    return;
+  }
+  const modal = document.getElementById('discountsModal');
+  if (modal) {
+    modal.classList.add('hidden');
+    modal.style.display = 'none';
+  }
+}
+
+// Update employees list (all unique names from all branches - like "الكل" view)
+function updateDiscountEmployeesList() {
+  const employeeSelect = document.getElementById('discountEmployeeSelect');
+  if (!employeeSelect) return;
+  
+  // Get unique employee names from ALL branches (like "الكل" view)
+  const uniqueEmployees = new Map();
+  
+  db.forEach(emp => {
+    if (!uniqueEmployees.has(emp.name)) {
+      uniqueEmployees.set(emp.name, emp);
+    }
+  });
+  
+  // Sort by name
+  const sortedNames = Array.from(uniqueEmployees.keys()).sort();
+  
+  employeeSelect.innerHTML = '<option value="">-- اختر الموظف --</option>';
+  sortedNames.forEach(name => {
+    const option = document.createElement('option');
+    option.value = name;
+    // Show name with branch count if duplicate
+    const allEmpBranches = db.filter(e => e.name === name);
+    const branchText = allEmpBranches.length > 1 ? ` (${allEmpBranches.length} فروع)` : '';
+    option.textContent = name + branchText;
+    employeeSelect.appendChild(option);
+  });
+  
+  // Hide employee info initially
+  const employeeInfo = document.getElementById('selectedEmployeeInfo');
+  if (employeeInfo) {
+    employeeInfo.classList.add('hidden');
+  }
+}
+
+// Update employee info when selected
+function updateDiscountEmployeeInfo() {
+  const employeeSelect = document.getElementById('discountEmployeeSelect');
+  const employeeInfo = document.getElementById('selectedEmployeeInfo');
+  
+  if (!employeeSelect || !employeeInfo) return;
+  
+  const selectedName = employeeSelect.value;
+  if (selectedName) {
+    showEmployeeDiscountInfo(selectedName);
+  } else {
+    employeeInfo.classList.add('hidden');
+  }
+}
+
+// Show employee discount info (aggregated net)
+function showEmployeeDiscountInfo(employeeName) {
+  const employeeInfo = document.getElementById('selectedEmployeeInfo');
+  const employeeNameEl = document.getElementById('selectedEmployeeName');
+  const employeeNetEl = document.getElementById('selectedEmployeeNet');
+  
+  if (!employeeInfo || !employeeNameEl || !employeeNetEl) return;
+  
+  // Calculate aggregated net
+  const aggregatedNet = calculateAggregatedNetForEmployee(employeeName);
+  
+  employeeNameEl.textContent = employeeName;
+  employeeNetEl.textContent = aggregatedNet.toFixed(2);
+  
+  employeeInfo.classList.remove('hidden');
+}
+
+// Update discount types select
+function updateDiscountTypesSelect() {
+  const select = document.getElementById('discountTypeSelect');
+  if (!select) return;
+  
+  select.innerHTML = '<option value="">-- اختر نوع الخصم --</option>';
+  discountTypes.forEach(type => {
+    const option = document.createElement('option');
+    option.value = type;
+    option.textContent = type;
+    select.appendChild(option);
+  });
+}
+
+// Add discount
+function addDiscount() {
+  const employeeSelect = document.getElementById('discountEmployeeSelect');
+  const typeSelect = document.getElementById('discountTypeSelect');
+  const percentageInput = document.getElementById('discountPercentageInput');
+  const eventDateInput = document.getElementById('discountEventDateInput');
+  
+  if (!employeeSelect || !typeSelect || !percentageInput || !eventDateInput) return;
+  
+  const employeeName = employeeSelect.value;
+  const discountType = typeSelect.value;
+  const discountPercentage = parseFloat(percentageInput.value);
+  const eventDate = eventDateInput.value;
+  
+  // Validation
+  if (!employeeName) {
+    showToast('❌ يرجى اختيار الموظف', 'error');
+    return;
+  }
+  if (!discountType) {
+    showToast('❌ يرجى اختيار نوع الخصم', 'error');
+    return;
+  }
+  if (isNaN(discountPercentage) || discountPercentage < 15 || discountPercentage > 50) {
+    showToast('❌ يرجى إدخال نسبة خصم صحيحة (15% - 50%)', 'error');
+    return;
+  }
+  if (!eventDate) {
+    showToast('❌ يرجى اختيار تاريخ الحدث', 'error');
+    return;
+  }
+  
+  // Create discount object
+  const discount = {
+    id: Date.now().toString() + Math.random().toString(36).substr(2, 9),
+    employeeName: employeeName,
+    discountType: discountType,
+    discountPercentage: discountPercentage,
+    eventDate: eventDate, // تاريخ الحدث
+    appliedAt: new Date().toISOString() // تاريخ إضافة الخصم
+  };
+  
+  // Add to discounts array
+  // Ensure discounts is defined
+  if (typeof discounts === 'undefined') {
+    loadDiscounts();
+  }
+  // Get discounts reference from window
+  if (typeof window === 'undefined' || !window.discounts) {
+    loadDiscounts();
+  }
+  const discountsRef = (typeof window !== 'undefined' && window.discounts) ? window.discounts : [];
+  discountsRef.push(discount);
+  // Update window reference
+  if (typeof window !== 'undefined') {
+    window.discounts = discountsRef;
+  }
+  saveDiscounts();
+  
+  // Clear form
+  employeeSelect.value = '';
+  typeSelect.value = '';
+  percentageInput.value = '';
+  eventDateInput.value = '';
+  document.getElementById('selectedEmployeeInfo')?.classList.add('hidden');
+  
+  // Update UI
+  populateDiscountsList();
+  
+  // Re-render table to show discount
+  if (typeof renderUI === 'function') {
+    renderUI(currentFilter);
+  }
+  
+  showToast('✅ تم إضافة الخصم بنجاح', 'success');
+}
+
+// Populate discounts list
+function populateDiscountsList() {
+  const list = document.getElementById('discountsList');
+  if (!list) return;
+  
+  // Load discounts first if not already loaded
+  if (typeof window === 'undefined' || !window.discounts) {
+    loadDiscounts();
+  }
+  
+  // Get discounts from window scope
+  let currentDiscounts = [];
+  if (typeof window !== 'undefined' && window.discounts) {
+    currentDiscounts = window.discounts;
+  } else {
+    // Fallback: try to load again
+    loadDiscounts();
+    currentDiscounts = (typeof window !== 'undefined' && window.discounts) ? window.discounts : [];
+  }
+  
+  // Ensure discounts is an array
+  if (!Array.isArray(currentDiscounts) || currentDiscounts.length === 0) {
+    list.innerHTML = '<p class="text-gray-400 text-center py-4">لا توجد خصومات مطبقة</p>';
+    return;
+  }
+  
+  // Group by employee name
+  const discountsByEmployee = {};
+  currentDiscounts.forEach(discount => {
+    if (!discountsByEmployee[discount.employeeName]) {
+      discountsByEmployee[discount.employeeName] = [];
+    }
+    discountsByEmployee[discount.employeeName].push(discount);
+  });
+  
+  let html = '';
+  Object.keys(discountsByEmployee).sort().forEach(employeeName => {
+    const employeeDiscounts = discountsByEmployee[employeeName];
+    // Calculate total discount from all branches (each branch separately)
+    const totalDiscountAmount = typeof getTotalDiscountForEmployee === 'function' 
+      ? getTotalDiscountForEmployee(employeeName)
+      : 0;
+    // Calculate aggregated net for display
+    const aggregatedNet = calculateAggregatedNetForEmployee(employeeName);
+    
+    html += `
+      <div class="glass p-4 rounded-xl border border-white/20">
+        <div class="flex justify-between items-start mb-2">
+          <div>
+            <h4 class="text-white font-bold">${employeeName}</h4>
+            <p class="text-sm text-gray-400">الصافي المجمع: ${aggregatedNet.toFixed(2)} ريال</p>
+          </div>
+          <span class="text-red-400 font-bold">-${totalDiscountAmount.toFixed(2)} ريال</span>
+        </div>
+        <div class="space-y-2 mt-3">
+          ${employeeDiscounts.map(discount => {
+            const eventDate = discount.eventDate ? new Date(discount.eventDate + 'T00:00:00').toLocaleDateString('ar-SA') : '-';
+            return `
+            <div class="flex justify-between items-center bg-white/5 p-2 rounded">
+              <div>
+                <span class="text-sm text-gray-300">${discount.discountType}</span>
+                <span class="text-xs text-gray-500 mr-2">(${discount.discountPercentage}%)</span>
+                ${discount.eventDate ? `<span class="text-xs text-gray-400 block mt-1">📅 ${eventDate}</span>` : ''}
+              </div>
+              <button onclick="deleteDiscount('${discount.id}')" class="text-red-400 hover:text-red-300 text-sm font-bold px-2 py-1 rounded hover:bg-red-500/20 transition-colors">
+                🗑️ حذف
+              </button>
+            </div>
+          `;
+          }).join('')}
+        </div>
+      </div>
+    `;
+  });
+  
+  list.innerHTML = html;
+}
+
+// Delete discount
+function deleteDiscount(discountId) {
+  if (!confirm('هل أنت متأكد من حذف هذا الخصم؟')) return;
+  
+  // Ensure discounts is defined
+  if (typeof discounts === 'undefined') {
+    loadDiscounts();
+  }
+  // Get discounts reference from window
+  if (typeof window === 'undefined' || !window.discounts) {
+    loadDiscounts();
+  }
+  const discountsRef = (typeof window !== 'undefined' && window.discounts) ? window.discounts : [];
+  const updatedDiscounts = discountsRef.filter(d => d.id !== discountId);
+  // Update window reference
+  if (typeof window !== 'undefined') {
+    window.discounts = updatedDiscounts;
+  }
+  saveDiscounts();
+  
+  populateDiscountsList();
+  
+  // Re-render table
+  if (typeof renderUI === 'function') {
+    renderUI(currentFilter);
+  }
+  
+  showToast('✅ تم حذف الخصم بنجاح', 'success');
+}
+
+// Show manage discount types modal
+function showManageDiscountTypesModal() {
+  const modal = document.getElementById('manageDiscountTypesModal');
+  if (!modal) return;
+  
+  loadDiscountTypes();
+  populateDiscountTypesList();
+  
+  modal.classList.remove('hidden');
+  modal.style.display = 'flex';
+}
+
+// Close manage discount types modal
+function closeManageDiscountTypesModal(event) {
+  if (event && event.target !== event.currentTarget && !event.target.closest('.glass')) {
+    return;
+  }
+  const modal = document.getElementById('manageDiscountTypesModal');
+  if (modal) {
+    modal.classList.add('hidden');
+    modal.style.display = 'none';
+  }
+}
+
+// Populate discount types list
+function populateDiscountTypesList() {
+  const list = document.getElementById('discountTypesList');
+  if (!list) return;
+  
+  let html = '';
+  discountTypes.forEach((type, index) => {
+    // Don't allow deletion of default types
+    const defaultTypes = [
+      'تلقائية',
+      'تقييم سيء من نزيل',
+      'تأخير عن الحضور للعمل',
+      'عدم اتباع التعليمات المكتوبة من الإدارة',
+      'الامتناع عن إيصال ملاحظة للشفت التالي (أثرت على رضاء العميل)',
+      'عدم إبلاغ الإدارة بمشكلة في الفرع'
+    ];
+    const isDefault = defaultTypes.includes(type);
+    html += `
+      <div class="flex justify-between items-center bg-white/5 p-3 rounded">
+        <span class="text-white font-semibold">${type}</span>
+        ${!isDefault ? `
+          <button onclick="removeDiscountType(${index})" class="text-red-400 hover:text-red-300 text-sm font-bold px-2 py-1 rounded hover:bg-red-500/20 transition-colors">
+            🗑️ حذف
+          </button>
+        ` : '<span class="text-xs text-gray-500">افتراضي</span>'}
+      </div>
+    `;
+  });
+  
+  list.innerHTML = html;
+}
+
+// Add discount type
+function addDiscountType() {
+  const input = document.getElementById('newDiscountTypeInput');
+  if (!input) return;
+  
+  const newType = input.value.trim();
+  if (!newType) {
+    showToast('❌ يرجى إدخال نوع خصم', 'error');
+    return;
+  }
+  
+  if (discountTypes.includes(newType)) {
+    showToast('❌ هذا النوع موجود بالفعل', 'error');
+    return;
+  }
+  
+  discountTypes.push(newType);
+  saveDiscountTypes();
+  
+  input.value = '';
+  populateDiscountTypesList();
+  updateDiscountTypesSelect();
+  
+  showToast('✅ تم إضافة نوع الخصم بنجاح', 'success');
+}
+
+// Remove discount type
+function removeDiscountType(index) {
+  if (!confirm('هل أنت متأكد من حذف هذا النوع؟')) return;
+  
+  discountTypes.splice(index, 1);
+  saveDiscountTypes();
+  
+  populateDiscountTypesList();
+  updateDiscountTypesSelect();
+  
+  showToast('✅ تم حذف نوع الخصم بنجاح', 'success');
+}
+
+// === Statistics Page Functions ===
+function loadStatisticsPage() {
+  console.log('📊 loadStatisticsPage called');
+  
+  // Check if statistics content is visible
+  const statisticsContent = document.getElementById('statisticsReportsContent');
+  if (!statisticsContent) {
+    console.error('❌ statisticsReportsContent not found');
+    return;
+  }
+  
+  // Force check and remove hidden if present
+  if (statisticsContent.classList.contains('hidden')) {
+    console.log('⚠️ statisticsContent has hidden class, removing it...');
+    statisticsContent.classList.remove('hidden');
+    statisticsContent.style.display = '';
+    statisticsContent.style.visibility = '';
+    statisticsContent.style.opacity = '';
+  }
+  
+  // Double check visibility
+  const computedStyle = window.getComputedStyle(statisticsContent);
+  console.log('✅ statisticsContent visibility check:', {
+    display: computedStyle.display,
+    visibility: computedStyle.visibility,
+    opacity: computedStyle.opacity,
+    hasHiddenClass: statisticsContent.classList.contains('hidden')
+  });
+  
+  if (computedStyle.display === 'none' || statisticsContent.classList.contains('hidden')) {
+    console.error('❌ statisticsContent is still hidden after removal attempt');
+    // Force show
+    statisticsContent.style.display = 'block';
+    statisticsContent.style.visibility = 'visible';
+    statisticsContent.style.opacity = '1';
+  }
+  
+  console.log('✅ statisticsContent is visible, loading stats...');
+  
+  // Load current period statistics
+  loadCurrentPeriodStats();
+  
+  // Load archived periods list for statistics
+  loadArchivedStatsPeriodsList();
+  
+  // Populate employee performance table
+  populateEmployeePerformanceTable();
+  
+  console.log('✅ loadStatisticsPage completed');
+}
+
+function loadCurrentPeriodStats() {
+  console.log('📊 loadCurrentPeriodStats called');
+  const container = document.getElementById('currentPeriodStats');
+  if (!container) {
+    console.error('❌ currentPeriodStats container not found');
+    // Try to create it if it doesn't exist
+    const parent = document.querySelector('#statisticsReportsContent .mb-8');
+    if (parent) {
+      const newContainer = document.createElement('div');
+      newContainer.id = 'currentPeriodStats';
+      newContainer.className = 'grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 mb-6';
+      parent.appendChild(newContainer);
+      console.log('✅ Created currentPeriodStats container');
+      return loadCurrentPeriodStats(); // Retry
+    }
+    return;
+  }
+  
+  console.log('✅ currentPeriodStats container found');
+  
+  // Get db from multiple sources (window.db, localStorage, or empty array)
+  let currentDb = [];
+  if (typeof window !== 'undefined' && window.db && Array.isArray(window.db) && window.db.length > 0) {
+    currentDb = window.db;
+    console.log('📊 Using window.db, length:', currentDb.length);
+  } else {
+    // Try to get from localStorage as fallback
+    try {
+      const savedDb = localStorage.getItem('adora_rewards_db');
+      if (savedDb) {
+        currentDb = JSON.parse(savedDb);
+        // Update window.db for future use
+        if (typeof window !== 'undefined') {
+          window.db = currentDb;
+        }
+        console.log('📊 Using localStorage, length:', currentDb.length);
+      } else {
+        console.log('⚠️ No data in localStorage');
+      }
+    } catch (e) {
+      console.error('❌ Error loading db from localStorage:', e);
+    }
+  }
+  
+  console.log('📊 Final db length:', currentDb.length);
+  
+  // Calculate statistics directly from db (like "الكل" view) - real-time updates
+  if (!currentDb || currentDb.length === 0) {
+    console.log('⚠️ No data available for statistics');
+    container.innerHTML = `
+      <div class="glass p-4 rounded-xl border border-turquoise/30">
+        <div class="text-sm text-gray-400 mb-1">عدد الموظفين</div>
+        <div class="text-2xl font-black text-turquoise">0</div>
+      </div>
+      <div class="glass p-4 rounded-xl border border-turquoise/30">
+        <div class="text-sm text-gray-400 mb-1">إجمالي الحجوزات</div>
+        <div class="text-2xl font-black text-turquoise">0</div>
+      </div>
+      <div class="glass p-4 rounded-xl border border-turquoise/30">
+        <div class="text-sm text-gray-400 mb-1">إجمالي التقييمات</div>
+        <div class="text-2xl font-black text-turquoise">0</div>
+      </div>
+      <div class="glass p-4 rounded-xl border border-turquoise/30">
+        <div class="text-sm text-gray-400 mb-1">إجمالي المستحقات</div>
+        <div class="text-2xl font-black text-green-400">0 ريال</div>
+      </div>
+    `;
+    return;
+  }
+  
+  // Calculate from "الكل" view (all employees, aggregated for duplicates)
+  const uniqueNames = new Set();
+  let totalBookings = 0;
+  let totalEvalBooking = 0;
+  let totalEvalGoogle = 0;
+  let totalNet = 0;
+  let totalFund = 0;
+  
+  // Get unique employees (aggregate duplicates like "الكل" view)
+  const uniqueEmployees = new Map();
+  currentDb.forEach(emp => {
+    uniqueNames.add(emp.name);
+    const key = emp.name;
+    if (!uniqueEmployees.has(key)) {
+      uniqueEmployees.set(key, []);
+    }
+    uniqueEmployees.get(key).push(emp);
+  });
+  
+  // Calculate aggregated stats for each employee (same logic as "الكل" view)
+  uniqueEmployees.forEach((employees, name) => {
+    let empTotalCount = 0;
+    let empTotalEvalBooking = 0;
+    let empTotalEvalGoogle = 0;
+    let empTotalNet = 0;
+    let empTotalFund = 0;
+    
+    employees.forEach(emp => {
+      empTotalCount += emp.count || 0;
+      empTotalEvalBooking += emp.evaluationsBooking || 0;
+      empTotalEvalGoogle += emp.evaluationsGoogle || 0;
+      
+      // Calculate net for this branch (same as renderUI)
+      const rate = emp.count > 100 ? 3 : (emp.count > 50 ? 2 : 1);
+      const evBooking = emp.evaluationsBooking || 0;
+      const evGoogle = emp.evaluationsGoogle || 0;
+      const gross = (emp.count * rate) + (evBooking * 20) + (evGoogle * 10);
+      const fund = gross * 0.15;
+      let net = gross - fund;
+      
+      // Add attendance bonus
+      const attendance26Days = emp.attendance26Days === true;
+      const attendanceBonus = attendance26Days ? net * 0.25 : 0;
+      net = net + attendanceBonus;
+      
+      // Apply discounts
+      if (typeof getDiscountForEmployeeInBranch === 'function') {
+        const discount = getDiscountForEmployeeInBranch(emp.name, net);
+        net = Math.max(0, net - discount);
+      }
+      
+      // Note: Excellence and commitment bonuses are calculated in renderUI
+      // For statistics, we use net after attendance bonus and discounts
+      
+      empTotalNet += net;
+      empTotalFund += fund;
+    });
+    
+    totalBookings += empTotalCount;
+    totalEvalBooking += empTotalEvalBooking;
+    totalEvalGoogle += empTotalEvalGoogle;
+    totalNet += empTotalNet;
+    totalFund += empTotalFund;
+  });
+  
+  const totalEmployees = uniqueNames.size;
+  const totalEval = totalEvalBooking + totalEvalGoogle;
+  const finalTotal = totalNet + totalFund;
+  
+  container.innerHTML = `
+    <div class="glass p-4 rounded-xl border border-turquoise/30">
+      <div class="text-sm text-gray-400 mb-1">عدد الموظفين</div>
+      <div class="text-2xl font-black text-turquoise">${totalEmployees}</div>
+    </div>
+    <div class="glass p-4 rounded-xl border border-turquoise/30">
+      <div class="text-sm text-gray-400 mb-1">إجمالي الحجوزات</div>
+      <div class="text-2xl font-black text-turquoise">${totalBookings}</div>
+    </div>
+    <div class="glass p-4 rounded-xl border border-turquoise/30">
+      <div class="text-sm text-gray-400 mb-1">إجمالي التقييمات</div>
+      <div class="text-2xl font-black text-turquoise">${totalEval}</div>
+    </div>
+    <div class="glass p-4 rounded-xl border border-turquoise/30">
+      <div class="text-sm text-gray-400 mb-1">إجمالي المستحقات</div>
+      <div class="text-2xl font-black text-green-400">${isNaN(finalTotal) || !isFinite(finalTotal) ? '0' : finalTotal.toFixed(0)} ريال</div>
+    </div>
+  `;
+  
+  // Force container to be visible
+  container.style.display = '';
+  container.style.visibility = '';
+  container.style.opacity = '';
+  
+  // Verify container is visible
+  const containerStyle = window.getComputedStyle(container);
+  console.log('✅ Statistics cards rendered:', {
+    employees: totalEmployees,
+    bookings: totalBookings,
+    evaluations: totalEval,
+    total: finalTotal.toFixed(0),
+    containerDisplay: containerStyle.display,
+    containerVisibility: containerStyle.visibility
+  });
+  
+  // Force parent to be visible too
+  const parent = container.parentElement;
+  if (parent) {
+    parent.style.display = '';
+    parent.style.visibility = '';
+    parent.style.opacity = '';
+    const parentStyle = window.getComputedStyle(parent);
+    console.log('✅ Parent visibility:', {
+      display: parentStyle.display,
+      visibility: parentStyle.visibility
+    });
+  }
+}
+
+function populateEmployeePerformanceTable() {
+  const tbody = document.getElementById('employeePerformanceTableBody');
+  if (!tbody) {
+    console.error('❌ employeePerformanceTableBody not found');
+    return;
+  }
+  // Get db from multiple sources (window.db, localStorage, or empty array)
+  let currentDb = [];
+  if (typeof window !== 'undefined' && window.db && Array.isArray(window.db)) {
+    currentDb = window.db;
+  } else {
+    // Try to get from localStorage as fallback
+    try {
+      const savedDb = localStorage.getItem('adora_rewards_db');
+      if (savedDb) {
+        currentDb = JSON.parse(savedDb);
+        // Update window.db for future use
+        if (typeof window !== 'undefined') {
+          window.db = currentDb;
+        }
+      }
+    } catch (e) {
+      console.error('❌ Error loading db from localStorage:', e);
+    }
+  }
+  console.log('📊 populateEmployeePerformanceTable - db length:', currentDb ? currentDb.length : 0, 'source:', typeof window !== 'undefined' && window.db ? 'window.db' : 'localStorage');
+  if (!currentDb || currentDb.length === 0) {
+    if (tbody) tbody.innerHTML = '<tr><td colspan="7" class="p-4 text-center text-gray-400">لا توجد بيانات</td></tr>';
+    return;
+  }
+  
+  // Calculate stats for each employee
+  const employeesData = [];
+  const nameCounts = {};
+  
+  // Count duplicates
+  currentDb.forEach(emp => {
+    nameCounts[emp.name] = (nameCounts[emp.name] || 0) + 1;
+  });
+  
+  // Get unique employees (aggregate duplicates)
+  const uniqueEmployees = new Map();
+  currentDb.forEach(emp => {
+    const key = emp.name;
+    if (!uniqueEmployees.has(key)) {
+      uniqueEmployees.set(key, []);
+    }
+    uniqueEmployees.get(key).push(emp);
+  });
+  
+  // Calculate aggregated stats for each employee
+  uniqueEmployees.forEach((employees, name) => {
+    const isDuplicate = nameCounts[name] > 1;
+    
+    let totalCount = 0;
+    let totalEvalBooking = 0;
+    let totalEvalGoogle = 0;
+    let totalNet = 0;
+    let branches = [];
+    
+    employees.forEach(emp => {
+      totalCount += emp.count || 0;
+      totalEvalBooking += emp.evaluationsBooking || 0;
+      totalEvalGoogle += emp.evaluationsGoogle || 0;
+      
+      // Calculate net for this branch
+      const rate = emp.count > 100 ? 3 : (emp.count > 50 ? 2 : 1);
+      const evBooking = emp.evaluationsBooking || 0;
+      const evGoogle = emp.evaluationsGoogle || 0;
+      const gross = (emp.count * rate) + (evBooking * 20) + (evGoogle * 10);
+      const fund = gross * 0.15;
+      let net = gross - fund;
+      
+      // Add attendance bonus
+      const attendance26Days = emp.attendance26Days === true;
+      const attendanceBonus = attendance26Days ? net * 0.25 : 0;
+      net = net + attendanceBonus;
+      
+      // Apply discounts (before adding bonuses for accurate calculation)
+      if (typeof getDiscountForEmployeeInBranch === 'function') {
+        const discount = getDiscountForEmployeeInBranch(emp.name, net);
+        net = Math.max(0, net - discount);
+      }
+      
+      // Note: Excellence and commitment bonuses are calculated in renderUI
+      // For the performance table, we use the net after attendance bonus and discounts
+      // Full calculation with all bonuses would require recalculating branchWinners
+      
+      totalNet += net;
+      if (!branches.includes(emp.branch)) {
+        branches.push(emp.branch);
+      }
+    });
+    
+    const totalEval = totalEvalBooking + totalEvalGoogle;
+    
+    // Calculate performance score (for ranking)
+    // Score = (bookings * 1) + (evalBooking * 2) + (evalGoogle * 1) + (net / 100)
+    const performanceScore = totalCount + (totalEvalBooking * 2) + totalEvalGoogle + (totalNet / 100);
+    
+    employeesData.push({
+      name: name,
+      branches: branches.join(' - '),
+      count: totalCount,
+      evalBooking: totalEvalBooking,
+      evalGoogle: totalEvalGoogle,
+      totalEval: totalEval,
+      net: totalNet,
+      performanceScore: performanceScore,
+      isDuplicate: isDuplicate
+    });
+  });
+  
+  // Sort by performance score (descending)
+  employeesData.sort((a, b) => b.performanceScore - a.performanceScore);
+  
+  // Generate table rows
+  let html = '';
+  employeesData.forEach((emp, index) => {
+    // Determine performance rating
+    let rating = 'جيد';
+    let ratingColor = 'text-green-400';
+    if (emp.performanceScore >= 200) {
+      rating = 'ممتاز';
+      ratingColor = 'text-green-500';
+    } else if (emp.performanceScore >= 100) {
+      rating = 'جيد جداً';
+      ratingColor = 'text-green-400';
+    } else if (emp.performanceScore >= 50) {
+      rating = 'جيد';
+      ratingColor = 'text-yellow-400';
+    } else {
+      rating = 'يحتاج تحسين';
+      ratingColor = 'text-red-400';
+    }
+    
+    html += `
+      <tr class="border-b border-white/10 hover:bg-white/5">
+        <td class="p-3 text-center font-bold text-turquoise">${index + 1}</td>
+        <td class="p-3 text-right font-bold text-white">${emp.name}${emp.isDuplicate ? ' <span class="text-xs text-gray-400">(متكرر)</span>' : ''}</td>
+        <td class="p-3 text-center text-gray-300 text-xs">${emp.branches}</td>
+        <td class="p-3 text-center font-bold text-white">${emp.count}</td>
+        <td class="p-3 text-center text-gray-300">
+          <span class="text-blue-400">${emp.evalBooking}</span> / <span class="text-purple-400">${emp.evalGoogle}</span>
+          <div class="text-xs text-gray-400">(${emp.totalEval} إجمالي)</div>
+        </td>
+        <td class="p-3 text-center font-bold text-green-400">${emp.net.toFixed(2)} ريال</td>
+        <td class="p-3 text-center">
+          <span class="font-bold ${ratingColor}">${rating}</span>
+        </td>
+      </tr>
+    `;
+  });
+  
+  if (html === '') {
+    html = '<tr><td colspan="7" class="p-4 text-center text-gray-400">لا توجد بيانات</td></tr>';
+  }
+  
+  tbody.innerHTML = html;
+}
+
+async function loadArchivedStatsPeriodsList() {
+  const select = document.getElementById('archivedStatsPeriodSelect');
+  const archivedPeriodsContainer = document.getElementById('archivedPeriodsStatsContainer');
+  if (!select && !archivedPeriodsContainer) return;
+  
+  if (select) {
+    select.innerHTML = '<option value="">-- اختر فترة --</option>';
+  }
+  
+  try {
+    let periods = [];
+    
+    if (storage && typeof storage.ref === 'function') {
+      try {
+        const periodsRef = storage.ref('periods/');
+        
+        if (typeof periodsRef.listAll === 'function') {
+          const result = await periodsRef.listAll();
+          
+          if (result && result.items && result.items.length > 0) {
+            for (const itemRef of result.items) {
+              try {
+                const url = await itemRef.getDownloadURL();
+                const response = await fetch(url);
+                if (response.ok) {
+                  const data = await response.json();
+                  periods.push(data);
+                }
+              } catch (itemError) {
+                console.warn('⚠️ Error fetching period item:', itemError.message);
+              }
+            }
+          }
+        }
+      } catch (error) {
+        console.error('❌ Firebase Storage list error:', error);
+        console.log('⚠️ Falling back to localStorage');
+      }
+    }
+    
+    if (periods.length === 0) {
+      const saved = localStorage.getItem('adora_archived_periods');
+      if (saved) {
+        periods = JSON.parse(saved);
+      }
+    }
+    
+    periods.sort((a, b) => new Date(b.closedAt || b.closedAt) - new Date(a.closedAt || a.closedAt));
+    
+    // Update dropdown if exists
+    if (select) {
+      periods.forEach(period => {
+        const option = document.createElement('option');
+        option.value = period.id || period.periodId;
+        option.textContent = period.periodText || `فترة ${period.id || period.periodId}`;
+        select.appendChild(option);
+      });
+    }
+    
+    // Display each period separately in container
+    if (archivedPeriodsContainer) {
+      archivedPeriodsContainer.innerHTML = '';
+      
+      if (periods.length === 0) {
+        archivedPeriodsContainer.innerHTML = '<p class="text-gray-400 text-center py-4">لا توجد فترات سابقة</p>';
+        return;
+      }
+      
+      // Load stats for each period
+      for (const period of periods) {
+        const periodId = period.id || period.periodId;
+        const periodText = period.periodText || `فترة ${periodId}`;
+        const closedAt = period.closedAt ? new Date(period.closedAt).toLocaleDateString('ar-SA') : '-';
+        
+        // Create period card
+        const periodCard = document.createElement('div');
+        periodCard.className = 'glass p-6 rounded-xl border border-turquoise/30 mb-6';
+        periodCard.innerHTML = `
+          <div class="flex items-center justify-between mb-4">
+            <h4 class="text-lg font-bold text-turquoise">${periodText}</h4>
+            <span class="text-sm text-gray-400">تاريخ الإغلاق: ${closedAt}</span>
+          </div>
+          <div id="archivedPeriodStats_${periodId}" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 mb-4">
+            <div class="glass p-4 rounded-xl border border-turquoise/30">
+              <div class="text-sm text-gray-400 mb-1">جاري التحميل...</div>
+            </div>
+          </div>
+          <div id="archivedPeriodTable_${periodId}">
+            <!-- Table will be loaded here -->
+          </div>
+        `;
+        archivedPeriodsContainer.appendChild(periodCard);
+        
+        // Load stats for this period
+        loadArchivedPeriodStatsForDisplay(periodId, period);
+      }
+    }
+  } catch (error) {
+    console.error('❌ Error loading archived periods:', error);
+  }
+}
+
+// Load archived period stats for display (without select dropdown)
+async function loadArchivedPeriodStatsForDisplay(periodId, periodData = null) {
+  try {
+    let periodDataToUse = periodData;
+    
+    if (!periodDataToUse) {
+      // Try Firebase Storage first
+      if (storage && typeof storage.ref === 'function') {
+        try {
+          const periodRef = storage.ref(`periods/${periodId}.json`);
+          const url = await periodRef.getDownloadURL();
+          const response = await fetch(url);
+          if (response.ok) {
+            periodDataToUse = await response.json();
+          }
+        } catch (error) {
+          console.warn('⚠️ Firebase Storage error, trying localStorage:', error);
+        }
+      }
+      
+      // Fallback to localStorage
+      if (!periodDataToUse) {
+        const saved = localStorage.getItem('adora_archived_periods');
+        if (saved) {
+          const periods = JSON.parse(saved);
+          periodDataToUse = periods.find(p => (p.id || p.periodId) === periodId);
+        }
+      }
+    }
+    
+    if (!periodDataToUse || !periodDataToUse.data) {
+      const container = document.getElementById(`archivedPeriodStats_${periodId}`);
+      if (container) {
+        container.innerHTML = '<div class="col-span-4 text-center text-gray-400">لا توجد بيانات</div>';
+      }
+      return;
+    }
+    
+    // Display statistics
+    const archivedData = periodDataToUse.data.db || [];
+    const stats = calculatePeriodStats(archivedData);
+    
+    // Update stats cards
+    const container = document.getElementById(`archivedPeriodStats_${periodId}`);
+    if (container) {
+      container.innerHTML = `
+        <div class="glass p-4 rounded-xl border border-turquoise/30">
+          <div class="text-sm text-gray-400 mb-1">عدد الموظفين</div>
+          <div class="text-2xl font-black text-turquoise">${stats.employees}</div>
+        </div>
+        <div class="glass p-4 rounded-xl border border-turquoise/30">
+          <div class="text-sm text-gray-400 mb-1">إجمالي الحجوزات</div>
+          <div class="text-2xl font-black text-turquoise">${stats.bookings}</div>
+        </div>
+        <div class="glass p-4 rounded-xl border border-turquoise/30">
+          <div class="text-sm text-gray-400 mb-1">إجمالي التقييمات</div>
+          <div class="text-2xl font-black text-turquoise">${stats.evaluations}</div>
+        </div>
+        <div class="glass p-4 rounded-xl border border-turquoise/30">
+          <div class="text-sm text-gray-400 mb-1">إجمالي المستحقات</div>
+          <div class="text-2xl font-black text-green-400">${stats.total.toFixed(0)} ريال</div>
+        </div>
+      `;
+    }
+    
+    // Populate employee performance table for this period
+    const tableContainer = document.getElementById(`archivedPeriodTable_${periodId}`);
+    if (tableContainer) {
+      populateArchivedEmployeePerformanceTableForPeriod(archivedData, periodId);
+    }
+  } catch (error) {
+    console.error(`❌ Error loading archived period stats for ${periodId}:`, error);
+    const container = document.getElementById(`archivedPeriodStats_${periodId}`);
+    if (container) {
+      container.innerHTML = '<div class="col-span-4 text-center text-red-400">خطأ في تحميل البيانات</div>';
+    }
+  }
+}
+
+// Populate archived employee performance table for a specific period
+function populateArchivedEmployeePerformanceTableForPeriod(employees, periodId) {
+  const tableContainer = document.getElementById(`archivedPeriodTable_${periodId}`);
+  if (!tableContainer) return;
+  
+  if (!employees || employees.length === 0) {
+    tableContainer.innerHTML = '<p class="text-gray-400 text-center py-4">لا توجد بيانات</p>';
+    return;
+  }
+  
+  // Similar logic to populateArchivedEmployeePerformanceTable but for specific period
+  const employeesData = [];
+  const nameCounts = {};
+  
+  employees.forEach(emp => {
+    nameCounts[emp.name] = (nameCounts[emp.name] || 0) + 1;
+  });
+  
+  const uniqueEmployees = new Map();
+  employees.forEach(emp => {
+    const key = emp.name;
+    if (!uniqueEmployees.has(key)) {
+      uniqueEmployees.set(key, []);
+    }
+    uniqueEmployees.get(key).push(emp);
+  });
+  
+  uniqueEmployees.forEach((empList, name) => {
+    let totalCount = 0;
+    let totalEvalBooking = 0;
+    let totalEvalGoogle = 0;
+    let totalNet = 0;
+    let branches = [];
+    
+    empList.forEach(emp => {
+      totalCount += emp.count || 0;
+      totalEvalBooking += emp.evaluationsBooking || 0;
+      totalEvalGoogle += emp.evaluationsGoogle || 0;
+      
+      const rate = emp.count > 100 ? 3 : (emp.count > 50 ? 2 : 1);
+      const gross = (emp.count * rate) + ((emp.evaluationsBooking || 0) * 20) + ((emp.evaluationsGoogle || 0) * 10);
+      const fund = gross * 0.15;
+      let net = gross - fund;
+      
+      if (emp.attendance26Days === true) {
+        net = net + (net * 0.25);
+      }
+      
+      totalNet += net;
+      if (!branches.includes(emp.branch)) {
+        branches.push(emp.branch);
+      }
+    });
+    
+    const performanceScore = totalCount + (totalEvalBooking * 2) + totalEvalGoogle + (totalNet / 100);
+    
+    employeesData.push({
+      name: name,
+      branches: branches.join(' - '),
+      count: totalCount,
+      evalBooking: totalEvalBooking,
+      evalGoogle: totalEvalGoogle,
+      totalEval: totalEvalBooking + totalEvalGoogle,
+      net: totalNet,
+      performanceScore: performanceScore,
+      isDuplicate: nameCounts[name] > 1
+    });
+  });
+  
+  employeesData.sort((a, b) => b.performanceScore - a.performanceScore);
+  
+  let html = `
+    <div class="glass p-4 rounded-xl border border-turquoise/30 mt-4">
+      <h5 class="text-base font-bold text-white mb-3">جدول تقييم الموظفين</h5>
+      <div class="overflow-x-auto">
+        <table class="w-full text-sm">
+          <thead>
+            <tr class="bg-white/10 border-b border-white/20">
+              <th class="p-2 text-right font-bold text-turquoise text-xs">الترتيب</th>
+              <th class="p-2 text-right font-bold text-turquoise text-xs">اسم الموظف</th>
+              <th class="p-2 text-center font-bold text-turquoise text-xs">الفرع</th>
+              <th class="p-2 text-center font-bold text-turquoise text-xs">الحجوزات</th>
+              <th class="p-2 text-center font-bold text-turquoise text-xs">التقييمات</th>
+              <th class="p-2 text-center font-bold text-turquoise text-xs">الصافي</th>
+              <th class="p-2 text-center font-bold text-turquoise text-xs">التقييم</th>
+            </tr>
+          </thead>
+          <tbody>
+  `;
+  
+  employeesData.forEach((emp, index) => {
+    let rating = 'جيد';
+    let ratingColor = 'text-green-400';
+    if (emp.performanceScore >= 200) {
+      rating = 'ممتاز';
+      ratingColor = 'text-green-500';
+    } else if (emp.performanceScore >= 100) {
+      rating = 'جيد جداً';
+      ratingColor = 'text-green-400';
+    } else if (emp.performanceScore >= 50) {
+      rating = 'جيد';
+      ratingColor = 'text-yellow-400';
+    } else {
+      rating = 'يحتاج تحسين';
+      ratingColor = 'text-red-400';
+    }
+    
+    html += `
+      <tr class="border-b border-white/10 hover:bg-white/5">
+        <td class="p-2 text-center font-bold text-turquoise text-xs">${index + 1}</td>
+        <td class="p-2 text-right font-bold text-white text-xs">${emp.name}${emp.isDuplicate ? ' <span class="text-[10px] text-gray-400">(متكرر)</span>' : ''}</td>
+        <td class="p-2 text-center text-gray-300 text-[10px]">${emp.branches}</td>
+        <td class="p-2 text-center font-bold text-white text-xs">${emp.count}</td>
+        <td class="p-2 text-center text-gray-300 text-xs">
+          <span class="text-blue-400">${emp.evalBooking}</span> / <span class="text-purple-400">${emp.evalGoogle}</span>
+        </td>
+        <td class="p-2 text-center font-bold text-green-400 text-xs">${emp.net.toFixed(2)} ريال</td>
+        <td class="p-2 text-center">
+          <span class="font-bold ${ratingColor} text-xs">${rating}</span>
+        </td>
+      </tr>
+    `;
+  });
+  
+  html += `
+          </tbody>
+        </table>
+      </div>
+    </div>
+  `;
+  
+  tableContainer.innerHTML = html;
+}
+
+async function loadArchivedPeriodStats(periodId) {
+  if (!periodId) {
+    document.getElementById('archivedPeriodStatsContent').classList.add('hidden');
+    return;
+  }
+  
+  try {
+    if (typeof showToast === 'function') {
+      showToast('⏳ جاري تحميل إحصائيات الفترة...', 'info');
+    }
+    
+    let periodData = null;
+    
+    // Try Firebase Storage first
+    if (storage && typeof storage.ref === 'function') {
+      try {
+        const periodRef = storage.ref(`periods/${periodId}.json`);
+        const url = await periodRef.getDownloadURL();
+        const response = await fetch(url);
+        if (response.ok) {
+          periodData = await response.json();
+        }
+      } catch (error) {
+        console.warn('⚠️ Firebase Storage error, trying localStorage:', error);
+      }
+    }
+    
+    // Fallback to localStorage
+    if (!periodData) {
+      const saved = localStorage.getItem('adora_archived_periods');
+      if (saved) {
+        const periods = JSON.parse(saved);
+        periodData = periods.find(p => (p.id || p.periodId) === periodId);
+      }
+    }
+    
+    if (!periodData || !periodData.data) {
+      if (typeof showToast === 'function') {
+        showToast('❌ لم يتم العثور على بيانات الفترة', 'error');
+      }
+      return;
+    }
+    
+    // Display statistics
+    const archivedData = periodData.data.db || [];
+    const stats = calculatePeriodStats(archivedData);
+    
+    // Update stats cards
+    const container = document.getElementById('archivedPeriodStatsCards');
+    if (container) {
+      container.innerHTML = `
+        <div class="glass p-4 rounded-xl border border-turquoise/30">
+          <div class="text-sm text-gray-400 mb-1">عدد الموظفين</div>
+          <div class="text-2xl font-black text-turquoise">${stats.employees}</div>
+        </div>
+        <div class="glass p-4 rounded-xl border border-turquoise/30">
+          <div class="text-sm text-gray-400 mb-1">إجمالي الحجوزات</div>
+          <div class="text-2xl font-black text-turquoise">${stats.bookings}</div>
+        </div>
+        <div class="glass p-4 rounded-xl border border-turquoise/30">
+          <div class="text-sm text-gray-400 mb-1">إجمالي التقييمات</div>
+          <div class="text-2xl font-black text-turquoise">${stats.evaluations}</div>
+        </div>
+        <div class="glass p-4 rounded-xl border border-turquoise/30">
+          <div class="text-sm text-gray-400 mb-1">إجمالي المستحقات</div>
+          <div class="text-2xl font-black text-green-400">${stats.total.toFixed(0)} ريال</div>
+        </div>
+      `;
+    }
+    
+    // Populate employee performance table for archived period
+    populateArchivedEmployeePerformanceTable(archivedData);
+    
+    // Show content
+    document.getElementById('archivedPeriodStatsContent').classList.remove('hidden');
+    
+    if (typeof showToast === 'function') {
+      showToast('✅ تم تحميل إحصائيات الفترة بنجاح', 'success');
+    }
+  } catch (error) {
+    console.error('❌ Error loading archived period stats:', error);
+    if (typeof showToast === 'function') {
+      showToast('❌ حدث خطأ أثناء تحميل إحصائيات الفترة', 'error');
+    }
+  }
+}
+
+function calculatePeriodStats(employees) {
+  let totalEmployees = 0;
+  let totalBookings = 0;
+  let totalEvalBooking = 0;
+  let totalEvalGoogle = 0;
+  let totalNet = 0;
+  let totalFund = 0;
+  
+  const uniqueNames = new Set();
+  
+  employees.forEach(emp => {
+    uniqueNames.add(emp.name);
+    totalBookings += emp.count || 0;
+    totalEvalBooking += emp.evaluationsBooking || 0;
+    totalEvalGoogle += emp.evaluationsGoogle || 0;
+    
+    // Calculate net (simplified)
+    const rate = emp.count > 100 ? 3 : (emp.count > 50 ? 2 : 1);
+    const gross = (emp.count * rate) + ((emp.evaluationsBooking || 0) * 20) + ((emp.evaluationsGoogle || 0) * 10);
+    const fund = gross * 0.15;
+    let net = gross - fund;
+    
+    // Add attendance bonus
+    if (emp.attendance26Days === true) {
+      net = net + (net * 0.25);
+    }
+    
+    totalNet += net;
+    totalFund += fund;
+  });
+  
+  totalEmployees = uniqueNames.size;
+  const totalEval = totalEvalBooking + totalEvalGoogle;
+  const total = totalNet + totalFund;
+  
+  return {
+    employees: totalEmployees,
+    bookings: totalBookings,
+    evaluations: totalEval,
+    total: total
+  };
+}
+
+function populateArchivedEmployeePerformanceTable(employees) {
+  const tbody = document.getElementById('archivedEmployeePerformanceTableBody');
+  if (!tbody) return;
+  
+  if (!employees || employees.length === 0) {
+    tbody.innerHTML = '<tr><td colspan="7" class="p-4 text-center text-gray-400">لا توجد بيانات</td></tr>';
+    return;
+  }
+  
+  // Similar logic to populateEmployeePerformanceTable but using archived data
+  const employeesData = [];
+  const nameCounts = {};
+  
+  employees.forEach(emp => {
+    nameCounts[emp.name] = (nameCounts[emp.name] || 0) + 1;
+  });
+  
+  const uniqueEmployees = new Map();
+  employees.forEach(emp => {
+    const key = emp.name;
+    if (!uniqueEmployees.has(key)) {
+      uniqueEmployees.set(key, []);
+    }
+    uniqueEmployees.get(key).push(emp);
+  });
+  
+  uniqueEmployees.forEach((empList, name) => {
+    let totalCount = 0;
+    let totalEvalBooking = 0;
+    let totalEvalGoogle = 0;
+    let totalNet = 0;
+    let branches = [];
+    
+    empList.forEach(emp => {
+      totalCount += emp.count || 0;
+      totalEvalBooking += emp.evaluationsBooking || 0;
+      totalEvalGoogle += emp.evaluationsGoogle || 0;
+      
+      const rate = emp.count > 100 ? 3 : (emp.count > 50 ? 2 : 1);
+      const gross = (emp.count * rate) + ((emp.evaluationsBooking || 0) * 20) + ((emp.evaluationsGoogle || 0) * 10);
+      const fund = gross * 0.15;
+      let net = gross - fund;
+      
+      if (emp.attendance26Days === true) {
+        net = net + (net * 0.25);
+      }
+      
+      totalNet += net;
+      if (!branches.includes(emp.branch)) {
+        branches.push(emp.branch);
+      }
+    });
+    
+    const performanceScore = totalCount + (totalEvalBooking * 2) + totalEvalGoogle + (totalNet / 100);
+    
+    employeesData.push({
+      name: name,
+      branches: branches.join(' - '),
+      count: totalCount,
+      evalBooking: totalEvalBooking,
+      evalGoogle: totalEvalGoogle,
+      totalEval: totalEvalBooking + totalEvalGoogle,
+      net: totalNet,
+      performanceScore: performanceScore,
+      isDuplicate: nameCounts[name] > 1
+    });
+  });
+  
+  employeesData.sort((a, b) => b.performanceScore - a.performanceScore);
+  
+  let html = '';
+  employeesData.forEach((emp, index) => {
+    let rating = 'جيد';
+    let ratingColor = 'text-green-400';
+    if (emp.performanceScore >= 200) {
+      rating = 'ممتاز';
+      ratingColor = 'text-green-500';
+    } else if (emp.performanceScore >= 100) {
+      rating = 'جيد جداً';
+      ratingColor = 'text-green-400';
+    } else if (emp.performanceScore >= 50) {
+      rating = 'جيد';
+      ratingColor = 'text-yellow-400';
+    } else {
+      rating = 'يحتاج تحسين';
+      ratingColor = 'text-red-400';
+    }
+    
+    html += `
+      <tr class="border-b border-white/10 hover:bg-white/5">
+        <td class="p-3 text-center font-bold text-turquoise">${index + 1}</td>
+        <td class="p-3 text-right font-bold text-white">${emp.name}${emp.isDuplicate ? ' <span class="text-xs text-gray-400">(متكرر)</span>' : ''}</td>
+        <td class="p-3 text-center text-gray-300 text-xs">${emp.branches}</td>
+        <td class="p-3 text-center font-bold text-white">${emp.count}</td>
+        <td class="p-3 text-center text-gray-300">
+          <span class="text-blue-400">${emp.evalBooking}</span> / <span class="text-purple-400">${emp.evalGoogle}</span>
+          <div class="text-xs text-gray-400">(${emp.totalEval} إجمالي)</div>
+        </td>
+        <td class="p-3 text-center font-bold text-green-400">${emp.net.toFixed(2)} ريال</td>
+        <td class="p-3 text-center">
+          <span class="font-bold ${ratingColor}">${rating}</span>
+        </td>
+      </tr>
+    `;
+  });
+  
+  if (html === '') {
+    html = '<tr><td colspan="7" class="p-4 text-center text-gray-400">لا توجد بيانات</td></tr>';
+  }
+  
+  tbody.innerHTML = html;
+}
