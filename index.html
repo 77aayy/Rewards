@@ -4,11 +4,20 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="theme-color" content="#14b8a6">
+    <meta name="description" content="نظام إدارة مكافآت فندق إليت">
     <title>إليت | كشف المكافآت النهائي</title>
+    
+    <!-- PWA Manifest -->
+    <link rel="manifest" href="manifest.json">
+    <link rel="apple-touch-icon" href="icon-192.png">
 
     <!-- Libraries -->
     <script src="https://cdn.tailwindcss.com"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-app-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-storage-compat.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/qrcodejs@1.0.0/qrcode.min.js"></script>
 
     <!-- Arabic Font -->
     <link
@@ -27,37 +36,55 @@
         <!-- Header -->
         <header
             class="flex flex-col sm:flex-row justify-between items-start sm:items-center glass p-4 sm:p-6 md:p-8 rounded-2xl sm:rounded-[30px] md:rounded-[40px] no-print border-r-4 sm:border-r-6 md:border-r-8 border-turquoise animate-in gap-4 sm:gap-5">
-            <div class="flex items-center gap-2 sm:gap-4 md:gap-5 w-full sm:w-auto">
-                <div class="text-2xl sm:text-3xl md:text-4xl lg:text-5xl" style="animation: pulse 2s infinite; font-size: clamp(1.5rem, 4vw, 3rem);">💎</div>
-                <div>
-                    <h1 class="text-lg sm:text-xl md:text-2xl lg:text-3xl font-black text-white" style="font-size: clamp(1rem, 3vw, 1.875rem);">
+            <div class="flex items-center gap-3 sm:gap-4 md:gap-5 w-full sm:w-auto">
+                <div class="flex-shrink-0">
+                    <img src="unnamed.png" alt="إليت" class="w-12 h-12 sm:w-16 sm:h-16 md:w-20 md:h-20 object-contain rounded-lg" style="max-width: 80px; max-height: 80px;" onerror="this.style.display='none'; this.nextElementSibling.style.display='block';">
+                    <div class="text-2xl sm:text-3xl md:text-4xl lg:text-5xl hidden" style="animation: pulse 2s infinite; font-size: clamp(1.5rem, 4vw, 3rem);">💎</div>
+                </div>
+                <div class="flex-1 min-w-0">
+                    <h1 class="text-lg sm:text-xl md:text-2xl lg:text-3xl font-black text-white truncate" style="font-size: clamp(1rem, 3vw, 1.875rem);">
                         مكافآت فريق عمل فندق إليت
                     </h1>
                     <p class="text-sm sm:text-base md:text-lg text-gray-300 mt-1 sm:mt-2 font-semibold" style="font-size: clamp(0.875rem, 2vw, 1.125rem);">
                         الفترة: <span id="headerPeriodRange" class="text-turquoise font-bold">-</span>
                     </p>
-                    <!-- Date Inputs Removed -->
                 </div>
             </div>
-            <div class="flex flex-wrap gap-2 sm:gap-3 w-full sm:w-auto" id="actionBtns" style="display: none;">
+            <div class="flex flex-wrap gap-2 sm:gap-3 w-full sm:w-auto justify-end" id="actionBtns" style="display: none;">
                 <button onclick="returnToUpload()"
-                    class="btn px-3 sm:px-4 md:px-6 lg:px-8 py-2 sm:py-2.5 md:py-3 bg-gradient-to-r from-red-500/70 to-red-600/70 text-white rounded-xl sm:rounded-2xl text-xs sm:text-sm font-bold border border-red-400/50 flex items-center gap-1 sm:gap-2 hover:shadow-lg hover:from-red-500/80 hover:to-red-600/80 transition-all" style="font-size: clamp(0.75rem, 2vw, 0.875rem);">
-                    <span>←</span>
-                    <span>رجوع</span>
+                    class="btn-modern px-4 sm:px-5 md:px-6 py-2 sm:py-2.5 md:py-3 bg-gradient-to-r from-red-500/80 to-red-600/80 text-white rounded-lg sm:rounded-xl text-xs sm:text-sm font-bold border border-red-400/50 flex items-center gap-2 hover:shadow-lg hover:from-red-500 hover:to-red-600 transition-all backdrop-blur-sm" style="font-size: clamp(0.75rem, 2vw, 0.875rem);">
+                    <span class="text-base sm:text-lg">🚪</span>
+                    <span>خروج</span>
                 </button>
                 <button id="printSelectedBtn" onclick="smartPrint(true)"
-                    class="hidden btn px-3 sm:px-4 md:px-6 lg:px-8 py-2 sm:py-2.5 md:py-3 bg-gradient-to-r from-orange-500 to-orange-600 text-white rounded-xl sm:rounded-2xl text-xs sm:text-sm font-bold shadow-lg" style="font-size: clamp(0.75rem, 2vw, 0.875rem);">
-                    طباعة المحدد 🎯
+                    class="hidden btn-modern px-4 sm:px-5 md:px-6 py-2 sm:py-2.5 md:py-3 bg-gradient-to-r from-orange-500/90 to-orange-600/90 text-white rounded-lg sm:rounded-xl text-xs sm:text-sm font-bold shadow-lg flex items-center gap-2 hover:shadow-xl hover:from-orange-500 hover:to-orange-600 transition-all backdrop-blur-sm" style="font-size: clamp(0.75rem, 2vw, 0.875rem);">
+                    <span class="text-base sm:text-lg">🎯</span>
+                    <span class="hidden sm:inline">طباعة المحدد</span>
+                    <span class="sm:hidden">محدد</span>
                 </button>
                 <button id="printAllBtn" onclick="smartPrint(false)"
-                    class="btn px-3 sm:px-4 md:px-6 lg:px-8 py-2 sm:py-2.5 md:py-3 bg-white/10 text-gray-300 rounded-xl sm:rounded-2xl text-xs sm:text-sm font-bold border border-white/20" style="font-size: clamp(0.75rem, 2vw, 0.875rem);">
-                    طباعة الكل 🖨️
+                    class="btn-modern px-4 sm:px-5 md:px-6 py-2 sm:py-2.5 md:py-3 bg-gradient-to-r from-turquoise/80 to-teal-500/80 text-white rounded-lg sm:rounded-xl text-xs sm:text-sm font-bold border border-turquoise/30 flex items-center gap-2 hover:shadow-lg hover:from-turquoise hover:to-teal-500 transition-all backdrop-blur-sm" style="font-size: clamp(0.75rem, 2vw, 0.875rem);">
+                    <span class="text-base sm:text-lg">🖨️</span>
+                    <span class="hidden sm:inline">طباعة الكل</span>
+                    <span class="sm:hidden">الكل</span>
                 </button>
                 <button onclick="showConditionsModal()"
-                    class="btn px-3 sm:px-4 md:px-6 lg:px-8 py-2 sm:py-2.5 md:py-3 bg-white/10 text-gray-300 rounded-xl sm:rounded-2xl text-xs sm:text-sm font-bold border border-white/20 flex items-center gap-1 sm:gap-2" style="font-size: clamp(0.75rem, 2vw, 0.875rem);">
-                    <span>📋</span>
+                    class="btn-modern px-4 sm:px-5 md:px-6 py-2 sm:py-2.5 md:py-3 bg-white/10 text-gray-200 rounded-lg sm:rounded-xl text-xs sm:text-sm font-bold border border-white/20 flex items-center gap-2 hover:bg-white/15 hover:border-turquoise/40 transition-all backdrop-blur-sm" style="font-size: clamp(0.75rem, 2vw, 0.875rem);">
+                    <span class="text-base sm:text-lg">📋</span>
                     <span class="hidden sm:inline">شروط المكافآت</span>
                     <span class="sm:hidden">شروط</span>
+                </button>
+                <button onclick="showReportsPage()"
+                    class="btn-modern px-4 sm:px-5 md:px-6 py-2 sm:py-2.5 md:py-3 bg-white/10 text-gray-200 rounded-lg sm:rounded-xl text-xs sm:text-sm font-bold border border-white/20 flex items-center gap-2 hover:bg-white/15 hover:border-turquoise/40 transition-all backdrop-blur-sm" style="font-size: clamp(0.75rem, 2vw, 0.875rem);">
+                    <span class="text-base sm:text-lg">📊</span>
+                    <span class="hidden sm:inline">التقارير</span>
+                    <span class="sm:hidden">تقارير</span>
+                </button>
+                <button onclick="showClosePeriodModal()"
+                    class="btn-modern px-4 sm:px-5 md:px-6 py-2 sm:py-2.5 md:py-3 bg-gradient-to-r from-red-500/80 to-red-600/80 text-white rounded-lg sm:rounded-xl text-xs sm:text-sm font-bold border border-red-400/50 flex items-center gap-2 hover:shadow-lg hover:from-red-500 hover:to-red-600 transition-all backdrop-blur-sm" style="font-size: clamp(0.75rem, 2vw, 0.875rem);">
+                    <span class="text-base sm:text-lg">🔒</span>
+                    <span class="hidden sm:inline">إغلاق الفترة</span>
+                    <span class="sm:hidden">إغلاق</span>
                 </button>
             </div>
         </header>
@@ -181,28 +208,28 @@
                                     <input type="checkbox" id="selectAll" onclick="toggleAll(this)"
                                         class="cursor-pointer accent-turquoise checkbox-custom">
                                 </th>
-                                <th class="col-m p-4 text-center" style="min-width: 40px; width: 4%;">م</th>
-                                <th class="col-name p-4 text-right" style="min-width: 150px; width: 18%;">
+                                <th class="col-m p-4 text-center" style="min-width: 40px; width: 3%;">م</th>
+                                <th class="col-name p-4 text-right" style="min-width: 150px; width: 20%;">
                                     الموظف
                                 </th>
-                                <th class="col-count p-4 text-center" style="min-width: 80px; width: 8%;">
+                                <th class="col-count p-4 text-center" style="min-width: 80px; width: 7%;">
                                     الحجوزات
                                 </th>
-                                <th class="col-attendance p-4 text-center text-sm" style="min-width: 180px; width: 20%;">بطل تحدي الظروف (إتمام 26 يوماً وأكثر من العطاء)</th>
-                                <th class="col-rate p-4 text-center" style="min-width: 70px; width: 8%;">الفئة</th>
-                                <th class="p-4 text-center text-blue-400" style="min-width: 100px; width: 12%;">
+                                <th class="col-attendance p-4 text-center text-sm" style="min-width: 180px; width: 16%;">بطل تحدي الظروف (إتمام 26 يوماً وأكثر من العطاء)</th>
+                                <th class="col-rate p-4 text-center" style="min-width: 70px; width: 7%;">الفئة</th>
+                                <th class="p-4 text-center text-blue-400" style="min-width: 100px; width: 11%;">
                                     <div class="flex flex-col items-center justify-center gap-1 mb-1">
                                         <span class="text-xs font-bold">Booking</span>
                                         <span class="text-[10px] text-gray-400">20 ريال (ثابت)</span>
                                     </div>
                                 </th>
-                                <th class="p-4 text-center text-green-400" style="min-width: 100px; width: 12%;">
+                                <th class="p-4 text-center text-green-400" style="min-width: 100px; width: 11%;">
                                     <div class="flex flex-col items-center justify-center gap-1 mb-1">
                                         <span class="text-xs font-bold">Google Maps</span>
                                         <span class="text-[10px] text-gray-400">10 ريال (ثابت)</span>
                                     </div>
                                 </th>
-                                <th class="col-net p-4 text-left bg-turquoise/10 text-white" style="min-width: 120px; width: 18%;">
+                                <th class="col-net p-4 text-left bg-turquoise/10 text-white" style="min-width: 120px; width: 20%;">
                                     الصافي المستحق
                                 </th>
                             </tr>
@@ -367,101 +394,86 @@
                 </div>
             </div>
 
-            <!-- Conditions Modal -->
-            <div id="conditionsModal" class="fixed inset-0 z-50 hidden items-center justify-center bg-black/60 backdrop-blur-sm" onclick="closeConditionsModal(event)">
-                <div class="glass rounded-2xl p-6 sm:p-8 max-w-2xl w-full mx-4 max-h-[90vh] overflow-y-auto" onclick="event.stopPropagation()" style="background: linear-gradient(135deg, rgba(15, 23, 41, 0.95) 0%, rgba(26, 31, 53, 0.95) 100%); border: 1px solid rgba(64, 224, 208, 0.3);">
-                    <div class="flex items-center justify-between mb-6">
-                        <h2 class="text-2xl font-black text-turquoise flex items-center gap-2">
-                            <span>📋</span>
-                            <span>شروط الحصول على المكافآت</span>
-                        </h2>
-                        <button onclick="closeConditionsModal()" class="text-gray-400 hover:text-white transition-colors text-2xl font-bold">&times;</button>
-                    </div>
-                    <div class="space-y-4">
-                        <!-- قسم مكافآت العقود -->
-                        <div class="bg-blue-500/10 rounded-xl p-4 border border-blue-500/30">
-                            <h3 class="text-lg font-bold text-blue-400 mb-3 flex items-center gap-2">
-                                <span>📊</span>
-                                <span>مكافآت العقود</span>
-                            </h3>
-                            <ul class="space-y-3 text-sm text-gray-300">
-                                <li class="flex items-start gap-3">
-                                    <span class="text-blue-400 font-bold mt-0.5">•</span>
-                                    <span>نقطة واحدة (1 ريال) لكل عقد حتى 50 عقد</span>
-                                </li>
-                                <li class="flex items-start gap-3">
-                                    <span class="text-blue-400 font-bold mt-0.5">•</span>
-                                    <span>ريالان (2 ريال) لكل عقد من 51 إلى 100 عقد</span>
-                                </li>
-                                <li class="flex items-start gap-3">
-                                    <span class="text-blue-400 font-bold mt-0.5">•</span>
-                                    <span>ثلاثة ريالات (3 ريال) لكل عقد أكثر من 100 عقد</span>
-                                </li>
-                            </ul>
-                        </div>
+        </div>
 
-                        <!-- قسم مكافآت التقييمات -->
-                        <div class="bg-yellow-500/10 rounded-xl p-4 border border-yellow-500/30">
-                            <h3 class="text-lg font-bold text-yellow-400 mb-3 flex items-center gap-2">
-                                <span>⭐</span>
-                                <span>مكافآت التقييمات</span>
-                            </h3>
-                            <ul class="space-y-3 text-sm text-gray-300">
-                                <li class="flex items-start gap-3">
-                                    <span class="text-yellow-400 font-bold mt-0.5">•</span>
-                                    <span>20 ريال لكل تقييم Booking (ثابت)</span>
-                                </li>
-                                <li class="flex items-start gap-3">
-                                    <span class="text-yellow-400 font-bold mt-0.5">•</span>
-                                    <span>10 ريال لكل تقييم Google Maps (ثابت)</span>
-                                </li>
-                            </ul>
-                        </div>
-
-                        <!-- قسم حوافز تحدي الظروف -->
-                        <div class="bg-green-500/10 rounded-xl p-4 border border-green-500/30">
-                            <h3 class="text-lg font-bold text-green-400 mb-3 flex items-center gap-2">
-                                <span>✓</span>
-                                <span>حوافز تحدي الظروف</span>
-                            </h3>
-                            <ul class="space-y-3 text-sm text-gray-300">
-                                <li class="flex items-start gap-3">
-                                    <span class="text-green-400 font-bold mt-0.5">•</span>
-                                    <span class="text-green-300">مكافأة 25% إضافية للموظفين الذين أتموا 26 يوماً وأكثر من العطاء (بطل تحدي الظروف) - يتم تفعيلها يدوياً من قبل المستخدم عند إتمام الموظف 26 يوماً وأكثر من العطاء (يتم التطبيق بناء على بصمه الحضور والانصراف)</span>
-                                </li>
-                            </ul>
-                        </div>
-
-                        <!-- قسم الحوافز الإضافية -->
-                        <div class="bg-turquoise/10 rounded-xl p-4 border border-turquoise/30">
-                            <h3 class="text-lg font-bold text-turquoise mb-3 flex items-center gap-2">
-                                <span>🏆</span>
-                                <span>الحوافز الإضافية</span>
-                            </h3>
-                            <ul class="space-y-3 text-sm text-gray-300">
-                                <li class="flex items-start gap-3">
-                                    <span class="text-turquoise font-bold mt-0.5">•</span>
-                                    <span>50 ريال حافز تفوق (الأعلى تقييماً والأكثر حجوزات في نفس الفرع)</span>
-                                </li>
-                                <li class="flex items-start gap-3">
-                                    <span class="text-turquoise font-bold mt-0.5">•</span>
-                                    <span>50 ريال حافز التزام مضافه الى الـ 25% كباقي الموظفين الذين تموا 26 يوم دوام (الموظف الذي جمع الأكثر التزاماً + الأعلى تقييماً أو الأكثر حجوزات في نفس الفرع)</span>
-                                </li>
-                            </ul>
-                        </div>
-                    </div>
-                    <div class="mt-6 flex gap-3 justify-end">
-                        <button onclick="printConditions()" class="glass px-6 py-2 rounded-lg text-sm font-bold text-white hover:bg-white/10 transition-colors flex items-center gap-2">
-                            <span>🖨️</span>
-                            <span>طباعة الشروط</span>
+        <!-- Reports Page -->
+        <div id="reportsPage" class="hidden space-y-6 relative" style="z-index: 1;">
+            <div class="glass p-6 rounded-2xl border border-turquoise/30">
+                <div class="flex items-center justify-between mb-6">
+                    <h2 class="text-2xl font-black text-turquoise flex items-center gap-2">
+                        <span>📊</span>
+                        <span>تقارير الموظفين</span>
+                    </h2>
+                    <div class="flex items-center gap-2">
+                        <button onclick="showEmployeeCodesModal()" class="px-3 py-2 bg-turquoise/20 text-turquoise rounded-lg text-sm font-bold hover:bg-turquoise/30 transition-colors flex items-center gap-1">
+                            <span>🔑</span>
+                            <span class="hidden sm:inline font-extrabold text-lg">الأكواد</span>
                         </button>
-                        <button onclick="closeConditionsModal()" class="glass px-6 py-2 rounded-lg text-sm font-bold text-gray-300 hover:bg-white/10 transition-colors">
-                            إغلاق
+                        <button onclick="hideReportsPage()" class="text-gray-400 hover:text-white transition-colors text-xl font-bold flex items-center gap-2">
+                            <span>←</span>
+                            <span class="text-sm">رجوع</span>
                         </button>
                     </div>
                 </div>
+                
+                <!-- Tabs -->
+                <div class="flex gap-2 mb-6 border-b border-white/10">
+                    <button onclick="switchReportsTab('current')" id="reportsTabCurrent" class="px-4 py-2 text-sm font-bold text-turquoise border-b-2 border-turquoise transition-colors">
+                        التقارير الحالية
+                    </button>
+                    <button onclick="switchReportsTab('archived')" id="reportsTabArchived" class="px-4 py-2 text-sm font-bold text-gray-400 border-b-2 border-transparent hover:text-white transition-colors">
+                        الفترات المغلقة
+                    </button>
+                </div>
+                
+                <!-- Current Reports Content -->
+                <div id="currentReportsContent">
+                <!-- Search and Filter -->
+                <div class="mb-6 space-y-4">
+                    <input type="text" id="reportsEmployeeSearch" placeholder="🔍 ابحث عن موظف..." 
+                        class="w-full px-4 py-3 sm:py-3 rounded-xl text-base sm:text-sm text-white placeholder-gray-300 focus:outline-none min-h-[44px]" 
+                        style="background: rgba(255, 255, 255, 0.1); border: 1px solid rgba(255, 255, 255, 0.2);" 
+                        onfocus="this.style.borderColor='rgba(64, 224, 208, 0.6)'; this.style.background='rgba(255, 255, 255, 0.15)';" 
+                        onblur="this.style.borderColor='rgba(255, 255, 255, 0.2)'; this.style.background='rgba(255, 255, 255, 0.1)';" 
+                        onkeyup="filterReportsEmployees(this.value)">
+                    
+                    <!-- Branch Filter -->
+                    <div class="flex flex-wrap gap-2">
+                        <button onclick="filterReportsByBranch('الكل')" 
+                            class="filter-reports-pill active px-4 py-2 rounded-lg text-sm font-bold transition-all text-white shadow-[0_0_20px_rgba(64,224,208,0.3)]" 
+                            data-filter="الكل">
+                            الكل
+                        </button>
+                    </div>
+                </div>
+                
+                <!-- Employees Grid -->
+                <div id="reportsEmployeesGrid" class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3 sm:gap-4 max-h-[70vh] overflow-y-auto">
+                    <!-- Employees cards will be populated here -->
+                </div>
+                </div>
+                
+                <!-- Archived Periods Content -->
+                <div id="archivedReportsContent" class="hidden">
+                    <div class="mb-4">
+                        <label class="block text-sm font-bold text-gray-300 mb-2">اختر الفترة:</label>
+                        <select id="archivedPeriodSelect" onchange="loadArchivedPeriod(this.value)" class="w-full px-4 py-3 rounded-xl text-base sm:text-sm text-white bg-white/10 border border-white/20 focus:outline-none focus:border-turquoise min-h-[44px]">
+                            <option value="">-- اختر فترة --</option>
+                        </select>
+                    </div>
+                    <div id="archivedPeriodInfo" class="mb-4 p-4 bg-white/5 rounded-xl border border-white/10 hidden">
+                        <p class="text-sm text-gray-300">
+                            <span class="font-bold text-turquoise">الفترة:</span> <span id="archivedPeriodText">-</span>
+                        </p>
+                        <p class="text-sm text-gray-300 mt-2">
+                            <span class="font-bold text-turquoise">تاريخ الإغلاق:</span> <span id="archivedClosedAt">-</span>
+                        </p>
+                    </div>
+                    <div id="archivedReportsGrid" class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3 sm:gap-4 max-h-[70vh] overflow-y-auto">
+                        <!-- Archived employees will be populated here -->
+                    </div>
+                </div>
             </div>
-
         </div>
         
         <!-- Developer Signature -->
@@ -481,8 +493,194 @@
         </footer>
     </div>
 
+    <!-- Approval Stamp (Print Only) -->
+    <div class="approval-stamp">
+        <span class="checkmark">✓</span>
+        <div class="department">إدارة التشغيل</div>
+        <div class="approved">معتمد</div>
+    </div>
+
+    <!-- Conditions Modal (Moved outside container to fix z-index issue) -->
+    <div id="conditionsModal" class="fixed inset-0 z-[999] hidden items-center justify-center bg-black/60 backdrop-blur-sm" onclick="closeConditionsModal(event)" style="z-index: 999 !important;">
+        <div class="glass rounded-2xl p-4 sm:p-6 md:p-8 max-w-2xl w-full mx-2 sm:mx-4 max-h-[95vh] sm:max-h-[90vh] overflow-y-auto" onclick="event.stopPropagation()" style="background: linear-gradient(135deg, rgba(15, 23, 41, 0.95) 0%, rgba(26, 31, 53, 0.95) 100%); border: 1px solid rgba(64, 224, 208, 0.3);">
+            <div class="flex items-center justify-between mb-4 sm:mb-6">
+                <h2 class="text-lg sm:text-xl md:text-2xl font-black text-turquoise flex items-center gap-2">
+                    <span>📋</span>
+                    <span>شروط الحصول على المكافآت</span>
+                </h2>
+                <button onclick="closeConditionsModal()" class="text-gray-400 hover:text-white transition-colors text-2xl sm:text-3xl font-bold min-w-[44px] min-h-[44px] flex items-center justify-center">&times;</button>
+            </div>
+            <div class="space-y-4">
+                <!-- قسم مكافآت العقود -->
+                <div class="bg-blue-500/10 rounded-xl p-4 border border-blue-500/30">
+                    <h3 class="text-lg font-bold text-blue-400 mb-3 flex items-center gap-2">
+                        <span>📊</span>
+                        <span>مكافآت العقود</span>
+                    </h3>
+                    <ul class="space-y-3 text-sm text-gray-300">
+                        <li class="flex items-start gap-3">
+                            <span class="text-blue-400 font-bold mt-0.5">•</span>
+                            <span>نقطة واحدة (1 ريال) لكل عقد حتى 50 عقد</span>
+                        </li>
+                        <li class="flex items-start gap-3">
+                            <span class="text-blue-400 font-bold mt-0.5">•</span>
+                            <span>ريالان (2 ريال) لكل عقد من 51 إلى 100 عقد</span>
+                        </li>
+                        <li class="flex items-start gap-3">
+                            <span class="text-blue-400 font-bold mt-0.5">•</span>
+                            <span>ثلاثة ريالات (3 ريال) لكل عقد أكثر من 100 عقد</span>
+                        </li>
+                    </ul>
+                </div>
+
+                <!-- قسم مكافآت التقييمات -->
+                <div class="bg-yellow-500/10 rounded-xl p-4 border border-yellow-500/30">
+                    <h3 class="text-lg font-bold text-yellow-400 mb-3 flex items-center gap-2">
+                        <span>⭐</span>
+                        <span>مكافآت التقييمات</span>
+                    </h3>
+                    <ul class="space-y-3 text-sm text-gray-300">
+                        <li class="flex items-start gap-3">
+                            <span class="text-yellow-400 font-bold mt-0.5">•</span>
+                            <span>20 ريال لكل تقييم Booking (ثابت)</span>
+                        </li>
+                        <li class="flex items-start gap-3">
+                            <span class="text-yellow-400 font-bold mt-0.5">•</span>
+                            <span>10 ريال لكل تقييم Google Maps (ثابت)</span>
+                        </li>
+                    </ul>
+                </div>
+
+                <!-- قسم حوافز تحدي الظروف -->
+                <div class="bg-green-500/10 rounded-xl p-4 border border-green-500/30">
+                    <h3 class="text-lg font-bold text-green-400 mb-3 flex items-center gap-2">
+                        <span>✓</span>
+                        <span>حوافز تحدي الظروف</span>
+                    </h3>
+                    <ul class="space-y-3 text-sm text-gray-300">
+                        <li class="flex items-start gap-3">
+                            <span class="text-green-400 font-bold mt-0.5">•</span>
+                            <span class="text-green-300">مكافأة 25% إضافية للموظفين الذين أتموا 26 يوماً وأكثر من العطاء (بطل تحدي الظروف) - يتم تفعيلها يدوياً من قبل المستخدم عند إتمام الموظف 26 يوماً وأكثر من العطاء (يتم التطبيق بناء على بصمه الحضور والانصراف)</span>
+                        </li>
+                    </ul>
+                </div>
+
+                <!-- قسم الحوافز الإضافية -->
+                <div class="bg-turquoise/10 rounded-xl p-4 border border-turquoise/30">
+                    <h3 class="text-lg font-bold text-turquoise mb-3 flex items-center gap-2">
+                        <span>🏆</span>
+                        <span>الحوافز الإضافية</span>
+                    </h3>
+                    <ul class="space-y-3 text-sm text-gray-300">
+                        <li class="flex items-start gap-3">
+                            <span class="text-turquoise font-bold mt-0.5">•</span>
+                            <span>50 ريال حافز تفوق (الأعلى تقييماً والأكثر حجوزات في نفس الفرع)</span>
+                        </li>
+                        <li class="flex items-start gap-3">
+                            <span class="text-turquoise font-bold mt-0.5">•</span>
+                            <span>50 ريال حافز التزام مضافه الى الـ 25% كباقي الموظفين الذين تموا 26 يوم دوام (الموظف الذي جمع الأكثر التزاماً + الأعلى تقييماً أو الأكثر حجوزات في نفس الفرع)</span>
+                        </li>
+                    </ul>
+                </div>
+            </div>
+                    <div class="mt-4 sm:mt-6 flex flex-col sm:flex-row gap-2 sm:gap-3 justify-end">
+                        <button onclick="printConditions()" class="glass px-4 sm:px-6 py-2.5 sm:py-2 rounded-lg text-sm font-bold text-white hover:bg-white/10 transition-colors flex items-center justify-center gap-2 min-h-[44px]">
+                            <span>🖨️</span>
+                            <span>طباعة الشروط</span>
+                        </button>
+                        <button onclick="closeConditionsModal()" class="glass px-4 sm:px-6 py-2.5 sm:py-2 rounded-lg text-sm font-bold text-gray-300 hover:bg-white/10 transition-colors min-h-[44px]">
+                            إغلاق
+                        </button>
+                    </div>
+        </div>
+    </div>
+
+    <!-- Employee Report Modal (Moved outside container to fix z-index issue) -->
+    <div id="employeeReportModal" class="fixed inset-0 z-[1000] hidden items-center justify-center" onclick="closeEmployeeReportModal(event)" style="background: rgba(0, 0, 0, 0.85); backdrop-filter: blur(8px); z-index: 1000 !important;">
+        <div class="rounded-2xl p-6 sm:p-8 max-w-4xl w-full mx-4 max-h-[90vh] overflow-y-auto" onclick="event.stopPropagation()" style="background: linear-gradient(135deg, rgba(15, 23, 41, 1) 0%, rgba(26, 31, 53, 1) 100%); border: 2px solid rgba(64, 224, 208, 0.6); box-shadow: 0 25px 70px rgba(0, 0, 0, 0.9), 0 0 50px rgba(64, 224, 208, 0.4);">
+            <div class="flex items-center justify-between mb-6">
+                <h2 class="text-2xl font-black text-turquoise flex items-center gap-2">
+                    <span>📊</span>
+                    <span id="reportEmployeeName">تقرير الموظف</span>
+                </h2>
+                <button onclick="event.stopPropagation(); closeEmployeeReportModal();" class="text-gray-400 hover:text-white transition-colors text-2xl font-bold">&times;</button>
+            </div>
+            <div id="employeeReportContent" class="space-y-4">
+                <!-- Report content will be populated here -->
+            </div>
+            <div class="mt-4 sm:mt-6 flex flex-col sm:flex-row gap-2 sm:gap-3 justify-end">
+                <button onclick="printEmployeeReport()" class="glass px-4 sm:px-6 py-2.5 sm:py-2 rounded-lg text-sm font-bold text-white hover:bg-white/10 transition-colors flex items-center justify-center gap-2 min-h-[44px]">
+                    <span>🖨️</span>
+                    <span>طباعة التقرير</span>
+                </button>
+                <button onclick="event.stopPropagation(); closeEmployeeReportModal();" class="glass px-4 sm:px-6 py-2.5 sm:py-2 rounded-lg text-sm font-bold text-gray-300 hover:bg-white/10 transition-colors min-h-[44px]">
+                    إغلاق
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Close Period Modal -->
+    <div id="closePeriodModal" class="fixed inset-0 z-[1001] hidden items-center justify-center bg-black/70 backdrop-blur-sm" onclick="closeClosePeriodModal(event)" style="z-index: 1001 !important;">
+        <div class="glass rounded-2xl p-4 sm:p-6 md:p-8 max-w-md w-full mx-2 sm:mx-4 max-h-[95vh] overflow-y-auto" onclick="event.stopPropagation()" style="background: linear-gradient(135deg, rgba(15, 23, 41, 0.95) 0%, rgba(26, 31, 53, 0.95) 100%); border: 2px solid rgba(239, 68, 68, 0.5);">
+            <div class="flex items-center justify-between mb-4 sm:mb-6">
+                <h2 class="text-lg sm:text-xl md:text-2xl font-black text-red-400 flex items-center gap-2">
+                    <span>🔒</span>
+                    <span>إغلاق الفترة</span>
+                </h2>
+                <button onclick="closeClosePeriodModal()" class="text-gray-400 hover:text-white transition-colors text-2xl sm:text-3xl font-bold min-w-[44px] min-h-[44px] flex items-center justify-center">&times;</button>
+            </div>
+            <div class="space-y-4">
+                <div class="bg-red-500/10 rounded-xl p-4 border border-red-500/30">
+                    <p class="text-sm text-gray-300 mb-2">
+                        <span class="font-bold text-red-400">تنبيه:</span> سيتم إغلاق الفترة الحالية وأرشفتها في Firebase Storage.
+                    </p>
+                    <p class="text-sm text-gray-300">
+                        الفترة: <span id="closePeriodPeriodText" class="text-turquoise font-bold">-</span>
+                    </p>
+                </div>
+                <div class="bg-yellow-500/10 rounded-xl p-4 border border-yellow-500/30">
+                    <p class="text-xs text-yellow-300">
+                        ⚠️ بعد الإغلاق، سيتم مسح جميع البيانات الحالية والعودة لصفحة الرفع.
+                    </p>
+                </div>
+            </div>
+            <div class="mt-4 sm:mt-6 flex flex-col sm:flex-row gap-2 sm:gap-3 justify-end">
+                <button onclick="confirmClosePeriod()" class="glass px-4 sm:px-6 py-2.5 sm:py-2 rounded-lg text-sm font-bold bg-gradient-to-r from-red-500/70 to-red-600/70 text-white hover:from-red-500/80 hover:to-red-600/80 transition-all flex items-center justify-center gap-2 min-h-[44px]">
+                    <span>🔒</span>
+                    <span>تأكيد الإغلاق</span>
+                </button>
+                <button onclick="closeClosePeriodModal()" class="glass px-4 sm:px-6 py-2.5 sm:py-2 rounded-lg text-sm font-bold text-gray-300 hover:bg-white/10 transition-colors min-h-[44px]">
+                    إلغاء
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Employee Codes Modal -->
+    <div id="employeeCodesModal" class="fixed inset-0 z-[1002] hidden items-center justify-center bg-black/70 backdrop-blur-sm" onclick="closeEmployeeCodesModal(event)" style="z-index: 1002 !important;">
+        <div class="glass rounded-2xl p-4 sm:p-6 md:p-8 max-w-4xl w-full mx-2 sm:mx-4 max-h-[95vh] overflow-y-auto" onclick="event.stopPropagation()" style="background: linear-gradient(135deg, rgba(15, 23, 41, 0.95) 0%, rgba(26, 31, 53, 0.95) 100%); border: 2px solid rgba(64, 224, 208, 0.5);">
+            <div class="flex items-center justify-between mb-4 sm:mb-6">
+                <h2 class="text-lg sm:text-xl md:text-2xl font-black text-turquoise flex items-center gap-2">
+                    <span>🔑</span>
+                    <span>أكواد الموظفين</span>
+                </h2>
+                <button onclick="closeEmployeeCodesModal()" class="text-gray-400 hover:text-white transition-colors text-2xl sm:text-3xl font-bold min-w-[44px] min-h-[44px] flex items-center justify-center">&times;</button>
+            </div>
+            <div id="employeeCodesContent" class="space-y-4">
+                <!-- Employee codes will be populated here -->
+            </div>
+            <div class="mt-4 sm:mt-6 flex justify-end">
+                <button onclick="closeEmployeeCodesModal()" class="glass px-4 sm:px-6 py-2.5 sm:py-2 rounded-lg text-sm font-bold text-gray-300 hover:bg-white/10 transition-colors min-h-[44px]">
+                    إغلاق
+                </button>
+            </div>
+        </div>
+    </div>
+
     <!-- JavaScript -->
     <script src="src/app.js"></script>
+    <script src="src/app-extensions.js"></script>
 </body>
 
 </html>

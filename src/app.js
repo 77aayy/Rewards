@@ -1,12 +1,109 @@
+// === Firebase Configuration ===
+const firebaseConfig = {
+  apiKey: "AIzaSyAKpUAnc_EJXxGrhPPfTAgnFB13Qvs_ogk",
+  authDomain: "rewards-63e43.firebaseapp.com",
+  projectId: "rewards-63e43",
+  storageBucket: "rewards-63e43.firebasestorage.app",
+  messagingSenderId: "453256410249",
+  appId: "1:453256410249:web:b7edd6afe3922c3e738258"
+};
+
+// Initialize Firebase (will be initialized after Firebase SDK loads)
+let storage = null;
+let firebaseApp = null;
+
 // === Global State ===
 let db = [];
 let branches = new Set();
 let currentFilter = 'الكل';
 let currentEvalRate = 20;
 let reportStartDate = null; // Store the start date for report month name
+let employeeCodesMap = {}; // Map employee names to codes
+
+// === Employee Code Functions ===
+function generateEmployeeCode() {
+  // Generate 4-digit code (1000-9999)
+  return Math.floor(1000 + Math.random() * 9000).toString();
+}
+
+function getOrCreateEmployeeCode(employeeName) {
+  // Check if employee already has a code
+  if (employeeCodesMap[employeeName]) {
+    return employeeCodesMap[employeeName];
+  }
+  // Generate new code and ensure uniqueness
+  let newCode;
+  const existingCodes = Object.values(employeeCodesMap);
+  do {
+    newCode = generateEmployeeCode();
+  } while (existingCodes.includes(newCode));
+  
+  employeeCodesMap[employeeName] = newCode;
+  saveEmployeeCodesMap();
+  return newCode;
+}
+
+function saveEmployeeCodesMap() {
+  try {
+    localStorage.setItem('adora_rewards_employeeCodes', JSON.stringify(employeeCodesMap));
+  } catch (error) {
+    console.error('❌ Error saving employee codes:', error);
+  }
+}
+
+function loadEmployeeCodesMap() {
+  try {
+    const saved = localStorage.getItem('adora_rewards_employeeCodes');
+    if (saved) {
+      employeeCodesMap = JSON.parse(saved);
+    }
+  } catch (error) {
+    console.error('❌ Error loading employee codes:', error);
+  }
+}
+
+// === Security: Admin Secret Key ===
+const ADMIN_SECRET_KEY = 'ayman5255'; // Change this to your preferred secret key
+
+// === Security: Check if user is in employee mode ===
+function isEmployeeMode() {
+  const urlParams = new URLSearchParams(window.location.search);
+  return urlParams.has('code');
+}
+
+// === Security: Check if user is admin ===
+function isAdminMode() {
+  const urlParams = new URLSearchParams(window.location.search);
+  const adminKey = urlParams.get('admin');
+  return adminKey === ADMIN_SECRET_KEY;
+}
+
 // Load data from localStorage on page load
 function loadDataFromStorage() {
 try {
+// Security: If employee mode, don't load admin data
+if (isEmployeeMode()) {
+  // Employee mode - data will be loaded by checkMobileEmployeeCode
+  return;
+}
+
+// Security: If not admin mode, block access
+if (!isAdminMode()) {
+  // Not admin and not employee - block access
+  document.body.innerHTML = `
+    <div style="display: flex; align-items: center; justify-content: center; min-height: 100vh; background: linear-gradient(135deg, #0a0e1a 0%, #1a1f35 100%); color: white; font-family: 'IBM Plex Sans Arabic', sans-serif; text-align: center; padding: 2rem;">
+      <div style="background: rgba(255, 255, 255, 0.1); padding: 3rem; border-radius: 20px; border: 2px solid rgba(239, 68, 68, 0.5); max-width: 500px;">
+        <div style="font-size: 4rem; margin-bottom: 1rem;">🔒</div>
+        <h1 style="font-size: 1.5rem; font-weight: 900; margin-bottom: 1rem; color: #ef4444;">غير مصرح بالدخول</h1>
+        <p style="color: #94a3b8; margin-bottom: 2rem;">يرجى استخدام الرابط الصحيح للوصول إلى النظام</p>
+        <p style="color: #64748b; font-size: 0.875rem;">إذا كنت موظفاً، يرجى استخدام QR Code الخاص بك</p>
+      </div>
+    </div>
+  `;
+  return;
+}
+
+loadEmployeeCodesMap(); // Load employee codes first
 const savedDb = localStorage.getItem('adora_rewards_db');
 const savedBranches = localStorage.getItem('adora_rewards_branches');
 const savedEvalRate = localStorage.getItem('adora_rewards_evalRate');
@@ -41,6 +138,8 @@ document.getElementById('actionBtns').style.display = 'flex';
 updateFilters();
 updatePrintButtonText();
 renderUI('الكل');
+// Update employees list if dropdown is open
+// Reports page is now separate, no need to populate dropdown
 console.log('✅ Data loaded from localStorage');
 }
 }
@@ -541,13 +640,17 @@ branches.add(currentBranch);
 }
 });
 if (db.length > 0) {
-// Add unique ID and evaluations init
-db = db.map(item => ({
-...item,
-id: item.id || crypto.randomUUID(),
-evaluations: item.evaluations || 0, // Keep for backward compatibility
-evaluationsBooking: item.evaluationsBooking || 0,
-evaluationsGoogle: item.evaluationsGoogle || 0,
+// Add unique ID, employee code, and evaluations init
+db = db.map(item => {
+  // Get or create employee code for this employee name
+  const employeeCode = getOrCreateEmployeeCode(item.name);
+  return {
+    ...item,
+    id: item.id || crypto.randomUUID(),
+    employeeCode: employeeCode, // Add employee code
+    evaluations: item.evaluations || 0, // Keep for backward compatibility
+    evaluationsBooking: item.evaluationsBooking || 0,
+    evaluationsGoogle: item.evaluationsGoogle || 0,
 // Calculate totalAttendanceDays if attendanceDaysPerBranch exists
 totalAttendanceDays: (() => {
 if (item.attendanceDaysPerBranch && typeof item.attendanceDaysPerBranch === 'object') {
@@ -565,7 +668,8 @@ return item.totalAttendanceDays || 0;
 })();
 return totalDays >= 26;
 })()
-}));
+  };
+});
 // Save to localStorage
 try {
 localStorage.setItem('adora_rewards_db', JSON.stringify(db));
@@ -963,8 +1067,9 @@ const bw = branchWinners[emp.branch];
 if (!bw) return;
 if (net > bw.net.val) { bw.net.val = net; bw.net.ids = [emp.id]; }
 else if (net === bw.net.val) { bw.net.ids.push(emp.id); }
-if (totalEval > bw.eval.val) { bw.eval.val = totalEval; bw.eval.ids = [emp.id]; }
-else if (totalEval === bw.eval.val) { bw.eval.ids.push(emp.id); }
+// "الأكثر تقييماً" = Booking فقط (NOT Google Maps)
+if (evBooking > bw.eval.val) { bw.eval.val = evBooking; bw.eval.ids = [emp.id]; }
+else if (evBooking === bw.eval.val) { bw.eval.ids.push(emp.id); }
 if (emp.count > bw.book.val) { bw.book.val = emp.count; bw.book.ids = [emp.id]; }
 else if (emp.count === bw.book.val) { bw.book.ids.push(emp.id); }
 // Track most committed (attendance26Days = true)
@@ -1062,7 +1167,14 @@ updateCommitmentBonusRow();
 // Update excellence bonus row immediately
 updateExcellenceBonusRow();
 // Update badges immediately for all rows
+// Use requestAnimationFrame to ensure DOM is ready
+requestAnimationFrame(() => {
 updateBadges();
+// Also update after a short delay to ensure badges are visible
+setTimeout(() => {
+updateBadges();
+}, 100);
+});
 // Save to localStorage after update
 try {
 localStorage.setItem('adora_rewards_db', JSON.stringify(db));
@@ -1116,6 +1228,11 @@ btn.classList.add('text-white', 'bg-white/5', 'border', 'border-white/10');
 updateReportTitle();
 updatePrintButtonText();
 renderUI(filter);
+// Ensure badges are updated after filter change
+// renderUI already calls updateBadges, but we add an extra call to be safe
+setTimeout(() => {
+updateBadges();
+}, 200);
 }
 function updatePrintButtonText() {
 const printBtn = document.getElementById('printAllBtn');
@@ -1305,22 +1422,62 @@ if (emp.count > 0 && emp.count < viewLosers.book.val) { viewLosers.book.val = em
 else if (emp.count > 0 && emp.count === viewLosers.book.val) { viewLosers.book.ids.push(emp.id); }
 });
 // Update badges in all rows (including badges-row)
-const rows = document.querySelectorAll('#mainTable tr');
-rows.forEach(row => {
-// Check if this is a badges-row (uses data-emp-id) or regular row (uses data-name)
-const empId = row.dataset.empId;
-const rName = row.dataset.name;
-const rBranch = row.dataset.branch;
-const badgeWrap = row.querySelector('.badges-wrapper');
-if (!badgeWrap) return;
-// Find employee: either by empId (for badges-row) or by name+branch (for regular row)
-let emp = null;
-if (empId) {
-emp = db.find(d => d.id === empId);
-} else if (rName && rBranch) {
-emp = db.find(d => d.name === rName && d.branch === rBranch);
-}
+// First, find all employee rows and ensure they have badges-rows
+const employeeRows = document.querySelectorAll('#mainTable tr[data-name]:not(.badges-row)');
+employeeRows.forEach(empRow => {
+const empId = empRow.dataset.id || empRow.dataset.empId;
+const rName = empRow.dataset.name;
+const rBranch = empRow.dataset.branch;
+if (!empId && !rName) return;
+// Find employee
+const emp = empId ? db.find(d => d.id === empId) : (rName && rBranch ? db.find(d => d.name === rName && d.branch === rBranch) : null);
 if (!emp) return;
+// Check if badges-row exists for this employee
+// Try multiple selectors to find the badges-row
+let badgesRow = document.querySelector(`tr.badges-row[data-emp-id="${emp.id}"]`);
+// If not found, try to find it by checking next sibling
+if (!badgesRow) {
+const nextSibling = empRow.nextElementSibling;
+if (nextSibling && nextSibling.classList.contains('badges-row') && 
+    (nextSibling.dataset.empId === emp.id || nextSibling.dataset.branch === emp.branch)) {
+    badgesRow = nextSibling;
+}
+}
+if (!badgesRow) {
+// Create badges-row if it doesn't exist
+badgesRow = document.createElement('tr');
+badgesRow.className = 'badges-row';
+badgesRow.setAttribute('data-emp-id', emp.id);
+badgesRow.setAttribute('data-branch', emp.branch);
+badgesRow.style.backgroundColor = 'rgba(255, 255, 255, 0.02)';
+const td = document.createElement('td');
+td.className = 'col-name p-2';
+td.setAttribute('colspan', '8');
+td.style.paddingRight = '16px';
+td.style.paddingTop = '4px';
+td.style.paddingBottom = '4px';
+const badgeWrap = document.createElement('div');
+badgeWrap.className = 'badges-wrapper flex flex-wrap gap-2 items-center';
+badgeWrap.style.direction = 'rtl';
+badgeWrap.style.textAlign = 'right';
+td.appendChild(badgeWrap);
+badgesRow.appendChild(td);
+// Insert badges-row after employee row
+empRow.insertAdjacentElement('afterend', badgesRow);
+}
+});
+// Now update all badges (including newly created ones)
+// First, update badges for all badges-rows directly
+const badgesRows = document.querySelectorAll('#mainTable tr.badges-row');
+badgesRows.forEach(badgesRow => {
+const empId = badgesRow.dataset.empId;
+if (!empId) return;
+const emp = db.find(d => d.id === empId);
+if (!emp) return;
+const badgeWrap = badgesRow.querySelector('.badges-wrapper');
+if (!badgeWrap) return;
+// Calculate badges for this employee
+const activeFilter = typeof currentFilter !== 'undefined' ? currentFilter : 'الكل';
 let badgesHtml = '';
 // Get all branches for this employee name (use emp.name instead of rName for badges-row compatibility)
 const allEmpBranches = db.filter(d => d.name === emp.name);
@@ -1781,7 +1938,7 @@ displayEmployees = commitmentEmployees.filter(e => e.branch === currentFilter);
 }
 if (displayEmployees.length > 0) {
 const names = displayEmployees.map(e => {
-if (activeFilter === 'الكل') {
+if (currentFilter === 'الكل') {
 return `${e.name} (${e.branch})`;
 } else {
 return e.name;
@@ -1824,8 +1981,9 @@ const bw = branchWinners[emp.branch];
 if (!bw) return;
 if (net > bw.net.val) { bw.net.val = net; bw.net.ids = [emp.id]; }
 else if (net === bw.net.val) { bw.net.ids.push(emp.id); }
-if (totalEval > bw.eval.val) { bw.eval.val = totalEval; bw.eval.ids = [emp.id]; }
-else if (totalEval === bw.eval.val) { bw.eval.ids.push(emp.id); }
+// "الأكثر تقييماً" = Booking فقط (NOT Google Maps)
+if (evBooking > bw.eval.val) { bw.eval.val = evBooking; bw.eval.ids = [emp.id]; }
+else if (evBooking === bw.eval.val) { bw.eval.ids.push(emp.id); }
 if (emp.count > bw.book.val) { bw.book.val = emp.count; bw.book.ids = [emp.id]; }
 else if (emp.count === bw.book.val) { bw.book.ids.push(emp.id); }
 // Track most committed (attendance26Days = true)
@@ -1902,7 +2060,7 @@ displayEmployees = excellenceEmployees.filter(e => e.branch === currentFilter);
 }
 if (displayEmployees.length > 0) {
 const names = displayEmployees.map(e => {
-if (activeFilter === 'الكل') {
+if (currentFilter === 'الكل') {
 return `${e.name} (${e.branch})`;
 } else {
 return e.name;
@@ -1951,8 +2109,9 @@ if (!bw || !bl) return;
 // Winners (Best) - using count and ev directly (not net, to avoid circular dependency)
 if (net > bw.net.val) { bw.net.val = net; bw.net.ids = [emp.id]; }
 else if (net === bw.net.val) { bw.net.ids.push(emp.id); }
-if (totalEval > bw.eval.val) { bw.eval.val = totalEval; bw.eval.ids = [emp.id]; }
-else if (totalEval === bw.eval.val) { bw.eval.ids.push(emp.id); }
+// "الأكثر تقييماً" = Booking فقط (NOT Google Maps)
+if (evBooking > bw.eval.val) { bw.eval.val = evBooking; bw.eval.ids = [emp.id]; }
+else if (evBooking === bw.eval.val) { bw.eval.ids.push(emp.id); }
 if (emp.count > bw.book.val) { bw.book.val = emp.count; bw.book.ids = [emp.id]; }
 else if (emp.count === bw.book.val) { bw.book.ids.push(emp.id); }
 // Track most committed (attendance26Days = true)
@@ -2255,26 +2414,63 @@ let excellenceEmployees = []; // Employees with excellence bonus
 let lastEmpKey = ""; // Track last employee key (name + branch) instead of just name
 // Track which duplicate employees already got their bonus applied (to apply only once)
 // First pass: determine which row should get the bonus for each duplicate employee
-const bonusApplied = {}; // { empName: { excellenceRowId: null, commitmentRowId: null } }
+const bonusApplied = {}; // { empName: { excellenceRowId: null, commitmentRowId: null, challengeRowId: null } }
 // Pre-calculate which row gets bonus for duplicates
 filtered.forEach((emp) => {
 if (nameCounts[emp.name] > 1) {
 if (!bonusApplied[emp.name]) {
 const s = calcStats(emp);
 const allEmpRows = filtered.filter(e => e.name === emp.name);
-// Find row that achieved the condition (has highest net, or first row if equal)
-let bonusRowId = allEmpRows[0].id;
+// Find row that achieved excellence bonus (has highest net, or first row if equal)
+let excellenceRowId = null;
+if (s.hasExcellenceBonus) {
 let maxNet = calcStats(allEmpRows[0]).net;
+excellenceRowId = allEmpRows[0].id;
 allEmpRows.forEach(e => {
 const stats = calcStats(e);
 if (stats.net > maxNet) {
 maxNet = stats.net;
-bonusRowId = e.id;
+excellenceRowId = e.id;
+}
+});
+}
+// Find row that achieved commitment bonus (has highest total amount including commitment bonus)
+// First, check all branches to see if employee qualifies for commitment bonus in any branch
+let commitmentRowId = null;
+let maxTotalAmount = -1;
+allEmpRows.forEach(e => {
+const stats = calcStats(e);
+// Only consider branches where employee actually qualifies for commitment bonus
+if (stats.hasCommitmentBonus) {
+// Calculate total amount including commitment bonus for this branch
+const totalAmount = stats.net + stats.commitmentBonus;
+if (totalAmount > maxTotalAmount) {
+maxTotalAmount = totalAmount;
+commitmentRowId = e.id;
+}
+}
+});
+// Find row that should get challenge bonus (25%) - has highest total amount (net + attendanceBonus)
+// First, check all branches to see if employee qualifies for challenge bonus (attendance26Days = true) in any branch
+let challengeRowId = null;
+let maxChallengeTotalAmount = -1;
+allEmpRows.forEach(e => {
+const stats = calcStats(e);
+// Only consider branches where employee actually qualifies for challenge bonus (attendance26Days = true)
+if (stats.attendance26Days && stats.attendanceBonus > 0) {
+// Calculate total amount including challenge bonus for this branch
+// Note: stats.net already includes attendanceBonus, so we use it directly
+const totalAmount = stats.net;
+if (totalAmount > maxChallengeTotalAmount) {
+maxChallengeTotalAmount = totalAmount;
+challengeRowId = e.id;
+}
 }
 });
 bonusApplied[emp.name] = {
-excellenceRowId: s.hasExcellenceBonus ? bonusRowId : null,
-commitmentRowId: s.hasCommitmentBonus ? bonusRowId : null
+excellenceRowId: excellenceRowId,
+commitmentRowId: commitmentRowId,
+challengeRowId: challengeRowId
 };
 }
 }
@@ -2306,16 +2502,28 @@ totalFund += s.fund;
 // For duplicate employees: apply bonus only once (on the designated row)
 let finalExcellenceBonus = s.excellenceBonus;
 let finalCommitmentBonus = s.commitmentBonus;
+let finalAttendanceBonus = s.attendanceBonus;
+let finalAttendance26Days = s.attendance26Days;
 let finalHasExcellenceBonus = s.hasExcellenceBonus;
 let finalHasCommitmentBonus = s.hasCommitmentBonus;
 if (s.isDuplicate) {
 const shouldApplyExcellence = bonusApplied[emp.name]?.excellenceRowId === emp.id;
 const shouldApplyCommitment = bonusApplied[emp.name]?.commitmentRowId === emp.id;
+const shouldApplyChallenge = bonusApplied[emp.name]?.challengeRowId === emp.id;
 finalExcellenceBonus = shouldApplyExcellence ? s.excellenceBonus : 0;
 finalCommitmentBonus = shouldApplyCommitment ? s.commitmentBonus : 0;
-finalHasExcellenceBonus = shouldApplyExcellence;
-finalHasCommitmentBonus = shouldApplyCommitment;
-totalNet += s.net + finalExcellenceBonus + finalCommitmentBonus;
+// For challenge bonus: if not applied in this branch, remove attendanceBonus from net
+if (!shouldApplyChallenge && s.attendanceBonus > 0) {
+// Remove attendanceBonus from net (it was already added in calcStats)
+s.net = s.net - s.attendanceBonus;
+finalAttendanceBonus = 0;
+finalAttendance26Days = false;
+} else if (shouldApplyChallenge) {
+// Keep attendanceBonus as calculated
+finalAttendanceBonus = s.attendanceBonus;
+finalAttendance26Days = s.attendance26Days;
+}
+totalNet += s.net + finalExcellenceBonus + finalCommitmentBonus + finalAttendanceBonus;
 } else {
 // For non-duplicate: apply bonus normally
 totalNet += s.net + s.excellenceBonus + s.commitmentBonus;
@@ -2325,6 +2533,8 @@ s.excellenceBonus = finalExcellenceBonus;
 s.hasExcellenceBonus = finalHasExcellenceBonus;
 s.commitmentBonus = finalCommitmentBonus;
 s.hasCommitmentBonus = finalHasCommitmentBonus;
+s.attendanceBonus = finalAttendanceBonus;
+s.attendance26Days = finalAttendance26Days;
 // For duplicates in "الكل" view: use aggregated totals
 if (filter === 'الكل' && nameCounts[emp.name] > 1) {
 totalBookings += s.aggregatedCount || s.count;
@@ -3239,31 +3449,647 @@ badgeWrap.innerHTML = badgesHtml;
 updateFooterTotals();
 updateDashboardStats();
 // Update badges immediately for all rows (after renderUI completes)
+// Use requestAnimationFrame to ensure DOM is fully rendered
+requestAnimationFrame(() => {
+updateBadges();
+// Also update after a short delay to ensure all badges are visible (especially after filter change)
 setTimeout(() => {
 updateBadges();
-}, 50);
+}, 150);
+});
 }
 // === Print Functionality ===
 function smartPrint(onlySelected) {
 try {
-// Save current sort and sort by employee name for printing
-const originalSort = { ...currentSort };
-if (currentSort.key !== 'name') {
-currentSort.key = 'name';
-currentSort.order = 'asc';
-updateSortIcons();
-renderUI(currentFilter);
-// Wait a bit for DOM to update
-setTimeout(() => {
-performPrint(onlySelected, originalSort);
-}, 100);
-} else {
-performPrint(onlySelected, originalSort);
-}
+// Generate professional print report
+generateProfessionalPrintReport(onlySelected);
 } catch (error) {
 console.error('Error in smartPrint:', error);
 alert('حدث خطأ أثناء الطباعة: ' + error.message);
 }
+}
+function generateProfessionalPrintReport(onlySelected) {
+// Get data
+const filter = currentFilter;
+const periodText = document.getElementById('headerPeriodRange')?.innerText || '-';
+const reportDate = new Date().toLocaleDateString('ar-SA', { year: 'numeric', month: 'long', day: 'numeric' });
+// Filter employees
+let employeesToPrint = [];
+if (onlySelected) {
+const rows = document.querySelectorAll('#mainTable tr:not(.badges-row)');
+rows.forEach(row => {
+const checkbox = row.querySelector('.emp-checkbox');
+if (checkbox && checkbox.checked) {
+// Try multiple attribute names for compatibility
+const empId = row.dataset.id || row.dataset.empId || row.getAttribute('data-id') || row.getAttribute('data-emp-id');
+// Also try to get from name and branch if ID not found
+if (!empId) {
+const empName = row.dataset.name;
+const empBranch = row.dataset.branch;
+if (empName && empBranch) {
+const emp = db.find(e => e.name === empName && e.branch === empBranch);
+if (emp) {
+employeesToPrint.push(emp);
+return;
+}
+}
+}
+if (empId) {
+const emp = db.find(e => e.id === empId);
+if (emp) employeesToPrint.push(emp);
+}
+}
+});
+// If no employees found, show alert
+if (employeesToPrint.length === 0) {
+alert('لم يتم تحديد أي موظف للطباعة. يرجى تحديد موظف واحد على الأقل.');
+return;
+}
+} else {
+employeesToPrint = filter === 'الكل' ? [...db] : db.filter(e => e.branch === filter);
+}
+// Sort by name
+employeesToPrint.sort((a, b) => a.name.localeCompare(b.name, 'ar'));
+// Calculate totals
+let totalFund = 0, totalNet = 0, totalEval = 0, totalBookings = 0, totalNetNoEval = 0;
+let totalExcellenceBonus = 0, totalCommitmentBonus = 0;
+const branchWinners = {};
+[...branches].forEach(b => {
+branchWinners[b] = { net: {val: -1, ids: []}, eval: {val: -1, ids: []}, book: {val: -1, ids: []}, attendance: {val: -1, ids: []} };
+});
+// Calculate branch winners
+db.forEach(emp => {
+const rate = emp.count > 100 ? 3 : (emp.count > 50 ? 2 : 1);
+const evBooking = emp.evaluationsBooking || 0;
+const evGoogle = emp.evaluationsGoogle || 0;
+const gross = (emp.count * rate) + (evBooking * 20) + (evGoogle * 10);
+const fund = gross * 0.15;
+let net = gross - fund;
+const attendance26Days = emp.attendance26Days === true;
+const attendanceBonus = attendance26Days ? net * 0.25 : 0;
+net = net + attendanceBonus;
+const bw = branchWinners[emp.branch];
+if (bw) {
+if (net > bw.net.val) { bw.net.val = net; bw.net.ids = [emp.id]; }
+else if (net === bw.net.val) { bw.net.ids.push(emp.id); }
+if (evBooking > bw.eval.val) { bw.eval.val = evBooking; bw.eval.ids = [emp.id]; }
+else if (evBooking === bw.eval.val) { bw.eval.ids.push(emp.id); }
+if (emp.count > bw.book.val) { bw.book.val = emp.count; bw.book.ids = [emp.id]; }
+else if (emp.count === bw.book.val) { bw.book.ids.push(emp.id); }
+if (attendance26Days) {
+if (bw.attendance.val === -1) { bw.attendance.val = 1; bw.attendance.ids = [emp.id]; }
+else { bw.attendance.ids.push(emp.id); }
+}
+}
+});
+// Calculate nameCounts for duplicate detection
+const nameCounts = {};
+db.forEach(e => {
+nameCounts[e.name] = (nameCounts[e.name] || 0) + 1;
+});
+// Use same calcStats function from renderUI
+const calcStats = (emp) => {
+const rate = emp.count > 100 ? 3 : (emp.count > 50 ? 2 : 1);
+const evBooking = emp.evaluationsBooking || 0;
+const evGoogle = emp.evaluationsGoogle || 0;
+const ev = evBooking;
+const nameCount = nameCounts[emp.name] || 1;
+const isDuplicate = nameCount > 1;
+let aggregatedCount = emp.count;
+let aggregatedEvalBooking = evBooking;
+let aggregatedDays = emp.totalAttendanceDays || (emp.attendance26Days === true ? 26 : 0);
+if (isDuplicate) {
+const allEmpBranches = db.filter(e => e.name === emp.name);
+aggregatedCount = allEmpBranches.reduce((sum, e) => sum + (e.count || 0), 0);
+aggregatedEvalBooking = allEmpBranches.reduce((sum, e) => sum + (e.evaluationsBooking || 0), 0);
+const firstEmp = allEmpBranches[0];
+if (firstEmp.attendanceDaysPerBranch) {
+aggregatedDays = Object.values(firstEmp.attendanceDaysPerBranch).reduce((sum, d) => sum + (parseInt(d) || 0), 0);
+} else {
+aggregatedDays = firstEmp.totalAttendanceDays || (firstEmp.attendance26Days === true ? 26 : 0);
+}
+}
+let hasExcellenceBonus = false;
+if (isDuplicate) {
+[...branches].forEach(branch => {
+const branchEmployees = db.filter(e => e.branch === branch);
+let isHighestBookInBranch = true;
+let isHighestEvalInBranch = true;
+branchEmployees.forEach(otherEmp => {
+if (otherEmp.name === emp.name) return;
+const otherAgg = nameCounts[otherEmp.name] > 1 ? {
+totalCount: db.filter(e => e.name === otherEmp.name).reduce((sum, e) => sum + (e.count || 0), 0),
+totalEvalBooking: db.filter(e => e.name === otherEmp.name).reduce((sum, e) => sum + (e.evaluationsBooking || 0), 0)
+} : { totalCount: otherEmp.count || 0, totalEvalBooking: otherEmp.evaluationsBooking || 0 };
+if (otherAgg.totalCount > aggregatedCount) isHighestBookInBranch = false;
+if (otherAgg.totalEvalBooking > aggregatedEvalBooking) isHighestEvalInBranch = false;
+});
+if (isHighestBookInBranch && isHighestEvalInBranch && aggregatedCount > 0 && aggregatedEvalBooking > 0) {
+hasExcellenceBonus = true;
+}
+});
+} else {
+hasExcellenceBonus = branchWinners[emp.branch]?.book.ids.includes(emp.id) && 
+branchWinners[emp.branch]?.eval.ids.includes(emp.id) &&
+branchWinners[emp.branch].book.val > 0 && 
+branchWinners[emp.branch].eval.val > 0;
+}
+const excellenceBonus = hasExcellenceBonus ? 50 : 0;
+const attendance26Days = isDuplicate ? (aggregatedDays >= 26 && emp.attendance26Days === true) : (emp.attendance26Days === true);
+let isMostCommitted = false;
+let isMostEval = false;
+let isMostBook = false;
+if (isDuplicate) {
+[...branches].forEach(branch => {
+const branchEmployees = db.filter(e => e.branch === branch);
+let isHighestDaysInBranch = true;
+let isHighestEvalInBranch = true;
+let isHighestBookInBranch = true;
+branchEmployees.forEach(otherEmp => {
+if (otherEmp.name === emp.name) return;
+const otherAgg = nameCounts[otherEmp.name] > 1 ? {
+totalDays: db.filter(e => e.name === otherEmp.name).reduce((sum, e) => {
+if (e.attendanceDaysPerBranch) {
+return Object.values(e.attendanceDaysPerBranch).reduce((s, d) => s + (parseInt(d) || 0), 0);
+}
+return e.totalAttendanceDays || (e.attendance26Days === true ? 26 : 0);
+}, 0),
+totalEvalBooking: db.filter(e => e.name === otherEmp.name).reduce((sum, e) => sum + (e.evaluationsBooking || 0), 0),
+totalCount: db.filter(e => e.name === otherEmp.name).reduce((sum, e) => sum + (e.count || 0), 0)
+} : {
+totalDays: otherEmp.attendance26Days === true ? 26 : 0,
+totalEvalBooking: otherEmp.evaluationsBooking || 0,
+totalCount: otherEmp.count || 0
+};
+if (otherAgg.totalDays > aggregatedDays) isHighestDaysInBranch = false;
+if (otherAgg.totalEvalBooking > aggregatedEvalBooking) isHighestEvalInBranch = false;
+if (otherAgg.totalCount > aggregatedCount) isHighestBookInBranch = false;
+});
+if (isHighestDaysInBranch && aggregatedDays >= 26) isMostCommitted = true;
+if (isHighestEvalInBranch && aggregatedEvalBooking > 0) isMostEval = true;
+if (isHighestBookInBranch && aggregatedCount > 0) isMostBook = true;
+});
+} else {
+isMostCommitted = branchWinners[emp.branch]?.attendance.ids.includes(emp.id);
+isMostEval = branchWinners[emp.branch]?.eval.ids.includes(emp.id) && branchWinners[emp.branch].eval.val > 0;
+isMostBook = branchWinners[emp.branch]?.book.ids.includes(emp.id) && branchWinners[emp.branch].book.val > 0;
+}
+const hasCommitmentBonus = attendance26Days && isMostCommitted && (isMostEval || isMostBook);
+const commitmentBonus = hasCommitmentBonus ? 50 : 0;
+const gross = (emp.count * rate) + (evBooking * 20) + (evGoogle * 10);
+const fund = gross * 0.15;
+let net = gross - fund;
+const attendanceBonus = attendance26Days ? net * 0.25 : 0;
+net = net + attendanceBonus;
+return { net, ev, count: emp.count, branch: emp.branch, name: emp.name, id: emp.id, fund, 
+excellenceBonus, hasExcellenceBonus, commitmentBonus, hasCommitmentBonus, 
+attendance26Days, attendanceBonus, gross, evBooking, evGoogle, isDuplicate };
+};
+// Calculate bonusApplied for duplicates (same logic as renderUI)
+const bonusApplied = {};
+employeesToPrint.forEach((emp) => {
+if (nameCounts[emp.name] > 1) {
+if (!bonusApplied[emp.name]) {
+const s = calcStats(emp);
+const allEmpRows = employeesToPrint.filter(e => e.name === emp.name);
+let excellenceRowId = null;
+if (s.hasExcellenceBonus) {
+let maxNet = calcStats(allEmpRows[0]).net;
+excellenceRowId = allEmpRows[0].id;
+allEmpRows.forEach(e => {
+const stats = calcStats(e);
+if (stats.net > maxNet) {
+maxNet = stats.net;
+excellenceRowId = e.id;
+}
+});
+}
+let commitmentRowId = null;
+let maxTotalAmount = -1;
+allEmpRows.forEach(e => {
+const stats = calcStats(e);
+if (stats.hasCommitmentBonus) {
+const totalAmount = stats.net + stats.commitmentBonus;
+if (totalAmount > maxTotalAmount) {
+maxTotalAmount = totalAmount;
+commitmentRowId = e.id;
+}
+}
+});
+let challengeRowId = null;
+let maxChallengeTotalAmount = -1;
+allEmpRows.forEach(e => {
+const stats = calcStats(e);
+if (stats.attendance26Days && stats.attendanceBonus > 0) {
+const totalAmount = stats.net;
+if (totalAmount > maxChallengeTotalAmount) {
+maxChallengeTotalAmount = totalAmount;
+challengeRowId = e.id;
+}
+}
+});
+bonusApplied[emp.name] = {
+excellenceRowId: excellenceRowId,
+commitmentRowId: commitmentRowId,
+challengeRowId: challengeRowId
+};
+}
+}
+});
+// Process employees for print
+const printRows = [];
+employeesToPrint.forEach(emp => {
+const s = calcStats(emp);
+let finalExcellenceBonus = s.excellenceBonus;
+let finalCommitmentBonus = s.commitmentBonus;
+let finalAttendanceBonus = s.attendanceBonus;
+let finalAttendance26Days = s.attendance26Days;
+if (s.isDuplicate) {
+const shouldApplyExcellence = bonusApplied[emp.name]?.excellenceRowId === emp.id;
+const shouldApplyCommitment = bonusApplied[emp.name]?.commitmentRowId === emp.id;
+const shouldApplyChallenge = bonusApplied[emp.name]?.challengeRowId === emp.id;
+finalExcellenceBonus = shouldApplyExcellence ? s.excellenceBonus : 0;
+finalCommitmentBonus = shouldApplyCommitment ? s.commitmentBonus : 0;
+if (!shouldApplyChallenge && s.attendanceBonus > 0) {
+s.net = s.net - s.attendanceBonus;
+finalAttendanceBonus = 0;
+finalAttendance26Days = false;
+} else if (shouldApplyChallenge) {
+finalAttendanceBonus = s.attendanceBonus;
+finalAttendance26Days = s.attendance26Days;
+}
+}
+const finalNet = s.net + finalExcellenceBonus + finalCommitmentBonus;
+// Badges
+const badges = [];
+if (finalExcellenceBonus > 0) badges.push('حافز التفوق');
+if (finalCommitmentBonus > 0) badges.push('حافز الالتزام');
+if (finalAttendance26Days) badges.push('بطل تحدي الظروف');
+totalFund += s.fund;
+totalNet += finalNet;
+totalEval += s.evBooking + s.evGoogle;
+totalBookings += s.count;
+totalNetNoEval += (s.count * (s.count > 100 ? 3 : (s.count > 50 ? 2 : 1))) * 0.85;
+totalExcellenceBonus += finalExcellenceBonus;
+totalCommitmentBonus += finalCommitmentBonus;
+// Generate detailed explanation for this employee
+const explanations = [];
+if (finalAttendanceBonus > 0) {
+explanations.push(`حافز تحدي الظروف (25%): +${finalAttendanceBonus.toFixed(2)} ريال`);
+}
+if (finalExcellenceBonus > 0) {
+const isMostEval = branchWinners[s.branch]?.eval.ids.includes(s.id) && branchWinners[s.branch].eval.val > 0;
+const isMostBook = branchWinners[s.branch]?.book.ids.includes(s.id) && branchWinners[s.branch].book.val > 0;
+if (isMostEval && isMostBook) {
+explanations.push(`حافز التفوق (الأعلى تقييماً والأكثر حجوزات): +${finalExcellenceBonus.toFixed(2)} ريال`);
+}
+}
+if (finalCommitmentBonus > 0) {
+const isMostCommitted = branchWinners[s.branch]?.attendance.ids.includes(s.id);
+const isMostEval = branchWinners[s.branch]?.eval.ids.includes(s.id) && branchWinners[s.branch].eval.val > 0;
+const isMostBook = branchWinners[s.branch]?.book.ids.includes(s.id) && branchWinners[s.branch].book.val > 0;
+if (isMostCommitted && (isMostEval || isMostBook)) {
+explanations.push(`حافز الالتزام (الأكثر التزاماً + ${isMostEval ? 'الأعلى تقييماً' : 'الأكثر حجوزات'}): +${finalCommitmentBonus.toFixed(2)} ريال`);
+}
+}
+const explanationText = explanations.length > 0 ? explanations.join(' | ') : '';
+
+printRows.push({
+name: s.name,
+branch: s.branch,
+count: s.count,
+rate: s.count > 100 ? 3 : (s.count > 50 ? 2 : 1),
+evBooking: s.evBooking,
+evGoogle: s.evGoogle,
+gross: s.gross,
+fund: s.fund,
+net: s.net,
+attendanceBonus: finalAttendanceBonus,
+excellenceBonus: finalExcellenceBonus,
+commitmentBonus: finalCommitmentBonus,
+finalNet: finalNet,
+badges: badges,
+attendance26Days: finalAttendance26Days,
+explanation: explanationText
+});
+});
+// Validate that we have employees to print
+if (printRows.length === 0) {
+alert('لا توجد بيانات للطباعة. يرجى التأكد من تحديد الموظفين بشكل صحيح.');
+return;
+}
+
+// Generate HTML
+const printWindow = window.open('', '_blank');
+const reportTitle = filter === 'الكل' ? 'جميع الفروع' : filter;
+const printContent = generatePrintHTML(reportTitle, periodText, reportDate, printRows, {
+totalFund, totalNet, totalEval, totalBookings, totalNetNoEval,
+totalExcellenceBonus, totalCommitmentBonus
+});
+printWindow.document.write(printContent);
+printWindow.document.close();
+setTimeout(() => {
+printWindow.print();
+}, 250);
+}
+function generatePrintHTML(reportTitle, periodText, reportDate, rows, totals) {
+return `<!DOCTYPE html>
+<html dir="rtl" lang="ar">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>تقرير المكافآت - ${reportTitle}</title>
+<style>
+@page {
+size: A4 portrait;
+margin: 15mm 10mm;
+}
+* {
+margin: 0;
+padding: 0;
+box-sizing: border-box;
+}
+body {
+font-family: 'IBM Plex Sans Arabic', 'Arial', sans-serif;
+direction: rtl;
+background: white;
+color: #000;
+padding: 0;
+font-size: 11px;
+line-height: 1.4;
+}
+.header {
+border-bottom: 4px solid #40E0D0;
+padding-bottom: 15px;
+margin-bottom: 20px;
+text-align: center;
+}
+.header h1 {
+font-size: 24px;
+font-weight: 900;
+color: #000;
+margin-bottom: 8px;
+}
+.header h2 {
+font-size: 18px;
+font-weight: 700;
+color: #333;
+margin-bottom: 5px;
+}
+.header .info {
+font-size: 12px;
+color: #666;
+margin-top: 10px;
+display: flex;
+justify-content: space-between;
+align-items: center;
+}
+table {
+width: 100%;
+border-collapse: collapse;
+margin: 15px 0;
+font-size: 10px;
+page-break-inside: auto;
+}
+thead {
+background: #f8f9fa;
+border-bottom: 3px solid #40E0D0;
+}
+thead th {
+padding: 10px 6px;
+text-align: center;
+font-weight: 800;
+font-size: 11px;
+color: #000;
+border: 1px solid #ddd;
+background: #e8f4f8;
+}
+tbody tr {
+border-bottom: 1px solid #e0e0e0;
+page-break-inside: avoid;
+}
+tbody tr:nth-child(even) {
+background: #f9f9f9;
+}
+tbody td {
+padding: 8px 6px;
+text-align: center;
+border: 1px solid #e0e0e0;
+font-size: 10px;
+vertical-align: middle;
+}
+td.name-col {
+text-align: right;
+font-weight: 700;
+padding-right: 10px;
+}
+td.branch-col {
+text-align: center;
+color: #555;
+font-size: 9px;
+}
+td.badge-col {
+text-align: right;
+padding-right: 8px;
+font-size: 8px;
+}
+td.badge-col span {
+display: inline-block;
+background: #e8f4f8;
+color: #0066cc;
+padding: 2px 6px;
+margin: 2px;
+border-radius: 3px;
+font-weight: 600;
+}
+td.number-col {
+font-weight: 700;
+font-family: 'Courier New', monospace;
+}
+td.bonus-col {
+color: #006400;
+font-weight: 800;
+}
+tfoot {
+background: #f0f0f0;
+border-top: 3px solid #40E0D0;
+}
+tfoot tr.summary-row {
+background: #e8f4f8;
+font-weight: 800;
+}
+tfoot td {
+padding: 12px 8px;
+font-size: 11px;
+font-weight: 900;
+border: 2px solid #40E0D0;
+text-align: center;
+}
+tfoot td.label-col {
+text-align: right;
+padding-right: 15px;
+font-size: 12px;
+}
+.footer {
+margin-top: 30px;
+padding-top: 15px;
+border-top: 2px solid #ddd;
+text-align: center;
+font-size: 10px;
+color: #666;
+}
+.approval-stamp {
+position: fixed;
+bottom: 25mm;
+left: 50%;
+transform: translateX(-50%);
+width: 100px;
+height: 100px;
+border: 3px solid #8b0000;
+border-radius: 50%;
+background: rgba(255, 255, 255, 0.95);
+display: flex;
+flex-direction: column;
+justify-content: center;
+align-items: center;
+box-shadow: 0 2px 8px rgba(0,0,0,0.2);
+z-index: 1000;
+}
+.approval-stamp .checkmark {
+color: #006400;
+font-size: 24px;
+font-weight: 900;
+margin-bottom: 3px;
+}
+.approval-stamp .department {
+color: #8b0000;
+font-size: 10px;
+font-weight: 700;
+margin-bottom: 2px;
+}
+.approval-stamp .approved {
+color: #8b0000;
+font-size: 11px;
+font-weight: 800;
+}
+@media print {
+body {
+margin: 0;
+padding: 0;
+}
+}
+</style>
+</head>
+<body>
+<div class="header">
+<h1>فندق إليت <span style="color: #40E0D0;">Elite Hotel</span></h1>
+<h2>تقرير استحقاق المكافآت الرسمي</h2>
+<div class="info">
+<span><strong>الفرع:</strong> ${reportTitle}</span>
+<span><strong>الفترة:</strong> ${periodText}</span>
+<span><strong>تاريخ التقرير:</strong> ${reportDate}</span>
+</div>
+</div>
+<table>
+<thead>
+<tr>
+<th style="width: 4%;">#</th>
+<th style="width: 16%;">اسم الموظف</th>
+<th style="width: 9%;">الفرع</th>
+<th style="width: 7%;">العقود</th>
+<th style="width: 7%;">التقييمات</th>
+<th style="width: 9%;">الإجمالي</th>
+<th style="width: 9%;">مساهمة شركاء النجاح</th>
+<th style="width: 9%;">الصافي</th>
+<th style="width: 10%;">الحوافز</th>
+<th style="width: 10%;">الإجمالي النهائي</th>
+<th style="width: 10%;">الملاحظات</th>
+</tr>
+</thead>
+<tbody>
+${rows.map((row, index) => {
+const badgesHtml = row.badges.length > 0 
+? row.badges.map(b => `<span>${b}</span>`).join('')
+: '-';
+const bonuses = [];
+if (row.attendanceBonus > 0) bonuses.push(`+${row.attendanceBonus.toFixed(2)} (25%)`);
+if (row.excellenceBonus > 0) bonuses.push(`+${row.excellenceBonus.toFixed(2)}`);
+if (row.commitmentBonus > 0) bonuses.push(`+${row.commitmentBonus.toFixed(2)}`);
+const bonusesText = bonuses.length > 0 ? bonuses.join('<br>') : '-';
+return `<tr>
+<td class="number-col">${index + 1}</td>
+<td class="name-col">${row.name}</td>
+<td class="branch-col">${row.branch}</td>
+<td class="number-col">${row.count}</td>
+<td class="number-col">${row.evBooking + row.evGoogle}</td>
+<td class="number-col">${row.gross.toFixed(2)}</td>
+<td class="number-col">${row.fund.toFixed(2)}</td>
+<td class="number-col">${row.net.toFixed(2)}</td>
+<td class="bonus-col" style="font-size: 8px;">${bonusesText}</td>
+<td class="number-col" style="color: #006400; font-size: 11px;">${row.finalNet.toFixed(2)}</td>
+<td class="badge-col">${badgesHtml}</td>
+</tr>`;
+}).join('')}
+</tbody>
+<tfoot>
+<tr class="summary-row">
+<td colspan="6" class="label-col">الإجماليات:</td>
+<td class="number-col">${totals.totalFund.toFixed(2)}</td>
+<td class="number-col">${(totals.totalNet - totals.totalExcellenceBonus - totals.totalCommitmentBonus).toFixed(2)}</td>
+<td class="number-col">${(totals.totalExcellenceBonus + totals.totalCommitmentBonus).toFixed(2)}</td>
+<td class="number-col" style="color: #006400; font-size: 12px;">${totals.totalNet.toFixed(2)}</td>
+<td></td>
+</tr>
+<tr>
+<td colspan="3" class="label-col">إجمالي العقود:</td>
+<td class="number-col" colspan="2">${totals.totalBookings}</td>
+<td colspan="6"></td>
+</tr>
+<tr>
+<td colspan="3" class="label-col">إجمالي التقييمات:</td>
+<td class="number-col" colspan="2">${totals.totalEval}</td>
+<td colspan="6"></td>
+</tr>
+<tr>
+<td colspan="3" class="label-col">مساهمة شركاء النجاح (إجمالي):</td>
+<td class="number-col" colspan="2">${totals.totalFund.toFixed(2)}</td>
+<td colspan="6"></td>
+</tr>
+<tr class="summary-row" style="background: #d4edda; border-top: 3px solid #40E0D0;">
+<td colspan="9" class="label-col" style="font-size: 14px; color: #000; font-weight: 900; text-align: right; padding-right: 20px;">الإجمالي الكلي (عمال + موظفين):</td>
+<td class="number-col" style="font-size: 16px; color: #006400; font-weight: 900; text-align: center;">${(totals.totalFund + totals.totalNet).toFixed(2)}</td>
+<td></td>
+</tr>
+</tfoot>
+</table>
+<div class="explanations-section" style="margin-top: 25px; padding-top: 15px; border-top: 2px solid #ddd;">
+<h3 style="font-size: 13px; font-weight: 800; color: #000; margin-bottom: 12px; text-align: right;">شرح المبالغ المستحقة:</h3>
+<div style="font-size: 9px; line-height: 2; color: #555; font-weight: 300;">
+${rows.map((row, index) => {
+const baseText = `<strong style="font-weight: 600; color: #000;">${row.name}</strong> (${row.branch}): الصافي الأساسي: ${row.net.toFixed(2)} ريال`;
+if (row.explanation) {
+return `<div style="margin-bottom: 6px; padding-right: 10px; border-right: 2px solid #e0e0e0; text-align: right;">
+${baseText} | ${row.explanation} <strong style="font-weight: 700; color: #006400;">= الإجمالي: ${row.finalNet.toFixed(2)} ريال</strong>
+</div>`;
+} else {
+return `<div style="margin-bottom: 6px; padding-right: 10px; border-right: 2px solid #e0e0e0; text-align: right;">
+${baseText} <strong style="font-weight: 700; color: #006400;">= الإجمالي: ${row.finalNet.toFixed(2)} ريال</strong>
+</div>`;
+}
+}).join('')}
+</div>
+</div>
+<div class="footer">
+<p>تم إنشاء هذا التقرير تلقائياً بواسطة نظام إدارة المكافآت</p>
+<p>تاريخ الطباعة: ${reportDate}</p>
+</div>
+<div class="approval-stamp">
+<div class="checkmark">✓</div>
+<div class="department">إدارة التشغيل</div>
+<div class="approved">معتمد</div>
+</div>
+</body>
+</html>`;
 }
 function performPrint(onlySelected, originalSort) {
 try {
@@ -3479,6 +4305,7 @@ setTimeout(() => toast.remove(), 500);
 function showConditionsModal() {
 const modal = document.getElementById('conditionsModal');
 if (modal) {
+modal.style.setProperty('z-index', '999', 'important');
 modal.classList.remove('hidden');
 modal.classList.add('flex');
 }
@@ -3490,6 +4317,898 @@ if (modal) {
 modal.classList.add('hidden');
 modal.classList.remove('flex');
 }
+}
+// === Reports Page Functions ===
+let currentReportsBranchFilter = 'الكل';
+function showReportsPage() {
+const reportsPage = document.getElementById('reportsPage');
+const dashboard = document.getElementById('dashboard');
+if (!reportsPage || !dashboard) return;
+// Hide dashboard and show reports page
+dashboard.classList.add('hidden');
+reportsPage.classList.remove('hidden');
+// Populate reports page
+populateReportsPage();
+}
+function hideReportsPage() {
+const reportsPage = document.getElementById('reportsPage');
+const dashboard = document.getElementById('dashboard');
+if (!reportsPage || !dashboard) return;
+// Hide reports page and show dashboard
+reportsPage.classList.add('hidden');
+dashboard.classList.remove('hidden');
+}
+function populateReportsPage() {
+// Populate branch filters
+const branchFiltersContainer = document.querySelector('#reportsPage .flex.flex-wrap.gap-2');
+if (branchFiltersContainer) {
+let html = `
+<button onclick="filterReportsByBranch('الكل')" 
+class="filter-reports-pill ${currentReportsBranchFilter === 'الكل' ? 'active' : ''} px-4 py-2 rounded-lg text-sm font-bold transition-all ${currentReportsBranchFilter === 'الكل' ? 'text-white shadow-[0_0_20px_rgba(64,224,208,0.3)]' : 'text-white bg-white/5 border border-white/10 hover:bg-white/10 hover:border-turquoise/50'}" 
+data-filter="الكل">
+الكل
+</button>
+`;
+branches.forEach(b => {
+const isActive = currentReportsBranchFilter === b;
+html += `
+<button onclick="filterReportsByBranch('${b}')" 
+class="filter-reports-pill ${isActive ? 'active' : ''} px-4 py-2 rounded-lg text-sm font-bold transition-all ${isActive ? 'text-white shadow-[0_0_20px_rgba(64,224,208,0.3)]' : 'text-white bg-white/5 border border-white/10 hover:bg-white/10 hover:border-turquoise/50'}" 
+data-filter="${b}">
+${b}
+</button>
+`;
+});
+branchFiltersContainer.innerHTML = html;
+}
+// Populate employees grid
+const grid = document.getElementById('reportsEmployeesGrid');
+if (!grid) return;
+grid.innerHTML = '';
+// Get unique employees (handle duplicates)
+const uniqueEmployees = new Map();
+let filteredDb = [...db];
+if (currentReportsBranchFilter !== 'الكل') {
+filteredDb = filteredDb.filter(emp => emp.branch === currentReportsBranchFilter);
+}
+filteredDb.forEach(emp => {
+const key = emp.name;
+if (!uniqueEmployees.has(key)) {
+uniqueEmployees.set(key, []);
+}
+uniqueEmployees.get(key).push(emp);
+});
+// Sort by name
+const sortedNames = Array.from(uniqueEmployees.keys()).sort();
+sortedNames.forEach(name => {
+const employees = uniqueEmployees.get(name);
+const isDuplicate = employees.length > 1;
+const card = document.createElement('div');
+card.className = 'glass p-4 rounded-xl border border-white/20 hover:border-turquoise/50 transition-all cursor-pointer';
+// Create click handler function
+const handleCardClick = (e) => {
+e.preventDefault();
+e.stopPropagation();
+console.log('Card clicked:', name, 'isDuplicate:', isDuplicate, 'empId:', isDuplicate ? 'multiple' : employees[0].id);
+if (isDuplicate) {
+showBranchSelectionForReport(name, employees);
+} else {
+const empId = employees[0].id;
+console.log('Calling showEmployeeReport with empId:', empId);
+showEmployeeReport(empId);
+}
+};
+// Attach click handler to card - use both onclick and addEventListener for compatibility
+card.onclick = handleCardClick;
+card.addEventListener('click', handleCardClick);
+const nameText = isDuplicate ? `${name} (${employees.length} فروع)` : name;
+const branchesText = isDuplicate ? employees.map(e => e.branch).join('، ') : employees[0].branch;
+// Calculate total for display
+let totalCount = 0;
+let totalNet = 0;
+employees.forEach(emp => {
+const rate = emp.count > 100 ? 3 : (emp.count > 50 ? 2 : 1);
+const evBooking = emp.evaluationsBooking || 0;
+const evGoogle = emp.evaluationsGoogle || 0;
+const gross = (emp.count * rate) + (evBooking * 20) + (evGoogle * 10);
+const fund = gross * 0.15;
+let net = gross - fund;
+const attendanceBonus = emp.attendance26Days === true ? net * 0.25 : 0;
+net = net + attendanceBonus;
+totalCount += emp.count;
+totalNet += net;
+});
+card.innerHTML = `
+<div class="flex flex-col gap-2">
+<div class="flex items-center justify-between">
+<h3 class="text-lg font-bold text-white">${name}</h3>
+${isDuplicate ? '<span class="text-xs text-turquoise font-bold bg-turquoise/20 px-2 py-1 rounded">متكرر</span>' : ''}
+</div>
+<p class="text-sm text-gray-300">الفرع: <span class="text-turquoise font-semibold">${branchesText}</span></p>
+${isDuplicate ? '' : `
+<div class="mt-2 pt-2 border-t border-white/10">
+<div class="flex justify-between items-center">
+<span class="text-xs text-gray-400">الحجوزات:</span>
+<span class="text-sm font-bold text-white">${employees[0].count}</span>
+</div>
+<div class="flex justify-between items-center mt-1">
+<span class="text-xs text-gray-400">المبلغ الصافي:</span>
+<span class="text-sm font-bold text-turquoise">${totalNet.toFixed(2)} ريال</span>
+</div>
+</div>
+`}
+<div class="mt-2 pt-2 border-t border-turquoise/30">
+<span class="text-xs text-turquoise font-semibold">عرض التقرير →</span>
+</div>
+</div>
+`;
+grid.appendChild(card);
+});
+}
+function filterReportsByBranch(branch) {
+currentReportsBranchFilter = branch;
+populateReportsPage();
+}
+function filterReportsEmployees(searchTerm) {
+const grid = document.getElementById('reportsEmployeesGrid');
+if (!grid) return;
+const cards = grid.querySelectorAll('div');
+const term = searchTerm.toLowerCase();
+cards.forEach(card => {
+const text = card.textContent.toLowerCase();
+card.style.display = text.includes(term) ? 'block' : 'none';
+});
+}
+function showBranchSelectionForReport(empName, employees) {
+const modal = document.getElementById('employeeReportModal');
+if (!modal) return;
+const content = document.getElementById('employeeReportContent');
+const title = document.getElementById('reportEmployeeName');
+if (!content || !title) return;
+title.innerText = `اختر الفرع - ${empName}`;
+content.innerHTML = `
+<div class="space-y-3">
+<p class="text-white mb-4 font-semibold">الموظف موجود في ${employees.length} فروع. اختر الفرع لعرض التقرير:</p>
+${employees.map(emp => `
+<div onclick="showEmployeeReport('${emp.id}')" class="p-4 rounded-xl cursor-pointer transition-all" style="background: rgba(255, 255, 255, 0.1); border: 1px solid rgba(64, 224, 208, 0.3);" onmouseover="this.style.background='rgba(255, 255, 255, 0.15)'; this.style.borderColor='rgba(64, 224, 208, 0.6)';" onmouseout="this.style.background='rgba(255, 255, 255, 0.1)'; this.style.borderColor='rgba(64, 224, 208, 0.3)';">
+<div class="flex items-center justify-between">
+<div>
+<h3 class="text-lg font-bold text-white">${emp.name}</h3>
+<p class="text-sm text-gray-300 mt-1">الفرع: <span class="text-turquoise font-semibold">${emp.branch}</span></p>
+</div>
+<span class="text-turquoise text-xl">→</span>
+</div>
+</div>
+`).join('')}
+</div>
+`;
+modal.style.setProperty('display', 'flex', 'important');
+modal.style.setProperty('z-index', '1000', 'important');
+modal.classList.remove('hidden');
+}
+function calculateEmployeeReport(empId) {
+const emp = db.find(e => e.id === empId);
+if (!emp) return null;
+// Recalculate branch winners for bonuses
+const branchWinners = {};
+[...branches].forEach(b => {
+branchWinners[b] = { net: {val: -1, ids: []}, eval: {val: -1, ids: []}, evalBooking: {val: -1, ids: []}, evalGoogle: {val: -1, ids: []}, book: {val: -1, ids: []}, attendance: {val: -1, ids: []} };
+});
+db.forEach(e => {
+const rate = e.count > 100 ? 3 : (e.count > 50 ? 2 : 1);
+const evBooking = e.evaluationsBooking || 0;
+const evGoogle = e.evaluationsGoogle || 0;
+const gross = (e.count * rate) + (evBooking * 20) + (evGoogle * 10);
+const fund = gross * 0.15;
+let net = gross - fund;
+const attendance26Days = e.attendance26Days === true;
+const attendanceBonus = attendance26Days ? net * 0.25 : 0;
+net = net + attendanceBonus;
+const bw = branchWinners[e.branch];
+if (!bw) return;
+if (net > bw.net.val) { bw.net.val = net; bw.net.ids = [e.id]; }
+else if (net === bw.net.val) { bw.net.ids.push(e.id); }
+if (evBooking > bw.eval.val) { bw.eval.val = evBooking; bw.eval.ids = [e.id]; }
+else if (evBooking === bw.eval.val) { bw.eval.ids.push(e.id); }
+if (evBooking > bw.evalBooking.val) { bw.evalBooking.val = evBooking; bw.evalBooking.ids = [e.id]; }
+else if (evBooking === bw.evalBooking.val) { bw.evalBooking.ids.push(e.id); }
+if (evGoogle > bw.evalGoogle.val) { bw.evalGoogle.val = evGoogle; bw.evalGoogle.ids = [e.id]; }
+else if (evGoogle === bw.evalGoogle.val) { bw.evalGoogle.ids.push(e.id); }
+if (e.count > bw.book.val) { bw.book.val = e.count; bw.book.ids = [e.id]; }
+else if (e.count === bw.book.val) { bw.book.ids.push(e.id); }
+const empNameCount = db.filter(emp => emp.name === e.name).length;
+let empAttendanceDays = attendance26Days ? 26 : 0;
+if (empNameCount > 1) {
+empAttendanceDays = e.totalAttendanceDays || (attendance26Days ? 26 : 0);
+}
+if (empAttendanceDays >= 26) {
+let isHighestDays = true;
+const branchEmployees = db.filter(emp => emp.branch === e.branch);
+branchEmployees.forEach(otherEmp => {
+if (otherEmp.name === e.name) return;
+const otherNameCount = db.filter(emp => emp.name === otherEmp.name).length;
+let otherDays = otherEmp.attendance26Days === true ? 26 : 0;
+if (otherNameCount > 1) {
+otherDays = otherEmp.totalAttendanceDays || (otherEmp.attendance26Days === true ? 26 : 0);
+}
+if (otherDays > empAttendanceDays) {
+isHighestDays = false;
+}
+});
+if (isHighestDays) {
+if (bw.attendance.val === -1) {
+bw.attendance.val = empAttendanceDays;
+bw.attendance.ids = [e.id];
+} else if (empAttendanceDays > bw.attendance.val) {
+bw.attendance.val = empAttendanceDays;
+bw.attendance.ids = [e.id];
+} else if (empAttendanceDays === bw.attendance.val) {
+bw.attendance.ids.push(e.id);
+}
+}
+}
+});
+// Calculate employee's details
+const rate = emp.count > 100 ? 3 : (emp.count > 50 ? 2 : 1);
+const evBooking = emp.evaluationsBooking || 0;
+const evGoogle = emp.evaluationsGoogle || 0;
+const gross = (emp.count * rate) + (evBooking * 20) + (evGoogle * 10);
+const fund = gross * 0.15;
+let net = gross - fund;
+const attendance26Days = emp.attendance26Days === true;
+// For duplicate employees: check if this branch should get challenge bonus (25%)
+const empNameCount = db.filter(e => e.name === emp.name).length;
+let attendanceBonus = 0;
+let finalAttendance26Days = attendance26Days;
+if (empNameCount > 1) {
+// Duplicate employee: find which branch should get challenge bonus
+const allEmpRows = db.filter(e => e.name === emp.name);
+let challengeRowId = null;
+let maxChallengeTotalAmount = -1;
+allEmpRows.forEach(e => {
+const eRate = e.count > 100 ? 3 : (e.count > 50 ? 2 : 1);
+const eEvBooking = e.evaluationsBooking || 0;
+const eEvGoogle = e.evaluationsGoogle || 0;
+const eGross = (e.count * eRate) + (eEvBooking * 20) + (eEvGoogle * 10);
+const eFund = eGross * 0.15;
+let eNet = eGross - eFund;
+const eAttendance26Days = e.attendance26Days === true;
+const eAttendanceBonus = eAttendance26Days ? eNet * 0.25 : 0;
+eNet = eNet + eAttendanceBonus;
+// Only consider branches where employee actually qualifies for challenge bonus
+if (eAttendance26Days && eAttendanceBonus > 0) {
+if (eNet > maxChallengeTotalAmount) {
+maxChallengeTotalAmount = eNet;
+challengeRowId = e.id;
+}
+}
+});
+// Only apply challenge bonus if this is the selected branch
+if (challengeRowId === emp.id && attendance26Days) {
+attendanceBonus = net * 0.25;
+net = net + attendanceBonus;
+} else {
+// Don't apply challenge bonus in this branch
+attendanceBonus = 0;
+finalAttendance26Days = false;
+}
+} else {
+// Non-duplicate: apply challenge bonus normally
+attendanceBonus = attendance26Days ? net * 0.25 : 0;
+net = net + attendanceBonus;
+}
+// Check bonuses
+const bw = branchWinners[emp.branch];
+const hasExcellenceBonus = bw?.book.ids.includes(emp.id) && bw?.eval.ids.includes(emp.id) && bw.book.val > 0 && bw.eval.val > 0;
+const excellenceBonus = hasExcellenceBonus ? 50 : 0;
+const isMostCommitted = bw?.attendance.ids.includes(emp.id);
+const isMostEval = bw?.eval.ids.includes(emp.id) && bw.eval.val > 0;
+const isMostBook = bw?.book.ids.includes(emp.id) && bw.book.val > 0;
+const hasCommitmentBonus = finalAttendance26Days && isMostCommitted && (isMostEval || isMostBook);
+const commitmentBonus = hasCommitmentBonus ? 50 : 0;
+const finalNet = net + excellenceBonus + commitmentBonus;
+return {
+emp,
+rate,
+evBooking,
+evGoogle,
+gross,
+fund,
+net,
+attendanceBonus,
+excellenceBonus,
+commitmentBonus,
+finalNet,
+hasExcellenceBonus,
+hasCommitmentBonus,
+attendance26Days: finalAttendance26Days,
+isMostCommitted,
+isMostEval,
+isMostBook
+};
+}
+function showEmployeeReport(empId) {
+console.log('showEmployeeReport called with empId:', empId);
+const modal = document.getElementById('employeeReportModal');
+const content = document.getElementById('employeeReportContent');
+const title = document.getElementById('reportEmployeeName');
+if (!modal) {
+console.error('Modal not found!');
+alert('خطأ: لم يتم العثور على نافذة التقرير');
+return;
+}
+if (!content) {
+console.error('Content not found!');
+alert('خطأ: لم يتم العثور على محتوى التقرير');
+return;
+}
+if (!title) {
+console.error('Title not found!');
+alert('خطأ: لم يتم العثور على عنوان التقرير');
+return;
+}
+console.log('All modal elements found:', { modal: modal.id, content: content.id, title: title.id });
+console.log('Modal elements found, calculating report...');
+const report = calculateEmployeeReport(empId);
+if (!report) {
+console.error('Report calculation returned null for empId:', empId);
+content.innerHTML = '<p class="text-red-400">❌ لم يتم العثور على الموظف</p>';
+modal.style.setProperty('display', 'flex', 'important');
+modal.style.setProperty('z-index', '1000', 'important');
+modal.classList.remove('hidden');
+return;
+}
+console.log('Report calculated successfully, preparing content...');
+const { emp, rate, evBooking, evGoogle, gross, fund, net, attendanceBonus, excellenceBonus, commitmentBonus, finalNet, hasExcellenceBonus, hasCommitmentBonus, attendance26Days } = report;
+title.innerText = `تقرير ${emp.name} - ${emp.branch}`;
+const periodText = document.getElementById('headerPeriodRange')?.innerText || '-';
+const reportDate = new Date().toLocaleDateString('ar-SA');
+content.innerHTML = `
+<div class="space-y-4">
+<!-- Header -->
+<div class="bg-gradient-to-r from-turquoise/20 to-transparent p-4 rounded-xl border border-turquoise/30">
+<h3 class="text-xl font-black text-turquoise mb-2">${emp.name}</h3>
+<p class="text-sm text-gray-300">الفرع: <span class="text-turquoise font-bold">${emp.branch}</span></p>
+<p class="text-sm text-gray-300">الفترة: <span class="text-turquoise font-bold">${periodText}</span></p>
+<p class="text-sm text-gray-300">تاريخ التقرير: <span class="text-turquoise font-bold">${reportDate}</span></p>
+</div>
+<!-- Summary Card -->
+<div class="bg-gradient-to-r from-green-500/20 to-transparent p-6 rounded-xl border border-green-500/30 text-center">
+<h4 class="text-lg font-bold text-green-400 mb-2">المبلغ الصافي المستحق</h4>
+<p class="text-3xl font-black text-white">${finalNet.toFixed(2)} <span class="text-lg text-green-400">ريال</span></p>
+</div>
+<!-- Details -->
+<div class="space-y-3">
+<!-- Bookings -->
+<div class="bg-blue-500/10 p-4 rounded-xl border border-blue-500/30">
+<h5 class="text-base font-bold text-blue-400 mb-3 flex items-center gap-2">
+<span>📊</span>
+<span>مكافآت الحجوزات</span>
+</h5>
+<div class="space-y-2 text-sm text-gray-300">
+<div class="flex justify-between items-center">
+<span>عدد الحجوزات:</span>
+<span class="font-bold text-white">${emp.count}</span>
+</div>
+<div class="flex justify-between items-center">
+<span>الفئة (نقطة لكل عقد):</span>
+<span class="font-bold text-white">${rate} ريال</span>
+</div>
+<div class="flex justify-between items-center pt-2 border-t border-white/10">
+<span>إجمالي مكافآت الحجوزات:</span>
+<span class="font-bold text-blue-400">${(emp.count * rate).toFixed(2)} ريال</span>
+</div>
+</div>
+</div>
+<!-- Evaluations -->
+<div class="bg-yellow-500/10 p-4 rounded-xl border border-yellow-500/30">
+<h5 class="text-base font-bold text-yellow-400 mb-3 flex items-center gap-2">
+<span>⭐</span>
+<span>مكافآت التقييمات</span>
+</h5>
+<div class="space-y-2 text-sm text-gray-300">
+<div class="flex justify-between items-center">
+<span>تقييمات Booking:</span>
+<span class="font-bold text-white">${evBooking}</span>
+</div>
+<div class="flex justify-between items-center">
+<span>مكافأة لكل تقييم Booking:</span>
+<span class="font-bold text-white">20 ريال</span>
+</div>
+<div class="flex justify-between items-center pt-2 border-t border-white/10">
+<span>إجمالي مكافآت Booking:</span>
+<span class="font-bold text-yellow-400">${(evBooking * 20).toFixed(2)} ريال</span>
+</div>
+<div class="flex justify-between items-center mt-3">
+<span>تقييمات Google Maps:</span>
+<span class="font-bold text-white">${evGoogle}</span>
+</div>
+<div class="flex justify-between items-center">
+<span>مكافأة لكل تقييم Google Maps:</span>
+<span class="font-bold text-white">10 ريال</span>
+</div>
+<div class="flex justify-between items-center pt-2 border-t border-white/10">
+<span>إجمالي مكافآت Google Maps:</span>
+<span class="font-bold text-yellow-400">${(evGoogle * 10).toFixed(2)} ريال</span>
+</div>
+<div class="flex justify-between items-center pt-3 border-t-2 border-yellow-500/30 mt-3">
+<span class="font-bold text-white">إجمالي مكافآت التقييمات:</span>
+<span class="font-bold text-yellow-400 text-lg">${((evBooking * 20) + (evGoogle * 10)).toFixed(2)} ريال</span>
+</div>
+</div>
+</div>
+<!-- Gross Total -->
+<div class="bg-purple-500/10 p-4 rounded-xl border border-purple-500/30">
+<h5 class="text-base font-bold text-purple-400 mb-3">الإجمالي قبل مساهمة شركاء النجاح</h5>
+<div class="flex justify-between items-center">
+<span class="text-sm text-gray-300">إجمالي المكافآت (حجوزات + تقييمات):</span>
+<span class="font-bold text-white text-lg">${gross.toFixed(2)} ريال</span>
+</div>
+</div>
+<!-- Deductions -->
+<div class="bg-orange-500/10 p-4 rounded-xl border border-orange-500/30">
+<h5 class="text-base font-bold text-orange-400 mb-3">مساهمة شركاء النجاح</h5>
+<div class="space-y-2 text-sm text-gray-300">
+<div class="flex justify-between items-center">
+<span>مساهمة شركاء النجاح (15%):</span>
+<span class="font-bold text-orange-400">-${fund.toFixed(2)} ريال</span>
+</div>
+<div class="flex justify-between items-center pt-2 border-t border-white/10">
+<span class="font-bold text-white">إجمالي مساهمة شركاء النجاح:</span>
+<span class="font-bold text-orange-400">-${fund.toFixed(2)} ريال</span>
+</div>
+</div>
+</div>
+<!-- Bonuses -->
+<div class="bg-turquoise/10 p-4 rounded-xl border border-turquoise/30">
+<h5 class="text-base font-bold text-turquoise mb-3">الحوافز الإضافية</h5>
+<div class="space-y-3 text-sm">
+${attendance26Days ? `
+<div class="bg-green-500/10 p-3 rounded-lg border border-green-500/30">
+<div class="flex justify-between items-center mb-1">
+<span class="text-gray-300">✓ حافز تحدي الظروف (25%):</span>
+<span class="font-bold text-green-400">+${attendanceBonus.toFixed(2)} ريال</span>
+</div>
+<p class="text-xs text-gray-400 mt-1">تم إتمام 26 يوماً وأكثر من العطاء</p>
+</div>
+` : ''}
+${hasExcellenceBonus ? `
+<div class="bg-turquoise/20 p-3 rounded-lg border border-turquoise/50">
+<div class="flex justify-between items-center mb-1">
+<span class="text-gray-300">✨ حافز التفوق:</span>
+<span class="font-bold text-turquoise">+${excellenceBonus.toFixed(2)} ريال</span>
+</div>
+<p class="text-xs text-gray-400 mt-1">الأعلى تقييماً والأكثر حجوزات في ${emp.branch}</p>
+</div>
+` : ''}
+${hasCommitmentBonus ? `
+<div class="bg-purple-500/20 p-3 rounded-lg border border-purple-500/50">
+<div class="flex justify-between items-center mb-1">
+<span class="text-gray-300">✓ حافز التزام:</span>
+<span class="font-bold text-purple-400">+${commitmentBonus.toFixed(2)} ريال</span>
+</div>
+<p class="text-xs text-gray-400 mt-1">الأكثر التزاماً + (الأعلى تقييماً أو الأكثر حجوزات) في ${emp.branch}</p>
+</div>
+` : ''}
+${!attendance26Days && !hasExcellenceBonus && !hasCommitmentBonus ? `
+<p class="text-gray-400 text-center py-2">لا توجد حوافز إضافية</p>
+` : ''}
+</div>
+</div>
+<!-- Calculation Summary -->
+<div class="bg-gradient-to-r from-slate-800/50 to-slate-900/50 p-4 rounded-xl border border-white/10">
+<h5 class="text-base font-bold text-white mb-3">ملخص الحساب</h5>
+<div class="space-y-2 text-sm">
+<div class="flex justify-between items-center text-gray-300">
+<span>إجمالي المكافآت:</span>
+<span class="font-bold text-white">${gross.toFixed(2)} ريال</span>
+</div>
+<div class="flex justify-between items-center text-gray-300">
+<span>مساهمة شركاء النجاح:</span>
+<span class="font-bold text-orange-400">-${fund.toFixed(2)} ريال</span>
+</div>
+<div class="flex justify-between items-center text-gray-300 pt-2 border-t border-white/10">
+<span>الصافي بعد مساهمة شركاء النجاح:</span>
+<span class="font-bold text-white">${(gross - fund).toFixed(2)} ريال</span>
+</div>
+${attendanceBonus > 0 ? `
+<div class="flex justify-between items-center text-gray-300">
+<span>حافز تحدي الظروف (25%):</span>
+<span class="font-bold text-green-400">+${attendanceBonus.toFixed(2)} ريال</span>
+</div>
+` : ''}
+${excellenceBonus > 0 ? `
+<div class="flex justify-between items-center text-gray-300">
+<span>حافز التفوق:</span>
+<span class="font-bold text-turquoise">+${excellenceBonus.toFixed(2)} ريال</span>
+</div>
+` : ''}
+${commitmentBonus > 0 ? `
+<div class="flex justify-between items-center text-gray-300">
+<span>حافز التزام:</span>
+<span class="font-bold text-purple-400">+${commitmentBonus.toFixed(2)} ريال</span>
+</div>
+` : ''}
+<div class="flex justify-between items-center pt-3 border-t-2 border-turquoise/50 mt-2">
+<span class="text-lg font-bold text-white">المبلغ الصافي المستحق:</span>
+<span class="text-2xl font-black text-turquoise">${finalNet.toFixed(2)} ريال</span>
+</div>
+</div>
+</div>
+</div>
+`;
+// Show modal after content is set
+console.log('Setting modal content, about to show modal...');
+// Force modal to be visible - use !important to override Tailwind's hidden class
+modal.style.setProperty('display', 'flex', 'important');
+modal.style.setProperty('z-index', '1000', 'important');
+modal.style.setProperty('visibility', 'visible', 'important');
+modal.style.setProperty('opacity', '1', 'important');
+modal.classList.remove('hidden');
+console.log('Modal should be visible now. Modal classes:', modal.className, 'Modal display:', window.getComputedStyle(modal).display, 'Modal z-index:', window.getComputedStyle(modal).zIndex);
+// Store current employee ID for printing
+modal.dataset.empId = empId;
+}
+function closeEmployeeReportModal(event) {
+// If event is provided, only close if clicking on the background (not inside modal content)
+if (event) {
+// Prevent closing if clicking inside the modal content
+if (event.target !== event.currentTarget) {
+return;
+}
+// Stop event propagation to prevent multiple triggers
+event.stopPropagation();
+}
+const modal = document.getElementById('employeeReportModal');
+if (modal) {
+// Remove inline styles to reset modal state
+modal.style.removeProperty('display');
+modal.style.removeProperty('z-index');
+modal.style.removeProperty('visibility');
+modal.style.removeProperty('opacity');
+// Hide modal
+modal.classList.add('hidden');
+modal.classList.remove('flex');
+}
+}
+function printEmployeeReport() {
+const modal = document.getElementById('employeeReportModal');
+if (!modal) return;
+const empId = modal.dataset.empId;
+if (!empId) return;
+const report = calculateEmployeeReport(empId);
+if (!report) return;
+const { emp, rate, evBooking, evGoogle, gross, fund, net, attendanceBonus, excellenceBonus, commitmentBonus, finalNet, hasExcellenceBonus, hasCommitmentBonus, attendance26Days, isMostCommitted, isMostEval, isMostBook } = report;
+const periodText = document.getElementById('headerPeriodRange')?.innerText || '-';
+const reportDate = new Date().toLocaleDateString('ar-SA');
+const printWindow = window.open('', '_blank');
+const printContent = `
+<!DOCTYPE html>
+<html dir="rtl" lang="ar">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>تقرير ${emp.name}</title>
+<style>
+@page {
+size: A4 portrait;
+margin: 10mm 8mm;
+}
+* {
+margin: 0;
+padding: 0;
+box-sizing: border-box;
+}
+html, body {
+height: 100%;
+overflow: hidden;
+}
+body {
+font-family: 'IBM Plex Sans Arabic', Arial, sans-serif;
+direction: rtl;
+background: white;
+color: #000;
+padding: 8px;
+font-size: 10px;
+line-height: 1.3;
+max-height: 277mm;
+overflow: hidden;
+}
+.header {
+border-bottom: 2px solid #40E0D0;
+padding-bottom: 6px;
+margin-bottom: 8px;
+}
+.header h1 {
+font-size: 16px;
+font-weight: 900;
+color: #000;
+margin-bottom: 4px;
+}
+.header p {
+font-size: 10px;
+color: #333;
+margin: 2px 0;
+}
+.detail-section {
+margin-bottom: 8px;
+padding: 8px;
+border: 1px solid #e5e7eb;
+border-radius: 4px;
+background: #f9fafb;
+}
+.detail-section h3 {
+font-size: 12px;
+font-weight: 800;
+color: #000;
+margin-bottom: 5px;
+border-bottom: 1px solid #40E0D0;
+padding-bottom: 2px;
+}
+.summary-box {
+background: linear-gradient(135deg, #10b981 0%, #059669 100%);
+color: white;
+padding: 10px;
+border-radius: 4px;
+text-align: center;
+margin: 8px 0;
+}
+.summary-box h2 {
+font-size: 12px;
+font-weight: 800;
+margin-bottom: 4px;
+}
+.summary-box .amount {
+font-size: 24px;
+font-weight: 900;
+margin-top: 4px;
+}
+.row {
+display: flex;
+justify-content: space-between;
+align-items: flex-start;
+padding: 5px 0;
+border-bottom: 1px solid #e5e7eb;
+font-size: 10px;
+}
+.row:last-child {
+border-bottom: none;
+}
+.row > div {
+flex: 1;
+min-width: 0;
+}
+.row > div > span:first-child {
+display: block;
+font-weight: 600;
+margin-bottom: 3px;
+}
+.row > div > span:last-child {
+display: block;
+font-size: 8px;
+color: #666;
+line-height: 1.4;
+}
+.total-row {
+font-weight: 900;
+font-size: 12px;
+border-top: 2px solid #40E0D0;
+padding-top: 5px;
+margin-top: 5px;
+}
+.approval-stamp {
+position: fixed;
+bottom: 20mm;
+left: 50%;
+transform: translateX(-50%);
+text-align: center;
+width: 120px;
+height: 120px;
+border: 3px solid #8b0000;
+border-radius: 50%;
+padding: 20px;
+background: rgba(255, 255, 255, 0.95);
+display: flex;
+flex-direction: column;
+justify-content: center;
+align-items: center;
+box-shadow: 0 2px 4px rgba(0, 0, 0, 0.15);
+}
+.approval-stamp::before {
+content: '';
+position: absolute;
+top: -2px;
+left: -2px;
+right: -2px;
+bottom: -2px;
+border: 1px solid #8b0000;
+border-radius: 50%;
+opacity: 0.3;
+}
+.approval-stamp .checkmark {
+color: #006400;
+font-size: 28px;
+font-weight: 900;
+margin-bottom: 5px;
+line-height: 1;
+}
+.approval-stamp .department {
+color: #8b0000;
+font-size: 11px;
+font-weight: 700;
+margin-bottom: 3px;
+line-height: 1.2;
+}
+.approval-stamp .approved {
+color: #8b0000;
+font-size: 13px;
+font-weight: 800;
+line-height: 1.2;
+}
+</style>
+</head>
+<body>
+<div class="header">
+<h1>فندق إليت - تقرير المكافآت</h1>
+<p><strong>الموظف:</strong> ${emp.name}</p>
+<p><strong>الفرع:</strong> ${emp.branch}</p>
+<p><strong>الفترة:</strong> ${periodText}</p>
+<p><strong>تاريخ التقرير:</strong> ${reportDate}</p>
+</div>
+<div class="summary-box">
+<h2>المبلغ الصافي المستحق</h2>
+<div class="amount">${finalNet.toFixed(2)} ريال</div>
+</div>
+<div class="detail-section">
+<h3>📊 مكافآت الحجوزات</h3>
+<div class="row">
+<span>عدد الحجوزات:</span>
+<span><strong>${emp.count}</strong></span>
+</div>
+<div class="row">
+<span>الفئة (نقطة لكل عقد):</span>
+<span><strong>${rate} ريال</strong></span>
+</div>
+<div class="row total-row">
+<span>إجمالي مكافآت الحجوزات:</span>
+<span><strong>${(emp.count * rate).toFixed(2)} ريال</strong></span>
+</div>
+</div>
+<div class="detail-section">
+<h3>⭐ مكافآت التقييمات</h3>
+<div class="row">
+<span>تقييمات Booking:</span>
+<span><strong>${evBooking}</strong></span>
+</div>
+<div class="row">
+<span>مكافأة لكل تقييم Booking:</span>
+<span><strong>20 ريال</strong></span>
+</div>
+<div class="row">
+<span>إجمالي مكافآت Booking:</span>
+<span><strong>${(evBooking * 20).toFixed(2)} ريال</strong></span>
+</div>
+<div class="row">
+<span>تقييمات Google Maps:</span>
+<span><strong>${evGoogle}</strong></span>
+</div>
+<div class="row">
+<span>مكافأة لكل تقييم Google Maps:</span>
+<span><strong>10 ريال</strong></span>
+</div>
+<div class="row">
+<span>إجمالي مكافآت Google Maps:</span>
+<span><strong>${(evGoogle * 10).toFixed(2)} ريال</strong></span>
+</div>
+<div class="row total-row">
+<span>إجمالي مكافآت التقييمات:</span>
+<span><strong>${((evBooking * 20) + (evGoogle * 10)).toFixed(2)} ريال</strong></span>
+</div>
+</div>
+<div class="detail-section">
+<h3>الإجمالي ومساهمة شركاء النجاح</h3>
+<div class="row">
+<span>إجمالي المكافآت (حجوزات + تقييمات):</span>
+<span><strong>${gross.toFixed(2)} ريال</strong></span>
+</div>
+<div class="row">
+<span>مساهمة شركاء النجاح (15%):</span>
+<span><strong style="color: #ef4444;">-${fund.toFixed(2)} ريال</strong></span>
+</div>
+<div class="row total-row">
+<span>الصافي بعد مساهمة شركاء النجاح:</span>
+<span><strong>${(gross - fund).toFixed(2)} ريال</strong></span>
+</div>
+</div>
+${attendanceBonus > 0 || excellenceBonus > 0 || commitmentBonus > 0 ? `
+<div class="detail-section">
+<h3>🏆 الحوافز الإضافية</h3>
+${attendance26Days ? `
+<div class="row" style="border-bottom: 1px solid #e5e7eb; padding-bottom: 5px; margin-bottom: 5px;">
+<div style="flex: 1;">
+<span>✓ حافز تحدي الظروف (25%):</span>
+<span style="display: block; font-size: 9px; color: #666; margin-top: 2px; margin-right: 15px;">إتمام 26 يوماً وأكثر من العطاء</span>
+</div>
+<span><strong style="color: #10b981;">+${attendanceBonus.toFixed(2)} ريال</strong></span>
+</div>
+` : ''}
+${hasExcellenceBonus ? `
+<div class="row" style="border-bottom: 1px solid #e5e7eb; padding-bottom: 5px; margin-bottom: 5px;">
+<div style="flex: 1;">
+<span>✨ حافز التفوق:</span>
+<span style="display: block; font-size: 9px; color: #666; margin-top: 2px; margin-right: 15px;">الأعلى تقييماً (${evBooking} تقييم Booking) والأكثر حجوزات (${emp.count} حجز) في فرع ${emp.branch}</span>
+</div>
+<span><strong style="color: #14b8a6;">+${excellenceBonus.toFixed(2)} ريال</strong></span>
+</div>
+` : ''}
+${hasCommitmentBonus ? `
+<div class="row" style="border-bottom: 1px solid #e5e7eb; padding-bottom: 5px; margin-bottom: 5px;">
+<div style="flex: 1;">
+<span>✓ حافز التزام:</span>
+<span style="display: block; font-size: 9px; color: #666; margin-top: 2px; margin-right: 15px;">الأكثر التزاماً (26+ يوم)${isMostEval && isMostBook ? ' + الأعلى تقييماً والأكثر حجوزات' : isMostEval ? ' + الأعلى تقييماً' : isMostBook ? ' + الأكثر حجوزات' : ''} في فرع ${emp.branch}</span>
+</div>
+<span><strong style="color: #a855f7;">+${commitmentBonus.toFixed(2)} ريال</strong></span>
+</div>
+` : ''}
+</div>
+` : ''}
+<div class="detail-section">
+<h3>ملخص الحساب النهائي</h3>
+<div class="row">
+<span>إجمالي المكافآت:</span>
+<span><strong>${gross.toFixed(2)} ريال</strong></span>
+</div>
+<div class="row">
+<span>مساهمة شركاء النجاح:</span>
+<span><strong style="color: #ef4444;">-${fund.toFixed(2)} ريال</strong></span>
+</div>
+<div class="row">
+<span>الصافي بعد مساهمة شركاء النجاح:</span>
+<span><strong>${(gross - fund).toFixed(2)} ريال</strong></span>
+</div>
+${attendanceBonus > 0 ? `
+<div class="row">
+<span>حافز تحدي الظروف (25%):</span>
+<span><strong style="color: #10b981;">+${attendanceBonus.toFixed(2)} ريال</strong></span>
+</div>
+` : ''}
+${excellenceBonus > 0 ? `
+<div class="row" style="border-bottom: 1px solid #e5e7eb; padding-bottom: 5px; margin-bottom: 5px;">
+<div style="flex: 1;">
+<span>حافز التفوق:</span>
+<span style="display: block; font-size: 9px; color: #666; margin-top: 2px; margin-right: 15px;">الأعلى تقييماً (${evBooking} تقييم Booking) والأكثر حجوزات (${emp.count} حجز) في فرع ${emp.branch}</span>
+</div>
+<span><strong style="color: #14b8a6;">+${excellenceBonus.toFixed(2)} ريال</strong></span>
+</div>
+` : ''}
+${commitmentBonus > 0 ? `
+<div class="row" style="border-bottom: 1px solid #e5e7eb; padding-bottom: 5px; margin-bottom: 5px;">
+<div style="flex: 1;">
+<span>حافز التزام:</span>
+<span style="display: block; font-size: 9px; color: #666; margin-top: 2px; margin-right: 15px;">الأكثر التزاماً (26+ يوم)${isMostEval && isMostBook ? ' + الأعلى تقييماً والأكثر حجوزات' : isMostEval ? ' + الأعلى تقييماً' : isMostBook ? ' + الأكثر حجوزات' : ''} في فرع ${emp.branch}</span>
+</div>
+<span><strong style="color: #a855f7;">+${commitmentBonus.toFixed(2)} ريال</strong></span>
+</div>
+` : ''}
+<div class="row total-row" style="background: #f0fdf4; padding: 8px; border-radius: 4px; margin-top: 8px;">
+<span style="font-size: 14px;">المبلغ الصافي المستحق:</span>
+<span style="font-size: 20px; color: #10b981;"><strong>${finalNet.toFixed(2)} ريال</strong></span>
+</div>
+</div>
+<div class="approval-stamp">
+<span class="checkmark">✓</span>
+<div class="department">إدارة التشغيل</div>
+<div class="approved">معتمد</div>
+</div>
+</body>
+</html>
+`;
+printWindow.document.write(printContent);
+printWindow.document.close();
+printWindow.focus();
+setTimeout(() => {
+printWindow.print();
+}, 250);
 }
 function printConditions() {
 const printWindow = window.open('', '_blank');
@@ -3670,3 +5389,26 @@ setTimeout(() => {
 printWindow.print();
 }, 250);
 }
+
+// === Firebase Storage Functions ===
+// Initialize Firebase when SDK loads
+function initializeFirebase() {
+  if (typeof firebase !== 'undefined') {
+    try {
+      if (!firebase.apps || firebase.apps.length === 0) {
+        firebaseApp = firebase.initializeApp(firebaseConfig);
+      } else {
+        firebaseApp = firebase.apps[0];
+      }
+      storage = firebase.storage();
+      console.log('✅ Firebase initialized');
+    } catch (error) {
+      console.error('❌ Firebase initialization error:', error);
+    }
+  }
+}
+
+// Wait for Firebase SDK to load
+window.addEventListener('load', () => {
+  setTimeout(initializeFirebase, 500);
+});
