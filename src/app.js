@@ -1,4 +1,16 @@
 // === Firebase Configuration ===
+// ⚠️ SECURITY NOTE: This API key is PUBLIC but PROTECTED by:
+// 1. API Key Restrictions in Google Cloud Console (HTTP referrers + API restrictions)
+// 2. Firebase Security Rules (storage.rules)
+// 3. Domain restrictions (only works on authorized domains)
+// 
+// To secure this key:
+// 1. Go to: https://console.cloud.google.com/apis/credentials
+// 2. Edit the API key
+// 3. Add HTTP referrer restrictions: rewards-63e43.web.app, rewards-63e43.firebaseapp.com
+// 4. Restrict to Firebase Storage API only
+//
+// This key MUST be in client-side code for Firebase Client SDK to work.
 const firebaseConfig = {
   apiKey: "AIzaSyAKpUAnc_EJXxGrhPPfTAgnFB13Qvs_ogk",
   authDomain: "rewards-63e43.firebaseapp.com",
