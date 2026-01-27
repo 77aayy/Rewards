@@ -1,0 +1,5 @@
+# Firebase App Hosting — مشروع ستاتيك (HTML/JS بدون framework)
+# Build: نسخ الملفات إلى dist ثم السيرفر يقدّمها
+scripts:
+  buildCommand: npm run build
+  runCommand: npx serve -s dist -l 8080
