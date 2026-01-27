@@ -3881,18 +3881,21 @@ setTimeout(() => {
   const currentRole = localStorage.getItem('adora_current_role');
   const tbl = document.getElementById('targetTable');
   if (currentRole === 'supervisor') {
-    // المشرف: خانات التقييمات فقط — إخفاء عمود الحضور بالكامل
+    // المشرف: خانات التقييمات (بوكينج + جوجل) فقط — إخفاء عمود الحضور وعمود الحجوزات بالكامل
     if (tbl) {
       tbl.querySelectorAll('th.col-attendance, td.col-attendance').forEach(el => { el.style.display = 'none'; });
+      tbl.querySelectorAll('th.col-count, td.col-count').forEach(el => { el.style.display = 'none'; });
     }
     document.querySelectorAll('.attendance-toggle, .attendance-days-input').forEach(el => {
       el.style.display = 'none';
     });
   } else if (currentRole === 'hr') {
-    // HR: إخفاء أعمدة التقييمات فقط — يبقى عمود الحضور ظاهراً بالكامل (تم/لم يتم + أيام الحضور للكل)
+    // HR: خانات إدخال أيام الحضور فقط — إخفاء مؤشر تم/لم يتم وعمود الحجوزات وأعمدة التقييمات
     if (tbl) {
       tbl.querySelectorAll('th.col-eval-booking, th.col-eval-google, td.col-eval-booking, td.col-eval-google').forEach(el => { el.style.display = 'none'; });
+      tbl.querySelectorAll('th.col-count, td.col-count').forEach(el => { el.style.display = 'none'; });
     }
+    document.querySelectorAll('.attendance-indicator').forEach(el => { el.style.display = 'none'; });
     document.querySelectorAll('.eval-input').forEach(el => { el.style.display = 'none'; });
   } else if (currentRole === 'accounting') {
     // الحسابات: كل الأعمدة والمؤشرات للعرض فقط — إظهار بلوك القراءة وإخفاء الخانات القابلة للتعديل
@@ -3904,7 +3907,7 @@ setTimeout(() => {
   } else {
     // أدمن أو بدون دور: إظهار كل الأعمدة والمؤشرات
     if (tbl) {
-      tbl.querySelectorAll('th.col-attendance, td.col-attendance, th.col-eval-booking, th.col-eval-google, td.col-eval-booking, td.col-eval-google').forEach(el => { el.style.removeProperty('display'); });
+      tbl.querySelectorAll('th.col-attendance, td.col-attendance, th.col-count, td.col-count, th.col-eval-booking, th.col-eval-google, td.col-eval-booking, td.col-eval-google').forEach(el => { el.style.removeProperty('display'); });
     }
     document.querySelectorAll('.attendance-indicator').forEach(el => { el.style.removeProperty('display'); });
     document.querySelectorAll('.attendance-readonly-accounting').forEach(el => { el.style.display = 'none'; });

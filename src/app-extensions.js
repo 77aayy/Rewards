@@ -156,6 +156,7 @@ function populateAdminManagementModal() {
   
   const periodId = getCurrentPeriodId();
   const tokens = adminTokens[periodId] || {};
+  const periodTextAdminMgmt = (document.getElementById('headerPeriodRange') && document.getElementById('headerPeriodRange').innerText) ? document.getElementById('headerPeriodRange').innerText : 'غير محدد';
   
   const roles = [
     { key: 'supervisor', label: 'المشرف', icon: '👨‍💼', description: 'إدخال تقييمات بوكينج وجوجل' },
@@ -171,7 +172,10 @@ function populateAdminManagementModal() {
     const baseUrl = window.location.origin + window.location.pathname;
     const nameParam = (admin.name || '').trim() ? '&name=' + encodeURIComponent((admin.name || '').trim()) : '';
     const link = `${baseUrl}?role=${role.key}&token=${admin.token}&period=${periodId}${nameParam}`;
-    
+    const adminNameEsc = (admin.name || '').replace(/'/g, "\\'").replace(/"/g, '&quot;');
+    const periodEsc = (periodTextAdminMgmt || '').replace(/'/g, "\\'").replace(/"/g, '&quot;');
+    const roleLabelEsc = (role.label || '').replace(/'/g, "\\'").replace(/"/g, '&quot;');
+    const linkEsc = (link || '').replace(/'/g, "\\'");
     html += `
       <div class="glass p-4 rounded-xl border border-purple-400/30">
         <div class="flex items-center gap-2 mb-3">
@@ -183,7 +187,7 @@ function populateAdminManagementModal() {
         </div>
         <div class="mb-3">
           <label class="block text-sm font-bold text-gray-300 mb-1">اسم الإداري (اختياري):</label>
-          <input type="text" id="adminName_${role.key}" value="${admin.name || ''}" 
+          <input type="text" id="adminName_${role.key}" value="${(admin.name || '').replace(/"/g, '&quot;')}" 
             placeholder="أدخل اسم الإداري..." 
             class="w-full px-3 py-2 rounded-lg text-sm text-white bg-white/10 border border-white/20 focus:outline-none focus:border-purple-400"
             onchange="updateAdminName('${role.key}', this.value)">
@@ -191,7 +195,7 @@ function populateAdminManagementModal() {
         <div class="mb-3">
           <label class="block text-sm font-bold text-gray-300 mb-1">الرابط:</label>
           <div class="flex gap-2">
-            <input type="text" id="adminLink_${role.key}" value="${link}" readonly
+            <input type="text" id="adminLink_${role.key}" value="${link.replace(/"/g, '&quot;')}" readonly
               class="flex-1 px-3 py-2 rounded-lg text-xs text-gray-300 bg-white/5 border border-white/10">
             <button onclick="copyAdminLink('${role.key}')" 
               class="px-3 py-2 bg-purple-500/20 text-purple-400 rounded-lg hover:bg-purple-500/30 transition-colors text-sm font-bold">
@@ -199,6 +203,13 @@ function populateAdminManagementModal() {
             </button>
           </div>
         </div>
+        <button onclick="sendWhatsAppMessageAdmin('${adminNameEsc}', '${roleLabelEsc}', '${periodEsc}', '${linkEsc}')"
+          class="mb-3 w-full bg-green-500 hover:bg-green-600 text-white font-bold py-2 px-4 rounded-lg flex items-center justify-center gap-2 transition-all">
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor">
+            <path d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51-.173-.008-.371-.01-.57-.01-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347m-5.421 7.403h-.004a9.87 9.87 0 01-5.031-1.378l-.361-.214-3.741.982.998-3.648-.235-.374a9.86 9.86 0 01-1.51-5.26c.001-5.45 4.436-9.884 9.888-9.884 2.64 0 5.122 1.03 6.988 2.898a9.825 9.825 0 012.893 6.994c-.003 5.45-4.437 9.884-9.885 9.884m8.413-18.297A11.815 11.815 0 0012.05 0C5.495 0 .16 5.335.157 11.892c0 2.096.547 4.142 1.588 5.945L.057 24l6.305-1.654a11.882 11.882 0 005.683 1.448h.005c6.554 0 11.89-5.335 11.893-11.893a11.821 11.821 0 00-3.48-8.413Z"/>
+          </svg>
+          <span>إرسال عبر واتساب</span>
+        </button>
         <div class="flex gap-2">
           <button onclick="regenerateAdminToken('${role.key}')" 
             class="flex-1 px-3 py-2 bg-yellow-500/20 text-yellow-400 rounded-lg hover:bg-yellow-500/30 transition-colors text-sm font-bold">
@@ -570,40 +581,54 @@ function showEmployeeCodesModal() {
   if (adminLinksList && typeof getCurrentPeriodId === 'function') {
     const periodId = getCurrentPeriodId();
     const tokens = adminTokens[periodId] || {};
-    
+    const periodTextAdmin = document.getElementById('headerPeriodRange') ? (document.getElementById('headerPeriodRange').innerText || 'غير محدد') : 'غير محدد';
+
     const roles = [
       { key: 'supervisor', label: 'المشرف', icon: '👨‍💼' },
       { key: 'hr', label: 'HR', icon: '👔' },
       { key: 'accounting', label: 'الحسابات', icon: '💰' },
       { key: 'manager', label: 'المدير العام', icon: '👑' }
     ];
-    
+
     let html = '<div class="grid grid-cols-1 md:grid-cols-2 gap-4">';
     roles.forEach(role => {
       const admin = tokens[role.key];
       if (admin) {
         const baseUrl = window.location.origin + window.location.pathname;
         const link = `${baseUrl}?role=${role.key}&token=${admin.token}&period=${periodId}`;
+        const adminNameEsc = (admin.name || '').replace(/'/g, "\\'").replace(/"/g, '&quot;');
+        const periodEsc = (periodTextAdmin || '').replace(/'/g, "\\'").replace(/"/g, '&quot;');
+        const roleLabelEsc = (role.label || '').replace(/'/g, "\\'").replace(/"/g, '&quot;');
         html += `
-          <div class="glass p-4 rounded-xl border border-purple-400/30">
-            <div class="flex items-center gap-2 mb-3">
-              <span class="text-2xl">${role.icon}</span>
-              <h4 class="text-lg font-bold text-purple-400">${role.label}</h4>
-              ${admin.name ? `<span class="text-xs text-gray-400">(${admin.name})</span>` : ''}
-            </div>
-            <div class="mb-3">
-              <div class="flex gap-2">
-                <input type="text" value="${link}" readonly
-                  class="flex-1 px-3 py-2 rounded-lg text-xs text-gray-300 bg-white/5 border border-white/10">
-                <button onclick="copyAdminLinkFromCodes('${role.key}')" 
-                  class="px-3 py-2 bg-purple-500/20 text-purple-400 rounded-lg hover:bg-purple-500/30 transition-colors text-sm font-bold">
-                  📋
-                </button>
+          <div class="glass p-5 rounded-xl border border-white/20 hover:border-turquoise/50 transition-all">
+            <div class="text-center">
+              <div class="flex items-center justify-center gap-2 mb-3">
+                <span class="text-2xl">${role.icon}</span>
+                <h4 class="text-lg font-bold text-purple-400">${role.label}</h4>
+                ${admin.name ? `<span class="text-xs text-gray-400">(${admin.name})</span>` : ''}
               </div>
+              <div class="mb-3">
+                <div class="flex gap-2">
+                  <input type="text" value="${link}" readonly
+                    class="flex-1 px-3 py-2 rounded-lg text-xs text-gray-300 bg-white/5 border border-white/10">
+                  <button onclick="copyAdminLinkFromCodes('${role.key}')"
+                    class="px-3 py-2 bg-purple-500/20 text-purple-400 rounded-lg hover:bg-purple-500/30 transition-colors text-sm font-bold">
+                    📋
+                  </button>
+                </div>
+              </div>
+              <button onclick="sendWhatsAppMessageAdmin('${adminNameEsc}', '${roleLabelEsc}', '${periodEsc}', '${link.replace(/'/g, "\\'")}')"
+                class="mt-3 w-full bg-green-500 hover:bg-green-600 text-white font-bold py-2 px-4 rounded-lg flex items-center justify-center gap-2 transition-all">
+                <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor">
+                  <path d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51-.173-.008-.371-.01-.57-.01-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347m-5.421 7.403h-.004a9.87 9.87 0 01-5.031-1.378l-.361-.214-3.741.982.998-3.648-.235-.374a9.86 9.86 0 01-1.51-5.26c.001-5.45 4.436-9.884 9.888-9.884 2.64 0 5.122 1.03 6.988 2.898a9.825 9.825 0 012.893 6.994c-.003 5.45-4.437 9.884-9.885 9.884m8.413-18.297A11.815 11.815 0 0012.05 0C5.495 0 .16 5.335.157 11.892c0 2.096.547 4.142 1.588 5.945L.057 24l6.305-1.654a11.882 11.882 0 005.683 1.448h.005c6.554 0 11.89-5.335 11.893-11.893a11.821 11.821 0 00-3.48-8.413Z"/>
+                </svg>
+                <span>إرسال عبر واتساب</span>
+              </button>
+              <a href="${link}" target="_blank" class="mt-2 text-xs text-turquoise hover:underline inline-flex items-center gap-1">
+                <span>افتح الرابط</span>
+                <span>🔗</span>
+              </a>
             </div>
-            <a href="${link}" target="_blank" class="block text-center px-3 py-2 bg-purple-500/20 text-purple-400 rounded-lg hover:bg-purple-500/30 transition-colors text-sm font-bold">
-              🔗 فتح الرابط
-            </a>
           </div>
         `;
       }
@@ -821,6 +846,31 @@ function sendWhatsAppMessage(code, employeeName, periodText, url) {
   } catch (error) {
     console.error('❌ Error sending WhatsApp message:', error);
     showToast('❌ خطأ في إرسال الرسالة: ' + error.message, 'error');
+  }
+}
+
+// إرسال رابط الإداري عبر واتساب برسالة ترحيبية (نفس أسلوب الموظفين)
+function sendWhatsAppMessageAdmin(adminName, roleLabel, periodText, url) {
+  try {
+    var displayName = (adminName && String(adminName).trim()) ? String(adminName).trim() : roleLabel;
+    var message = 'السلام عليكم - ' + displayName + ' - الرجاء استخدام الرابط أدناه للدخول إلى لوحة المكافآت بدور "' + roleLabel + '" لفترة ' + periodText + '\n\n\uD83D\uDCE2 الرابط:\n' + url;
+    var encodedMessage = encodeURIComponent(message);
+    var isMobile = /Android|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent);
+    if (isMobile) {
+      if (navigator.share) {
+        navigator.share({ title: 'رابط لوحة المكافآت - ' + roleLabel, text: message, url: url }).catch(function () {
+          window.open('https://wa.me/?text=' + encodedMessage, '_blank');
+        });
+      } else {
+        window.open('https://wa.me/?text=' + encodedMessage, '_blank');
+      }
+    } else {
+      window.open('https://web.whatsapp.com/send?text=' + encodedMessage, '_blank');
+      setTimeout(function () { if (typeof showToast === 'function') showToast('\uD83D\uDCA1 تم فتح واتساب ويب - الصق الرابط في المحادثة إن لزم', 'info'); }, 800);
+    }
+  } catch (e) {
+    console.error('sendWhatsAppMessageAdmin:', e);
+    if (typeof showToast === 'function') showToast('\u274C خطأ في إرسال الرسالة', 'error');
   }
 }
 
