@@ -9,6 +9,14 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+      - name: Verify FIREBASE_TOKEN
+        run: |
+          if [ -z "$FIREBASE_TOKEN" ]; then
+            echo "::error::أضف السر: Repo → Settings → Secrets and variables → Actions → New repository secret → Name: FIREBASE_TOKEN"
+            exit 1
+          fi
+        env:
+          FIREBASE_TOKEN: ${{ secrets.FIREBASE_TOKEN }}
       - name: Deploy to Firebase Hosting
         uses: w9jds/firebase-action@master
         with:

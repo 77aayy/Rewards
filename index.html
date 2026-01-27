@@ -24,8 +24,8 @@
         href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans+Arabic:wght@300;400;500;600;700;800;900&display=swap"
         rel="stylesheet">
 
-    <!-- Custom Styles -->
-    <link rel="stylesheet" href="src/styles.css">
+    <!-- Custom Styles (v=dropdowns = نافذة الخصومات + قوائم منسدلة داكنة) -->
+    <link rel="stylesheet" href="src/styles.css?v=dropdowns">
 </head>
 
 <body class="p-2 sm:p-4 md:p-6">
@@ -533,6 +533,10 @@
                         <p class="text-sm text-gray-300 mt-2">
                             <span class="font-bold text-turquoise">تاريخ الإغلاق:</span> <span id="archivedClosedAt">-</span>
                         </p>
+                        <button type="button" onclick="restoreArchivedPeriodAsCurrent()" class="mt-4 w-full sm:w-auto btn-modern px-4 py-2.5 rounded-xl text-sm font-bold bg-gradient-to-r from-turquoise/80 to-teal-500/80 text-white border border-turquoise/30 flex items-center justify-center gap-2 hover:from-turquoise hover:to-teal-500 transition-all">
+                            <span>🔄</span>
+                            <span>استعادة الفترة للتعديل</span>
+                        </button>
                     </div>
                     <div id="archivedReportsGrid" class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3 sm:gap-4 max-h-[70vh] overflow-y-auto">
                         <!-- Archived employees will be populated here -->
@@ -612,6 +616,10 @@
                         <li class="flex items-start gap-3">
                             <span class="text-yellow-400 font-bold mt-0.5">•</span>
                             <span>10 ريال لكل تقييم Google Maps (ثابت)</span>
+                        </li>
+                        <li class="flex items-start gap-3">
+                            <span class="text-yellow-400 font-bold mt-0.5">•</span>
+                            <span class="text-yellow-200/90 font-medium">تُحتسب المكافآت أعلاه على أن يكون التقييم <strong>مساوٍ أو أعلى</strong> من التقييم الحالي للفندق.</span>
                         </li>
                     </ul>
                 </div>
@@ -892,8 +900,8 @@
                             <span class="text-red-400">📊</span>
                             <span>نسبة الخصم (%):</span>
                         </label>
-                        <input type="number" id="discountPercentageInput" min="15" max="50" step="0.1" placeholder="مثال: 15" class="w-full px-2.5 py-2 rounded-lg text-xs sm:text-sm text-white bg-white/10 border border-white/20 focus:outline-none focus:border-red-400 focus:ring-2 focus:ring-red-400/30 transition-all min-h-[36px]">
-                        <p class="text-[9px] text-gray-400 mt-1">الحد الأدنى: <span class="text-red-400 font-bold">15%</span> | الحد الأقصى: <span class="text-red-400 font-bold">50%</span></p>
+                        <input type="number" id="discountPercentageInput" min="1" max="100" step="0.1" placeholder="مثال: 5" class="w-full px-2.5 py-2 rounded-lg text-xs sm:text-sm text-white bg-white/10 border border-white/20 focus:outline-none focus:border-red-400 focus:ring-2 focus:ring-red-400/30 transition-all min-h-[36px]">
+                        <p class="text-[9px] text-gray-400 mt-1">من <span class="text-red-400 font-bold">1%</span> إلى <span class="text-red-400 font-bold">100%</span></p>
                     </div>
                 </div>
                 
@@ -974,9 +982,9 @@
         </div>
     </div>
 
-    <!-- JavaScript (v=tab ensures fresh load after Tab-navigation deploy) -->
-    <script src="src/app.js?v=tab"></script>
+    <!-- JavaScript: app-extensions أولاً لأن app.js يتحقق من الرابط (role/token/period) ويحتاج loadAdminTokens و validateAdminAccess -->
     <script src="src/app-extensions.js?v=tab"></script>
+    <script src="src/app.js?v=tab"></script>
 </body>
 
 </html>

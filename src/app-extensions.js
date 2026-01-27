@@ -7,15 +7,23 @@ function generateAdminToken() {
   return Date.now().toString(36) + Math.random().toString(36).substr(2, 9) + Math.random().toString(36).substr(2, 9);
 }
 
-// Get current period ID (based on header period range)
+// Get current period ID (based on header period range أو من الرابط عند الدخول برابط إداري أو startDate بعد استعادة فترة مغلقة)
 function getCurrentPeriodId() {
+  if (typeof window !== 'undefined' && window.location && window.location.search) {
+    const p = new URLSearchParams(window.location.search).get('period');
+    if (p) return p;
+  }
+  try {
+    const startDate = typeof localStorage !== 'undefined' ? localStorage.getItem('adora_rewards_startDate') : null;
+    if (startDate && /^\d{4}-\d{2}-\d{2}/.test(startDate)) {
+      return startDate.substring(0, 7).replace('-', '_');
+    }
+  } catch (e) {}
   const periodText = document.getElementById('headerPeriodRange')?.innerText || '';
   if (!periodText || periodText === '-') {
-    // Generate period ID from current date
     const now = new Date();
     return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
   }
-  // Use period text as ID (or generate from it)
   return periodText.replace(/\s+/g, '-').replace(/[^a-zA-Z0-9-]/g, '');
 }
 
@@ -32,12 +40,53 @@ function loadAdminTokens() {
   }
 }
 
-// Save admin tokens to localStorage
+// Save admin tokens to localStorage and mirror to Firebase (for links to work on other devices)
 function saveAdminTokens() {
   try {
     localStorage.setItem('adora_admin_tokens', JSON.stringify(adminTokens));
+    const periodId = getCurrentPeriodId();
+    const st = (typeof window !== 'undefined' && window.storage);
+    if (st && periodId && adminTokens[periodId]) {
+      (async () => {
+        try {
+          if (typeof st.ref === 'function') {
+            const ref = st.ref('admin_tokens/' + periodId + '.json');
+            const blob = new Blob([JSON.stringify(adminTokens[periodId])], { type: 'application/json' });
+            await ref.put(blob);
+          }
+        } catch (e) {
+          if (console && console.warn) console.warn('Firebase admin_tokens upload skip:', e);
+        }
+      })();
+    }
   } catch (error) {
     console.error('❌ Error saving admin tokens:', error);
+  }
+}
+
+// التحقق من الرابط عبر Firebase عند فشل localStorage (ليعمل الرابط على جهاز الإداري المستلم)
+async function tryValidateAdminAccessFromFirebase(role, token, periodId) {
+  const st = (typeof window !== 'undefined' && window.storage);
+  if (!st || typeof st.ref !== 'function') return false;
+  try {
+    const ref = st.ref('admin_tokens/' + periodId + '.json');
+    const url = await ref.getDownloadURL();
+    const res = await fetch(url);
+    if (!res.ok) return false;
+    const data = await res.json();
+    const admin = data && data[role];
+    if (!admin || admin.token !== token || admin.active === false) return false;
+    if (!adminTokens[periodId]) adminTokens[periodId] = {};
+    adminTokens[periodId][role] = admin;
+    try {
+      localStorage.setItem('adora_admin_tokens', JSON.stringify(adminTokens));
+    } catch (e) {}
+    localStorage.setItem('adora_current_role', role);
+    localStorage.setItem('adora_current_token', token);
+    localStorage.setItem('adora_current_period', periodId);
+    return true;
+  } catch (e) {
+    return false;
   }
 }
 
@@ -83,6 +132,7 @@ function showAdminManagementModal() {
   if (!modal) return;
   
   initializeAdminTokensForPeriod();
+  saveAdminTokens(); // يرفع الـ tokens إلى Firebase ليعمل الرابط على جهاز الإداري المستلم
   populateAdminManagementModal();
   
   modal.classList.remove('hidden');
@@ -990,6 +1040,66 @@ async function loadArchivedPeriod(periodId) {
   }
 }
 
+/**
+ * استعادة الفترة المغلقة كفترة حالية للتعديل (يعتمد على البيانات المحمّلة في الذاكرة من loadArchivedPeriod).
+ * يخزّن في localStorage ويتوافق مع Firebase: لا يمسّ Firebase periods/؛ إغلاق الفترة لاحقاً يحدّث Firebase كالمعتاد.
+ */
+function restoreArchivedPeriodAsCurrent() {
+  try {
+    if (!db || db.length === 0) {
+      if (typeof showToast === 'function') showToast('⏳ اختر فترةً أولاً من القائمة ثم استعدها', 'info');
+      return;
+    }
+    const periodTextEl = document.getElementById('archivedPeriodText');
+    const periodText = (periodTextEl && periodTextEl.textContent) ? periodTextEl.textContent.trim() : (reportStartDate || '').replace(/_/g, '-');
+    if (!periodText && periodText !== '') {
+      if (typeof showToast === 'function') showToast('❌ لم تُحمَّل فترة بعد', 'error');
+      return;
+    }
+
+    localStorage.setItem('adora_rewards_db', JSON.stringify(db));
+    localStorage.setItem('adora_rewards_branches', JSON.stringify([...branches]));
+    localStorage.setItem('adora_rewards_evalRate', String(currentEvalRate || 20));
+    localStorage.setItem('adora_rewards_startDate', reportStartDate || '');
+    localStorage.setItem('adora_rewards_periodText', periodText || '');
+    if (typeof employeeCodesMap !== 'undefined' && employeeCodesMap !== null) {
+      try {
+        localStorage.setItem('adora_rewards_employeeCodes', JSON.stringify(employeeCodesMap));
+      } catch (e) {}
+    }
+    if (typeof window !== 'undefined' && window.db !== undefined) {
+      window.db = db;
+    }
+
+    if (typeof hideReportsPage === 'function') {
+      hideReportsPage();
+    }
+    const headerEl = document.getElementById('headerPeriodRange');
+    const periodRangeEl = document.getElementById('periodRange');
+    if (headerEl) headerEl.innerText = periodText || '-';
+    if (periodRangeEl) periodRangeEl.innerText = periodText || '-';
+
+    const uploadBox = document.getElementById('uploadBox');
+    const dashboard = document.getElementById('dashboard');
+    const actionBtns = document.getElementById('actionBtns');
+    if (uploadBox) uploadBox.classList.add('hidden');
+    if (dashboard) dashboard.classList.remove('hidden');
+    if (actionBtns) {
+      actionBtns.style.display = 'flex';
+      actionBtns.style.removeProperty && actionBtns.style.removeProperty('display');
+    }
+
+    if (typeof updateFilters === 'function') updateFilters();
+    if (typeof updatePrintButtonText === 'function') updatePrintButtonText();
+    if (typeof renderUI === 'function') renderUI('الكل');
+
+    if (typeof showToast === 'function') showToast('✅ تم استعادة الفترة للتعديل', 'success');
+  } catch (error) {
+    console.error('❌ Error restoring archived period:', error);
+    if (typeof showToast === 'function') showToast('❌ خطأ في استعادة الفترة: ' + (error.message || ''), 'error');
+  }
+}
+
 function populateArchivedReportsGrid() {
   const grid = document.getElementById('archivedReportsGrid');
   if (!grid) return;
@@ -1221,15 +1331,19 @@ async function checkMobileEmployeeCode() {
     const header = document.querySelector('header');
     if (header) header.style.display = 'none';
     
-    // Show error message
+    // Show error message with clear reason
     const body = document.body;
     body.innerHTML = `
       <div style="display: flex; align-items: center; justify-content: center; min-height: 100vh; background: linear-gradient(135deg, #0a0e1a 0%, #1a1f35 100%); color: white; font-family: 'IBM Plex Sans Arabic', sans-serif; text-align: center; padding: 2rem;">
-        <div style="background: rgba(255, 255, 255, 0.1); padding: 3rem; border-radius: 20px; border: 2px solid rgba(239, 68, 68, 0.5); max-width: 500px;">
+        <div style="background: rgba(255, 255, 255, 0.1); padding: 3rem; border-radius: 20px; border: 2px solid rgba(239, 68, 68, 0.5); max-width: 560px;">
           <div style="font-size: 4rem; margin-bottom: 1rem;">🔒</div>
-          <h1 style="font-size: 1.5rem; font-weight: 900; margin-bottom: 1rem; color: #ef4444;">الكود غير صحيح</h1>
-          <p style="color: #94a3b8; margin-bottom: 2rem;">يرجى استخدام الرابط الصحيح أو QR Code الخاص بك</p>
-          <p style="color: #64748b; font-size: 0.875rem;">إذا كنت تواجه مشكلة، يرجى التواصل مع الإدارة</p>
+          <h1 style="font-size: 1.5rem; font-weight: 900; margin-bottom: 1rem; color: #ef4444;">رابط الموظف لا يفتح</h1>
+          <p style="color: #fbbf24; font-weight: 700; margin-bottom: 0.75rem; font-size: 0.95rem;">سبب عدم فتح الرابط:</p>
+          <ul style="color: #94a3b8; text-align: right; margin: 0 auto 1.5rem; padding-right: 1.5rem; max-width: 400px; line-height: 1.7; font-size: 0.9rem;">
+            <li>روابط الموظفين تعمل <strong>بعد «إغلاق الفترة» فقط</strong> — الموظف يطلع على نتائج شغله بعد الإغلاق. إن لم تُغلق الفترة بعد، الرابط لا يعمل.</li>
+            <li>أو الكود في الرابط غير مسجّل لأي موظف.</li>
+          </ul>
+          <p style="color: #64748b; font-size: 0.875rem;">إذا كنت موظفاً ولم ينجح الرابط، يرجى التواصل مع الإدارة.</p>
         </div>
       </div>
     `;
@@ -1712,8 +1826,8 @@ function addDiscount() {
     showToast('❌ يرجى اختيار نوع الخصم', 'error');
     return;
   }
-  if (isNaN(discountPercentage) || discountPercentage < 15 || discountPercentage > 50) {
-    showToast('❌ يرجى إدخال نسبة خصم صحيحة (15% - 50%)', 'error');
+  if (isNaN(discountPercentage) || discountPercentage < 1 || discountPercentage > 100) {
+    showToast('❌ يرجى إدخال نسبة خصم صحيحة (من 1% إلى 100%)', 'error');
     return;
   }
   if (!eventDate) {

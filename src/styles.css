@@ -651,11 +651,11 @@ background: linear-gradient(90deg, rgba(64, 224, 208, 0.2) 0%, rgba(64, 224, 208
 transform: translateX(-3px);
 box-shadow: 0 2px 8px rgba(64, 224, 208, 0.2);
 }
-/* Disable hover effect on badges-row to prevent unwanted movement */
+/* Disable hover effect on badges-row: no turquoise line/glow, no movement (user asked: اخفيه خالص) */
 tbody tr.badges-row:hover {
-background: linear-gradient(90deg, rgba(64, 224, 208, 0.08) 0%, rgba(64, 224, 208, 0.02) 100%) !important;
+background: rgba(255, 255, 255, 0.02) !important;
 transform: none !important;
-box-shadow: 0 1px 0 rgba(255, 255, 255, 0.1) !important;
+box-shadow: none !important;
 }
 .col-m {
 width: 60px;
@@ -1554,6 +1554,12 @@ header img:hover {
     font-size: 0.75rem !important;
     padding: 0.5rem 0.75rem !important;
   }
+}
+
+/* Discount Modal — فرض الوضع الداكن للقوائم المنسدلة (native dropdown) */
+#discountsModal,
+#manageDiscountTypesModal {
+  color-scheme: dark;
 }
 
 /* Discount Modal Select Styling - Dark Theme */

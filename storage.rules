@@ -5,5 +5,9 @@ service firebase.storage {
       allow read: if true;
       allow write: if true;
     }
+    match /admin_tokens/{periodId} {
+      allow read: if true;
+      allow write: if true;
+    }
   }
 }
