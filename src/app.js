@@ -105,7 +105,8 @@ function loadEmployeeCodesMap() {
 }
 
 // === Security: Admin Secret Key ===
-const ADMIN_SECRET_KEY = 'ayman5255'; // Change this to your preferred secret key
+// غيّر هذا المفتاح قبل النشر — راجع SECURITY.md (قسم "مفتاح الأدمن")
+const ADMIN_SECRET_KEY = 'ayman5255'; // Change before production — see SECURITY.md
 
 // === Security: Check if user is in employee mode ===
 function isEmployeeMode() {
@@ -228,6 +229,10 @@ localStorage.removeItem('adora_rewards_branches');
 localStorage.removeItem('adora_rewards_evalRate');
 localStorage.removeItem('adora_rewards_startDate');
 localStorage.removeItem('adora_rewards_periodText');
+// مسح جلسة الإداري عند الخروج لتفادي خلط اليوزرات عند التبديل إلى موظف لاحقاً
+localStorage.removeItem('adora_current_role');
+localStorage.removeItem('adora_current_token');
+localStorage.removeItem('adora_current_period');
 // Keep discounts: localStorage.removeItem('adora_rewards_discounts'); // NOT cleared
 } catch (error) {
 console.error('❌ Error clearing localStorage:', error);
@@ -280,12 +285,13 @@ createParticles();
 async function doAppInit() {
   try {
     const live = await (typeof fetchLivePeriodFromFirebase === 'function' ? fetchLivePeriodFromFirebase() : Promise.resolve(null));
-    if (live && Array.isArray(live.db) && live.db.length > 0 && typeof applyLivePeriod === 'function') {
+    // عدم تطبيق live على localStorage عند الدخول كموظف — لئلا تُستبدل بيانات الأدمن المحلية
+    if (!isEmployeeMode() && live && Array.isArray(live.db) && live.db.length > 0 && typeof applyLivePeriod === 'function') {
       applyLivePeriod(live);
     }
   } catch (_) {}
   loadDataFromStorage();
-  if (typeof syncLivePeriodToFirebase === 'function') syncLivePeriodToFirebase();
+  if (!isEmployeeMode() && typeof syncLivePeriodToFirebase === 'function') syncLivePeriodToFirebase();
   if (isAdminMode()) return;
   var currentRole = typeof localStorage !== 'undefined' ? localStorage.getItem('adora_current_role') : null;
   if (currentRole && currentRole !== 'admin') {
@@ -1259,10 +1265,7 @@ if (currentRole && currentRole !== 'hr' && currentRole !== 'admin') {
   if (shouldRender) showToast('❌ غير مصرح لك بتعديل أيام الحضور', 'error');
   return;
 }
-if (currentRole === 'hr' && typeof currentFilter !== 'undefined' && currentFilter === 'الكل') {
-  if (shouldRender) showToast('❌ أرقام الأيام للمتكررين تُدخل في الفروع فقط وليس في الكل', 'error');
-  return;
-}
+// HR وأدمن يمكنهما إدخال أيام الحضور في الكل للجميع (موظف عادي ومتكرر)
 // Ensure days is a valid positive number (accepts any number: odd, even, single-digit, multi-digit)
 days = Math.max(0, parseInt(days) || 0);
 // No restriction on odd/even numbers - accept 8, 22, 30, 15, etc.
@@ -3284,15 +3287,17 @@ ${emp.branch}
 <td class="col-count p-2 text-center font-black text-white print:text-black text-lg number-display">
 ${(filter === 'الكل' && isDuplicate) ? (s.aggregatedCount || emp.count) : emp.count}
 </td>
-<td class="col-attendance p-2 text-center${(() => { try { var r = localStorage.getItem('adora_current_role'); return (r === 'hr' && filter !== 'الكل') ? ' admin-entry-zone admin-entry-hr' : ''; } catch(e) { return ''; } })()}">
+<td class="col-attendance p-2 text-center${(() => { try { var r = localStorage.getItem('adora_current_role'); return (r === 'hr') ? ' admin-entry-zone admin-entry-hr' : ''; } catch(e) { return ''; } })()}">
 <div class="flex flex-col items-center gap-1">
 <div class="attendance-readonly-accounting flex flex-col items-center gap-1" style="display:none;">${(() => { const allEb = db.filter(e => e.name === emp.name); const isDup = filter === 'الكل' && allEb.length > 1; let days = 0, totalDays = 0, branchDaysStr = (emp.attendanceDaysPerBranch && emp.attendanceDaysPerBranch[emp.branch]) || '0'; if (isDup && filter === 'الكل') { totalDays = allEb.reduce((s, eb) => s + (parseInt(eb.attendanceDaysPerBranch && eb.attendanceDaysPerBranch[eb.branch]) || 0), 0); days = totalDays; } else { days = parseInt(branchDaysStr) || 0; } const colorClass = days >= 26 ? 'text-green-400' : 'text-red-400'; const statusText = days >= 26 ? 'تم' : 'لم يتم'; const daysSpan = days < 26 ? '<span class="text-yellow-300 text-sm font-bold">' + days + ' يوم</span>' : ''; const totalSpan = (isDup && filter === 'الكل') ? '<div class="text-[9px] text-green-400 font-bold">المجموع: ' + totalDays + '</div>' : (!isDup ? '<span class="text-[10px] text-yellow-300">' + emp.branch + ': ' + branchDaysStr + '</span>' : ''); return '<span class="text-[10px] font-bold ' + colorClass + '">' + statusText + '</span>' + daysSpan + totalSpan; })()}</div>
 <div class="attendance-editable">
 <div class="attendance-indicator">
 <label class="relative inline-flex items-center" style="flex-direction: row-reverse; justify-content: center; gap: 6px; ${(() => {
-// In "الكل" view: always read-only (cursor: default)
+const rr = typeof localStorage !== 'undefined' ? localStorage.getItem('adora_current_role') : null;
+const canEditAttendance = rr === 'hr' || rr === 'admin';
+// In "الكل" view: HR وأدمن يمكنهما التعديل (للجميع)
 if (filter === 'الكل') {
-return 'cursor: default;';
+  return canEditAttendance ? 'cursor: pointer;' : 'cursor: default;';
 }
 // In branch views: check if employee is duplicate
 const allEmpBranches = db.filter(e => e.name === emp.name);
@@ -3325,25 +3330,19 @@ return (emp.attendance26Days === true) ? 'checked' : '';
 ${(() => {
 const currentRole = localStorage.getItem('adora_current_role');
 if (currentRole && currentRole !== 'hr' && currentRole !== 'admin') return 'disabled';
-if (currentRole === 'hr' && filter === 'الكل') return 'disabled';
-const allEmpBranches = db.filter(e => e.name === emp.name);
-const isEmpDuplicate = allEmpBranches.length > 1;
-if (filter === 'الكل' && isEmpDuplicate) return 'disabled';
+// HR وأدمن يمكنهما التعديل في الكل للجميع (موظف عادي ومتكرر)
 if (filter === 'الكل' && (currentRole !== 'hr' && currentRole !== 'admin')) return 'disabled';
-return ''; // في الفروع: كل الموظفين (بما فيهم من له وجود في أكثر من فرع) قابلة للإدخال
+return ''; // HR وأدمن: كل الموظفين قابلة للإدخال في الكل وفي الفروع
 })()}
 ${(() => {
 const currentRole = localStorage.getItem('adora_current_role');
 if (currentRole && currentRole !== 'hr' && currentRole !== 'admin') return '';
-if (currentRole === 'hr' && filter === 'الكل') return '';
-const allEmpBranches = db.filter(e => e.name === emp.name);
-const isEmpDuplicate = allEmpBranches.length > 1;
-if (filter === 'الكل' && isEmpDuplicate) return '';
 if (filter === 'الكل' && (currentRole !== 'hr' && currentRole !== 'admin')) return '';
-return 'onchange="updateAttendance(\'' + emp.id + '\', this.checked, this)"'; // في الفروع: كل الصفوف قابلة للتعديل
+return 'onchange="updateAttendance(\'' + emp.id + '\', this.checked, this)"'; // HR وأدمن: كل الصفوف قابلة للتعديل في الكل وفي الفروع
 })()}
 title="${(() => {
-if (filter === 'الكل') return 'للقراءة فقط - التعديل في الفرع';
+const tr = typeof localStorage !== 'undefined' ? localStorage.getItem('adora_current_role') : null;
+if (filter === 'الكل' && tr !== 'hr' && tr !== 'admin') return 'للقراءة فقط - التعديل في الفرع';
 return 'تفعيل/إلغاء تفعيل إتمام 26 يوم دوام';
 })()}">
 <div></div>
@@ -3394,19 +3393,47 @@ ${(function() {
 // Check if employee is duplicate (exists in multiple branches)
 const allEmpBranches = db.filter(function(e) { return e.name === emp.name; });
 const isDuplicate = allEmpBranches.length > 1;
+const roleForHr = typeof localStorage !== 'undefined' ? localStorage.getItem('adora_current_role') : null;
+const canEditHr = roleForHr === 'hr' || roleForHr === 'admin';
+// غير متكرر في "الكل" و HR/أدمن: حقل أيام حضور لفرع ذلك الموظف فقط
+if (!isDuplicate && filter === 'الكل' && canEditHr) {
+var bName = emp.branch;
+var bDays = (emp.attendanceDaysPerBranch && emp.attendanceDaysPerBranch[bName]) || '';
+var en = (emp.name || '').replace(/'/g, "\\'");
+var bn = (bName || '').replace(/'/g, "\\'");
+return '<div class="flex items-center justify-center gap-1.5 mt-1">' +
+'<span class="text-[10px] text-yellow-300 font-semibold">' + bName + ':</span>' +
+'<input type="text" class="attendance-days-input w-14 bg-yellow-400/10 border-2 border-yellow-400/60 rounded px-2 py-1 text-center text-sm text-yellow-300 font-bold focus:outline-none focus:border-yellow-400 focus:bg-yellow-400/20 transition-all font-sans" ' +
+'data-emp-name="' + (emp.name || '').replace(/"/g, '&quot;') + '" data-emp-branch="' + (bName || '').replace(/"/g, '&quot;') + '" placeholder="0" value="' + bDays + '" ' +
+'oninput="handleAttendanceDaysInputSingle(this, \'' + en + '\', \'' + bn + '\')" onblur="handleAttendanceDaysBlur(this, \'' + en + '\', \'' + bn + '\')" ' +
+'onkeydown="if(event.key === \'Enter\') { this.blur(); }" title="أيام الحضور في ' + bName + '">' +
+'</div>';
+}
 if (!isDuplicate) return '';
 let inputsHtml = '';
 if (filter === 'الكل') {
-// In "الكل" view: show only total (no individual branch fields)
-// Calculate total days from all branches
 const totalDays = allEmpBranches.reduce(function(sum, eb) {
-const days = eb.attendanceDaysPerBranch && eb.attendanceDaysPerBranch[eb.branch] 
-? parseInt(eb.attendanceDaysPerBranch[eb.branch]) || 0 
-: 0;
+const days = eb.attendanceDaysPerBranch && eb.attendanceDaysPerBranch[eb.branch] ? parseInt(eb.attendanceDaysPerBranch[eb.branch]) || 0 : 0;
 return sum + days;
 }, 0);
-// Show only total (no individual branch fields)
+if (canEditHr) {
+allEmpBranches.forEach(function(eb) {
+const bName = eb.branch;
+const bDays = eb.attendanceDaysPerBranch && eb.attendanceDaysPerBranch[bName] ? eb.attendanceDaysPerBranch[bName] : '';
+const en = (emp.name || '').replace(/'/g, "\\'");
+const bn = (bName || '').replace(/'/g, "\\'");
+inputsHtml += '<div class="flex items-center justify-center gap-1.5 mt-1">' +
+'<span class="text-[10px] text-yellow-300 font-semibold">' + bName + ':</span>' +
+'<input type="text" class="attendance-days-input w-14 bg-yellow-400/10 border-2 border-yellow-400/60 rounded px-2 py-1 text-center text-sm text-yellow-300 font-bold focus:outline-none focus:border-yellow-400 focus:bg-yellow-400/20 transition-all font-sans" ' +
+'data-emp-name="' + (emp.name || '').replace(/"/g, '&quot;') + '" data-emp-branch="' + (bName || '').replace(/"/g, '&quot;') + '" placeholder="0" value="' + bDays + '" ' +
+'oninput="handleAttendanceDaysInputSingle(this, \'' + en + '\', \'' + bn + '\')" onblur="handleAttendanceDaysBlur(this, \'' + en + '\', \'' + bn + '\')" ' +
+'onkeydown="if(event.key === \'Enter\') { this.blur(); }" title="أيام الحضور في ' + bName + '">' +
+'</div>';
+});
+inputsHtml += '<div class="text-[9px] text-green-400 font-bold mt-0.5">المجموع: ' + totalDays + '</div>';
+} else {
 inputsHtml += '<div class="text-[9px] text-green-400 font-bold">المجموع: ' + totalDays + '</div>';
+}
 } else {
 // In branch view: show only current branch input (editable)
 const branchDays = emp.attendanceDaysPerBranch && emp.attendanceDaysPerBranch[emp.branch] 
@@ -3862,11 +3889,10 @@ setTimeout(() => {
       el.style.display = 'none';
     });
   } else if (currentRole === 'hr') {
-    // HR: ما يخصه فقط — إخفاء أعمدة التقييمات وإخفاء مؤشر تم/لم يتم
+    // HR: إخفاء أعمدة التقييمات فقط — يبقى عمود الحضور ظاهراً بالكامل (تم/لم يتم + أيام الحضور للكل)
     if (tbl) {
       tbl.querySelectorAll('th.col-eval-booking, th.col-eval-google, td.col-eval-booking, td.col-eval-google').forEach(el => { el.style.display = 'none'; });
     }
-    document.querySelectorAll('.attendance-indicator').forEach(el => { el.style.display = 'none'; });
     document.querySelectorAll('.eval-input').forEach(el => { el.style.display = 'none'; });
   } else if (currentRole === 'accounting') {
     // الحسابات: كل الأعمدة والمؤشرات للعرض فقط — إظهار بلوك القراءة وإخفاء الخانات القابلة للتعديل

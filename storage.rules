@@ -1,13 +1,17 @@
 rules_version = '2';
+// تقييد الكتابة: حجم ≤ 5MB ونوع application/json فقط (التطبيق يرفع JSON فقط).
+// القراءة مفتوحة لأن التطبيق لا يستخدم Firebase Auth والوصول يُتحقق منه عبر الروابط (admin/role+token/code).
 service firebase.storage {
   match /b/{bucket}/o {
     match /periods/{periodId} {
       allow read: if true;
-      allow write: if true;
+      allow write: if request.resource.size < 5 * 1024 * 1024
+                  && request.resource.contentType == 'application/json';
     }
     match /admin_tokens/{periodId} {
       allow read: if true;
-      allow write: if true;
+      allow write: if request.resource.size < 5 * 1024 * 1024
+                  && request.resource.contentType == 'application/json';
     }
   }
 }

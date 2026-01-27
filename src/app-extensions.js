@@ -1197,6 +1197,15 @@ async function checkMobileEmployeeCode() {
   const code = urlParams.get('code');
   
   if (!code) return;
+
+  // مسح جلسة الإداري من التخزين المحلي عند الدخول كموظف — لتفادي خلط اليوزرات عند التبديل لاحقاً
+  try {
+    if (typeof localStorage !== 'undefined') {
+      localStorage.removeItem('adora_current_role');
+      localStorage.removeItem('adora_current_token');
+      localStorage.removeItem('adora_current_period');
+    }
+  } catch (e) {}
   
   // First, try to find employee in current db (from localStorage)
   let employee = db.find(emp => (emp.employeeCode || employeeCodesMap[emp.name]) === code);
@@ -1239,12 +1248,21 @@ async function checkMobileEmployeeCode() {
         // Load the most recent period
         const latestPeriod = periods[0];
         if (latestPeriod && latestPeriod.data) {
-          // Restore data temporarily
+          // Restore data temporarily — يشمل الخصومات والفروع لئلا يُستخدم بيانات فترة أخرى من localStorage
           const originalDb = db;
           const originalEmployeeCodes = employeeCodesMap;
+          const originalDiscounts = (typeof discounts !== 'undefined' ? discounts : (typeof window !== 'undefined' && window.discounts ? window.discounts : []));
+          const originalBranches = typeof branches !== 'undefined' && branches ? new Set(branches) : new Set();
           
           db = latestPeriod.data.db || [];
           employeeCodesMap = latestPeriod.data.employeeCodes || {};
+          const periodBranches = latestPeriod.data.branches;
+          if (typeof branches !== 'undefined') {
+            branches = Array.isArray(periodBranches) ? new Set(periodBranches) : (periodBranches && typeof periodBranches.forEach === 'function' ? new Set([...periodBranches]) : new Set());
+          }
+          const periodDiscounts = Array.isArray(latestPeriod.data.discounts) ? latestPeriod.data.discounts : [];
+          if (typeof discounts !== 'undefined') discounts = periodDiscounts;
+          if (typeof window !== 'undefined') window.discounts = periodDiscounts;
           
           // Try to find employee again
           employee = db.find(emp => (emp.employeeCode || employeeCodesMap[emp.name]) === code);
@@ -1262,9 +1280,15 @@ async function checkMobileEmployeeCode() {
               const header = document.querySelector('header');
               if (header) header.style.display = 'none';
               showToast('✅ تم تحميل البيانات', 'success');
+              // استعادة الحالة العامة حتى لا تبقى بيانات الفترة المغلقة في الذاكرة عند التبديل لاحقاً
+              db = originalDb;
+              employeeCodesMap = originalEmployeeCodes;
+              if (typeof branches !== 'undefined') branches = originalBranches;
+              if (typeof discounts !== 'undefined') discounts = originalDiscounts;
+              if (typeof window !== 'undefined') { window.db = db; window.discounts = originalDiscounts; }
               return;
             } else {
-              // Single branch - show report directly
+              // Single branch - show report directly (يستخدم خصومات وفروع الفترة المغلقة المُسنَدة أعلاه)
               showEmployeeReport(employee.id);
               document.getElementById('dashboard')?.classList.add('hidden');
               document.getElementById('uploadBox')?.classList.add('hidden');
@@ -1272,7 +1296,12 @@ async function checkMobileEmployeeCode() {
               const header = document.querySelector('header');
               if (header) header.style.display = 'none';
               showToast('✅ تم تحميل التقرير', 'success');
-              
+              // استعادة الحالة العامة حتى لا تبقى بيانات الفترة المغلقة في الذاكرة عند التبديل لاحقاً
+              db = originalDb;
+              employeeCodesMap = originalEmployeeCodes;
+              if (typeof branches !== 'undefined') branches = originalBranches;
+              if (typeof discounts !== 'undefined') discounts = originalDiscounts;
+              if (typeof window !== 'undefined') { window.db = db; window.discounts = originalDiscounts; }
               // Show PWA install prompt after 3 seconds
               setTimeout(() => {
                 if (deferredPrompt && /Android|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent)) {
@@ -1292,6 +1321,9 @@ async function checkMobileEmployeeCode() {
           // Restore original data if employee not found
           db = originalDb;
           employeeCodesMap = originalEmployeeCodes;
+          if (typeof branches !== 'undefined') branches = originalBranches;
+          if (typeof discounts !== 'undefined') discounts = originalDiscounts;
+          if (typeof window !== 'undefined') { window.db = db; window.discounts = originalDiscounts; }
           }
         } else {
           console.warn('⚠️ No periods found in Firebase Storage or listAll() failed');

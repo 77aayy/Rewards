@@ -167,6 +167,14 @@
 
 ## 7. تقسيم الملفات والمسؤوليات
 
+### واجهة التبعيات (app.js ↔ app-extensions.js)
+
+- **ترتيب التحميل في index.html:** `app-extensions.js` ثم `app.js` — لأن app.js يعتمد على دوال معرّفة في app-extensions.
+- **ما يستدعيه app.js من app-extensions:**  
+  `loadAdminTokens`, `validateAdminAccess`, `tryValidateAdminAccessFromFirebase`, `initializeRoleBasedUI`, `loadDiscounts`, `loadDiscountTypes`, `fetchLivePeriodFromFirebase`, `applyLivePeriod`, `syncLivePeriodToFirebase`, وكل دوال الواجهة المُربوطة بـ `onclick` في الـ HTML (مثل `showAdminManagementModal`, `showReportsPage`, `showDiscountsModal`, `showClosePeriodModal`, …).
+- **ما يعتمد عليه app-extensions من app.js / الواجهة:**  
+  المتغيرات العامة `db`, `branches`, `reportStartDate`, `currentEvalRate`, `employeeCodesMap`, `discounts` (أو ما يُقرأ من `window.db` / localStorage)، ودوال مثل `renderUI`, `updateFooterTotals`, `returnToUpload`, `showToast`, وتهيئة Firebase عبر `window.storage`.
+
 ### app.js
 
 - فحص RBAC من الـ URL، والتحقق من الأدوار.
@@ -208,6 +216,10 @@
 
 ## 8. نقاط حساسة للتعديلات والفحوصات
 
+0. **عزل جلسات الأدمن/الإداري والموظف (تفادي اللغبطه عند التبديل):**
+   - عند **خروج** (returnToUpload): تُمسح `adora_current_role`, `adora_current_token`, `adora_current_period` حتى لا تبقى جلسة إداري في المتصفح.
+   - عند **الدخول كموظف** (?code=XXX): تُمسح نفس المفاتيح من localStorage، ولا تُطبَّق بيانات «الفترة الحية» من Firebase على localStorage (لئلا تُستبدل بيانات الأدمن المحلية). بعد عرض تقرير الموظف المُحمَّل من Firebase تُستعاد `db`, `employeeCodesMap`, `branches`, `discounts` (و`window.db`/`window.discounts`) للحالة السابقة حتى لا تبقى بيانات الفترة المغلقة في الذاكرة عند التبديل لاحقاً. **وقبل** عرض التقرير عند التحميل من Firebase تُسنَد `discounts` و`branches` من بيانات الفترة المغلقة حتى لا يُستخدم خصم أو فرع من فترة أخرى (localStorage).
+
 1. **تزامن `db`:**
    - أي تحديث لـ `db` يحتاج تحديث `window.db` إن وُجد، لأن دوال الإحصائيات والخصومات في `app-extensions.js` تعتمد على `window.db` أو localStorage.
 
@@ -244,6 +256,11 @@ git add .
 git commit -m "..."
 git push origin main
 ```
+
+### تنبيهات عند النشر
+
+- **قواعد التخزين:** بعد أي تعديل على `storage.rules` نفّذ: `firebase deploy --only storage` حتى تُطبَّق القواعد الجديدة.
+- **Service Worker:** عند تعديل `service-worker.js` يجب تغيير ثابت `CACHE_NAME` داخل الملف (مثلاً `elite-rewards-v4`) ثم النشر؛ وإلا قد يبقى المستخدمون على نسخة كاش قديمة.
 
 ---
 
