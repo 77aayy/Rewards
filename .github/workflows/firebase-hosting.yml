@@ -1,0 +1,17 @@
+# نشر تلقائي على Firebase Hosting عند كل push إلى main
+# الموقع: rewards-63e43.web.app
+name: Deploy to Firebase Hosting
+on:
+  push:
+    branches: [main]
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Deploy to Firebase Hosting
+        uses: w9jds/firebase-action@master
+        with:
+          args: deploy --only hosting --project rewards-63e43
+        env:
+          FIREBASE_TOKEN: ${{ secrets.FIREBASE_TOKEN }}
