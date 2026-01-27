@@ -589,6 +589,27 @@ min-width: 44px !important;
 #actionBtns {
 gap: 0.5rem !important;
 }
+/* أزرار الترويسة 2026 — أيقونات SVG موحّدة (بديل الإيموجي) */
+#actionBtns .action-btn-icon {
+width: 1.125rem;
+height: 1.125rem;
+flex-shrink: 0;
+display: inline-flex;
+align-items: center;
+justify-content: center;
+}
+#actionBtns .action-btn-icon svg {
+width: 100%;
+height: 100%;
+}
+#actionBtns .btn-modern {
+border-radius: 0.75rem;
+}
+@media (min-width: 640px) {
+#actionBtns .btn-modern {
+border-radius: 1rem;
+}
+}
 header {
 padding: 1rem !important;
 gap: 1rem !important;
@@ -1612,6 +1633,19 @@ header img:hover {
   z-index: 35 !important;
 }
 
+/* تحسين حجم منسدلة نوع الخصم وزر الإعدادات */
+#discountsModal #discountTypeSelect {
+  min-height: 44px !important;
+  padding: 0.5rem 0.75rem !important;
+  font-size: 0.875rem !important;
+}
+#discountsModal button[onclick*="showManageDiscountTypesModal"] {
+  min-height: 44px !important;
+  min-width: 44px !important;
+  padding: 0.5rem 0.75rem !important;
+  font-size: 1rem !important;
+}
+
 /* Fix overlap on smaller screens - make grid vertical */
 @media (max-width: 768px) {
   #discountsModal .grid.grid-cols-1.sm\\:grid-cols-2 {
@@ -1725,4 +1759,35 @@ header img:hover {
   display: grid !important;
   visibility: visible !important;
   opacity: 1 !important;
+}
+
+/* مناطق إدخال الإداريين: حد واضح + بلور خفيف + نبض للمشرف و HR */
+.admin-entry-zone {
+  position: relative;
+  border-radius: 10px;
+  -webkit-backdrop-filter: blur(4px);
+  backdrop-filter: blur(4px);
+}
+.admin-entry-supervisor {
+  border: 2px solid rgba(64, 224, 208, 0.75) !important;
+  box-shadow: 0 0 14px rgba(64, 224, 208, 0.35);
+  background: rgba(64, 224, 208, 0.08) !important;
+  animation: admin-entry-pulse-turquoise 2.5s ease-in-out infinite;
+}
+.admin-entry-hr {
+  border: 2px solid rgba(234, 179, 8, 0.75) !important;
+  box-shadow: 0 0 14px rgba(234, 179, 8, 0.35);
+  background: rgba(234, 179, 8, 0.06) !important;
+  animation: admin-entry-pulse-amber 2.5s ease-in-out infinite;
+}
+@keyframes admin-entry-pulse-turquoise {
+  0%, 100% { box-shadow: 0 0 12px rgba(64, 224, 208, 0.3); }
+  50% { box-shadow: 0 0 20px rgba(64, 224, 208, 0.5); }
+}
+@keyframes admin-entry-pulse-amber {
+  0%, 100% { box-shadow: 0 0 12px rgba(234, 179, 8, 0.3); }
+  50% { box-shadow: 0 0 20px rgba(234, 179, 8, 0.5); }
+}
+@media print {
+  .admin-entry-zone { animation: none !important; }
 }

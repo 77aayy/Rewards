@@ -52,49 +52,49 @@
             </div>
             <div class="flex flex-wrap gap-2 sm:gap-3 w-full sm:w-auto justify-end" id="actionBtns" style="display: none;">
                 <button onclick="showAdminManagementModal()"
-                    class="btn-modern px-4 sm:px-5 md:px-6 py-2 sm:py-2.5 md:py-3 bg-gradient-to-r from-purple-500/80 to-purple-600/80 text-white rounded-lg sm:rounded-xl text-xs sm:text-sm font-bold border border-purple-400/50 flex items-center gap-2 hover:shadow-lg hover:from-purple-500 hover:to-purple-600 transition-all backdrop-blur-sm" style="font-size: clamp(0.75rem, 2vw, 0.875rem);">
-                    <span class="text-base sm:text-lg">👥</span>
+                    class="btn-modern px-4 sm:px-5 md:px-6 py-2 sm:py-2.5 md:py-3 bg-gradient-to-r from-purple-500/80 to-purple-600/80 text-white rounded-xl text-xs sm:text-sm font-bold border border-purple-400/50 flex items-center gap-2 hover:shadow-lg hover:from-purple-500 hover:to-purple-600 transition-all backdrop-blur-sm" style="font-size: clamp(0.75rem, 2vw, 0.875rem);">
+                    <span class="action-btn-icon" aria-hidden="true"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M22 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg></span>
                     <span class="hidden sm:inline">إدارة الإداريين</span>
                     <span class="sm:hidden">إداريين</span>
                 </button>
                 <button onclick="returnToUpload()"
-                    class="btn-modern px-4 sm:px-5 md:px-6 py-2 sm:py-2.5 md:py-3 bg-gradient-to-r from-red-500/80 to-red-600/80 text-white rounded-lg sm:rounded-xl text-xs sm:text-sm font-bold border border-red-400/50 flex items-center gap-2 hover:shadow-lg hover:from-red-500 hover:to-red-600 transition-all backdrop-blur-sm" style="font-size: clamp(0.75rem, 2vw, 0.875rem);">
-                    <span class="text-base sm:text-lg">🚪</span>
+                    class="btn-modern px-4 sm:px-5 md:px-6 py-2 sm:py-2.5 md:py-3 bg-gradient-to-r from-red-500/80 to-red-600/80 text-white rounded-xl text-xs sm:text-sm font-bold border border-red-400/50 flex items-center gap-2 hover:shadow-lg hover:from-red-500 hover:to-red-600 transition-all backdrop-blur-sm" style="font-size: clamp(0.75rem, 2vw, 0.875rem);">
+                    <span class="action-btn-icon" aria-hidden="true"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" y1="12" x2="9" y2="12"/></svg></span>
                     <span>خروج</span>
                 </button>
                 <button id="printSelectedBtn" onclick="smartPrint(true)"
-                    class="hidden btn-modern px-4 sm:px-5 md:px-6 py-2 sm:py-2.5 md:py-3 bg-gradient-to-r from-orange-500/90 to-orange-600/90 text-white rounded-lg sm:rounded-xl text-xs sm:text-sm font-bold shadow-lg flex items-center gap-2 hover:shadow-xl hover:from-orange-500 hover:to-orange-600 transition-all backdrop-blur-sm" style="font-size: clamp(0.75rem, 2vw, 0.875rem);">
-                    <span class="text-base sm:text-lg">🎯</span>
+                    class="hidden btn-modern px-4 sm:px-5 md:px-6 py-2 sm:py-2.5 md:py-3 bg-gradient-to-r from-orange-500/90 to-orange-600/90 text-white rounded-xl text-xs sm:text-sm font-bold shadow-lg flex items-center gap-2 hover:shadow-xl hover:from-orange-500 hover:to-orange-600 transition-all backdrop-blur-sm" style="font-size: clamp(0.75rem, 2vw, 0.875rem);">
+                    <span class="action-btn-icon" aria-hidden="true"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><circle cx="12" cy="12" r="6"/><circle cx="12" cy="12" r="2"/></svg></span>
                     <span class="hidden sm:inline">طباعة المحدد</span>
                     <span class="sm:hidden">محدد</span>
                 </button>
                 <button id="printAllBtn" onclick="smartPrint(false)"
-                    class="btn-modern px-4 sm:px-5 md:px-6 py-2 sm:py-2.5 md:py-3 bg-gradient-to-r from-turquoise/80 to-teal-500/80 text-white rounded-lg sm:rounded-xl text-xs sm:text-sm font-bold border border-turquoise/30 flex items-center gap-2 hover:shadow-lg hover:from-turquoise hover:to-teal-500 transition-all backdrop-blur-sm" style="font-size: clamp(0.75rem, 2vw, 0.875rem);">
-                    <span class="text-base sm:text-lg">🖨️</span>
-                    <span class="hidden sm:inline">طباعة الكل</span>
-                    <span class="sm:hidden">الكل</span>
+                    class="btn-modern px-4 sm:px-5 md:px-6 py-2 sm:py-2.5 md:py-3 bg-gradient-to-r from-turquoise/80 to-teal-500/80 text-white rounded-xl text-xs sm:text-sm font-bold border border-turquoise/30 flex items-center gap-2 hover:shadow-lg hover:from-turquoise hover:to-teal-500 transition-all backdrop-blur-sm" style="font-size: clamp(0.75rem, 2vw, 0.875rem);">
+                    <span class="action-btn-icon" aria-hidden="true"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 6 2 18 2 18 9"/><path d="M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2"/><rect x="6" y="14" width="12" height="8"/></svg></span>
+                    <span id="printAllBtnLabel" class="hidden sm:inline">طباعة الكل</span>
+                    <span id="printAllBtnLabelMobile" class="sm:hidden">الكل</span>
                 </button>
                 <button onclick="showConditionsModal()"
-                    class="btn-modern px-4 sm:px-5 md:px-6 py-2 sm:py-2.5 md:py-3 bg-white/10 text-gray-200 rounded-lg sm:rounded-xl text-xs sm:text-sm font-bold border border-white/20 flex items-center gap-2 hover:bg-white/15 hover:border-turquoise/40 transition-all backdrop-blur-sm" style="font-size: clamp(0.75rem, 2vw, 0.875rem);">
-                    <span class="text-base sm:text-lg">📋</span>
+                    class="btn-modern px-4 sm:px-5 md:px-6 py-2 sm:py-2.5 md:py-3 bg-white/10 text-gray-200 rounded-xl text-xs sm:text-sm font-bold border border-white/20 flex items-center gap-2 hover:bg-white/15 hover:border-turquoise/40 transition-all backdrop-blur-sm" style="font-size: clamp(0.75rem, 2vw, 0.875rem);">
+                    <span class="action-btn-icon" aria-hidden="true"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/><line x1="10" y1="9" x2="8" y2="9"/></svg></span>
                     <span class="hidden sm:inline">شروط المكافآت</span>
                     <span class="sm:hidden">شروط</span>
                 </button>
                 <button onclick="showReportsPage()"
-                    class="btn-modern px-4 sm:px-5 md:px-6 py-2 sm:py-2.5 md:py-3 bg-white/10 text-gray-200 rounded-lg sm:rounded-xl text-xs sm:text-sm font-bold border border-white/20 flex items-center gap-2 hover:bg-white/15 hover:border-turquoise/40 transition-all backdrop-blur-sm" style="font-size: clamp(0.75rem, 2vw, 0.875rem);">
-                    <span class="text-base sm:text-lg">📊</span>
+                    class="btn-modern px-4 sm:px-5 md:px-6 py-2 sm:py-2.5 md:py-3 bg-white/10 text-gray-200 rounded-xl text-xs sm:text-sm font-bold border border-white/20 flex items-center gap-2 hover:bg-white/15 hover:border-turquoise/40 transition-all backdrop-blur-sm" style="font-size: clamp(0.75rem, 2vw, 0.875rem);">
+                    <span class="action-btn-icon" aria-hidden="true"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="20" x2="18" y2="10"/><line x1="12" y1="20" x2="12" y2="4"/><line x1="6" y1="20" x2="6" y2="14"/></svg></span>
                     <span class="hidden sm:inline">التقارير</span>
                     <span class="sm:hidden">تقارير</span>
                 </button>
                 <button onclick="showDiscountsModal()"
-                    class="btn-modern px-4 sm:px-5 md:px-6 py-2 sm:py-2.5 md:py-3 bg-white/10 text-gray-200 rounded-lg sm:rounded-xl text-xs sm:text-sm font-bold border border-white/20 flex items-center gap-2 hover:bg-white/15 hover:border-red-400/40 transition-all backdrop-blur-sm" style="font-size: clamp(0.75rem, 2vw, 0.875rem);">
-                    <span class="text-base sm:text-lg">💰</span>
+                    class="btn-modern px-4 sm:px-5 md:px-6 py-2 sm:py-2.5 md:py-3 bg-white/10 text-gray-200 rounded-xl text-xs sm:text-sm font-bold border border-white/20 flex items-center gap-2 hover:bg-white/15 hover:border-turquoise/40 transition-all backdrop-blur-sm" style="font-size: clamp(0.75rem, 2vw, 0.875rem);">
+                    <span class="action-btn-icon" aria-hidden="true"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="19" y1="5" x2="5" y2="19"/><circle cx="6.5" cy="6.5" r="2.5"/><circle cx="17.5" cy="17.5" r="2.5"/></svg></span>
                     <span class="hidden sm:inline">الخصومات</span>
                     <span class="sm:hidden">خصومات</span>
                 </button>
                 <button onclick="showClosePeriodModal()"
-                    class="btn-modern px-4 sm:px-5 md:px-6 py-2 sm:py-2.5 md:py-3 bg-gradient-to-r from-red-500/80 to-red-600/80 text-white rounded-lg sm:rounded-xl text-xs sm:text-sm font-bold border border-red-400/50 flex items-center gap-2 hover:shadow-lg hover:from-red-500 hover:to-red-600 transition-all backdrop-blur-sm" style="font-size: clamp(0.75rem, 2vw, 0.875rem);">
-                    <span class="text-base sm:text-lg">🔒</span>
+                    class="btn-modern px-4 sm:px-5 md:px-6 py-2 sm:py-2.5 md:py-3 bg-gradient-to-r from-red-500/80 to-red-600/80 text-white rounded-xl text-xs sm:text-sm font-bold border border-red-400/50 flex items-center gap-2 hover:shadow-lg hover:from-red-500 hover:to-red-600 transition-all backdrop-blur-sm" style="font-size: clamp(0.75rem, 2vw, 0.875rem);">
+                    <span class="action-btn-icon" aria-hidden="true"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="11" width="18" height="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg></span>
                     <span class="hidden sm:inline">إغلاق الفترة</span>
                     <span class="sm:hidden">إغلاق</span>
                 </button>
@@ -229,13 +229,13 @@
                                 </th>
                                 <th class="col-attendance p-4 text-center text-sm" style="min-width: 180px; width: 16%;">بطل تحدي الظروف (إتمام 26 يوماً وأكثر من العطاء)</th>
                                 <th class="col-rate p-4 text-center" style="min-width: 70px; width: 7%;">الفئة</th>
-                                <th class="p-4 text-center text-blue-400" style="min-width: 100px; width: 11%;">
+                                <th class="col-eval-booking p-4 text-center text-blue-400" style="min-width: 100px; width: 11%;">
                                     <div class="flex flex-col items-center justify-center gap-1 mb-1">
                                         <span class="text-xs font-bold">Booking</span>
                                         <span class="text-[10px] text-gray-400">20 ريال (ثابت)</span>
                                     </div>
                                 </th>
-                                <th class="p-4 text-center text-green-400" style="min-width: 100px; width: 11%;">
+                                <th class="col-eval-google p-4 text-center text-green-400" style="min-width: 100px; width: 11%;">
                                     <div class="flex flex-col items-center justify-center gap-1 mb-1">
                                         <span class="text-xs font-bold">Google Maps</span>
                                         <span class="text-[10px] text-gray-400">10 ريال (ثابت)</span>
@@ -478,20 +478,33 @@
                             <option value="">-- اختر فترة --</option>
                         </select>
                     </div>
-                
-                <!-- Statistics Content -->
+                    <div id="archivedPeriodInfo" class="mb-4 p-4 bg-white/5 rounded-xl border border-white/10 hidden">
+                        <p class="text-sm text-gray-300">
+                            <span class="font-bold text-turquoise">الفترة:</span> <span id="archivedPeriodText">-</span>
+                        </p>
+                        <p class="text-sm text-gray-300 mt-2">
+                            <span class="font-bold text-turquoise">تاريخ الإغلاق:</span> <span id="archivedClosedAt">-</span>
+                        </p>
+                        <button type="button" onclick="restoreArchivedPeriodAsCurrent()" class="mt-4 w-full sm:w-auto btn-modern px-4 py-2.5 rounded-xl text-sm font-bold bg-gradient-to-r from-turquoise/80 to-teal-500/80 text-white border border-turquoise/30 flex items-center justify-center gap-2 hover:from-turquoise hover:to-teal-500 transition-all">
+                            <span>🔄</span>
+                            <span>استعادة الفترة للتعديل</span>
+                        </button>
+                    </div>
+                    <div id="archivedReportsGrid" class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3 sm:gap-4 max-h-[70vh] overflow-y-auto">
+                        <!-- Archived employees will be populated here -->
+                    </div>
+                </div>
+
+                <!-- Statistics Content (شقيق للتقارير الحالية والفترات المغلقة — كان داخل archived فكان يُخفى معها) -->
                 <div id="statisticsReportsContent" class="hidden">
-                    <!-- Current Period Statistics -->
                     <div class="mb-8">
                         <h3 class="text-xl font-black text-turquoise mb-4 flex items-center gap-2">
                             <span>📊</span>
                             <span>إحصائيات الفترة الحالية</span>
                         </h3>
-                        <div id="currentPeriodStats" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
+                        <div id="currentPeriodStats" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6 gap-4 mb-6">
                             <!-- Stats cards will be populated here -->
                         </div>
-                        
-                        <!-- Employee Performance Table -->
                         <div class="glass p-4 rounded-xl border border-turquoise/30 mt-6">
                             <h4 class="text-lg font-bold text-white mb-4">جدول تقييم الموظفين</h4>
                             <div class="overflow-x-auto">
@@ -514,8 +527,6 @@
                             </div>
                         </div>
                     </div>
-                    
-                    <!-- Archived Periods Statistics -->
                     <div class="mt-8">
                         <h3 class="text-xl font-black text-turquoise mb-4 flex items-center gap-2">
                             <span>📈</span>
@@ -524,22 +535,6 @@
                         <div id="archivedPeriodsStatsContainer" class="space-y-6">
                             <!-- Each archived period will be displayed here separately -->
                         </div>
-                    </div>
-                </div>
-                    <div id="archivedPeriodInfo" class="mb-4 p-4 bg-white/5 rounded-xl border border-white/10 hidden">
-                        <p class="text-sm text-gray-300">
-                            <span class="font-bold text-turquoise">الفترة:</span> <span id="archivedPeriodText">-</span>
-                        </p>
-                        <p class="text-sm text-gray-300 mt-2">
-                            <span class="font-bold text-turquoise">تاريخ الإغلاق:</span> <span id="archivedClosedAt">-</span>
-                        </p>
-                        <button type="button" onclick="restoreArchivedPeriodAsCurrent()" class="mt-4 w-full sm:w-auto btn-modern px-4 py-2.5 rounded-xl text-sm font-bold bg-gradient-to-r from-turquoise/80 to-teal-500/80 text-white border border-turquoise/30 flex items-center justify-center gap-2 hover:from-turquoise hover:to-teal-500 transition-all">
-                            <span>🔄</span>
-                            <span>استعادة الفترة للتعديل</span>
-                        </button>
-                    </div>
-                    <div id="archivedReportsGrid" class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3 sm:gap-4 max-h-[70vh] overflow-y-auto">
-                        <!-- Archived employees will be populated here -->
                     </div>
                 </div>
             </div>
@@ -621,6 +616,10 @@
                             <span class="text-yellow-400 font-bold mt-0.5">•</span>
                             <span class="text-yellow-200/90 font-medium">تُحتسب المكافآت أعلاه على أن يكون التقييم <strong>مساوٍ أو أعلى</strong> من التقييم الحالي للفندق.</span>
                         </li>
+                        <li class="flex items-start gap-3">
+                            <span class="text-yellow-400 font-bold mt-0.5">•</span>
+                            <span class="text-yellow-200/90 font-medium">التقييم الحالي: تقييم الكورنيش <strong>8.7</strong>، تقييم الأندلس <strong>8.2</strong> — جوجل الكورنيش <strong>4.3</strong>، جوجل الأندلس <strong>4.3</strong>.</span>
+                        </li>
                     </ul>
                 </div>
 
@@ -664,32 +663,27 @@
                     </h3>
                     <ul class="space-y-3 text-sm text-gray-300">
                         <li class="flex items-start gap-3">
-                            <span class="text-red-400 font-bold mt-0.5">•</span>
-                            <span class="text-red-300 font-semibold">تطبق خصومات التقصير من خلال إدارة التشغيل على الموظفين الذين يخالفون التعليمات واللوائح المعمول بها</span>
+                            <span class="text-turquoise font-bold mt-0.5">💎</span>
+                            <span>الحفاظ علي معايير الجودة والأداء 💎</span>
                         </li>
                         <li class="flex items-start gap-3">
                             <span class="text-red-400 font-bold mt-0.5">•</span>
-                            <span>نسبة الخصم: <strong class="text-red-300">من 15% إلى 50%</strong> من المبلغ الصافي المستحق</span>
+                            <span class="text-red-300 font-semibold">تطبق إدارة التشغيل خصومات تتراوح بين 15% إلى 50% من صافي المستحق في حالات تقصير الموظفين وعدم اتباع التعليمات</span>
+                        </li>
+                        <li class="flex items-start gap-3 flex-wrap items-center">
+                            <span class="text-red-400 font-bold mt-0.5">•</span>
+                            <span class="text-gray-400">( فى حال عدم استلامك نسخه من التعليمات اطلب نسختك المطبوعه الان )</span>
+                            <button type="button" onclick="event.stopPropagation(); showInstructionsModal();" class="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg text-xs font-bold text-turquoise bg-turquoise/20 border border-turquoise/40 hover:bg-turquoise/30 transition-colors mt-1 sm:mt-0">
+                                <span>او اضغط هنا</span>
+                            </button>
                         </li>
                         <li class="flex items-start gap-3">
                             <span class="text-red-400 font-bold mt-0.5">•</span>
-                            <span>يتم تحديد نسبة الخصم الدقيقة حسب تقدير إدارة التشغيل لتأثير التقصير على سير العمل وجودة الخدمة المقدمة</span>
+                            <span>تُحدد نسبة الخصم بناءً على جسامة التأثير على جودة الخدمة، وتُسجل رسمياً في سجل وأرشيف الموظف وتؤثر على تقييم اداءه.</span>
                         </li>
                         <li class="flex items-start gap-3">
                             <span class="text-red-400 font-bold mt-0.5">•</span>
-                            <span>الحد الأدنى للخصم: <strong class="text-red-300">15%</strong> - للتقصيرات البسيطة التي لا تؤثر بشكل كبير على العمل</span>
-                        </li>
-                        <li class="flex items-start gap-3">
-                            <span class="text-red-400 font-bold mt-0.5">•</span>
-                            <span>الحد الأقصى للخصم: <strong class="text-red-300">50%</strong> - للتقصيرات الجسيمة التي تؤثر سلبياً على العمل والخدمة</span>
-                        </li>
-                        <li class="flex items-start gap-3">
-                            <span class="text-red-400 font-bold mt-0.5">•</span>
-                            <span>يتم تطبيق الخصم على المبلغ الصافي النهائي (بعد جميع الحوافز والمكافآت) ويظهر في تقرير الموظف مع بيان سبب الخصم</span>
-                        </li>
-                        <li class="flex items-start gap-3">
-                            <span class="text-red-400 font-bold mt-0.5">•</span>
-                            <span class="text-red-200 font-semibold">تسجل الخصومات في أرشيف الموظف</span>
+                            <span>هدفنا الالتزام بالتعليمات لضمان استمرار تميز "إليت" وتجنب أي إجراءات تؤثر على مبلغ المكافأة النهائي.</span>
                         </li>
                     </ul>
                 </div>
@@ -703,6 +697,31 @@
                             إغلاق
                         </button>
                     </div>
+        </div>
+    </div>
+
+    <!-- نافذة لائحة التعليمات -->
+    <div id="instructionsModal" class="fixed inset-0 z-[1001] hidden items-center justify-center bg-black/70 backdrop-blur-sm" onclick="closeInstructionsModal(event)" style="z-index: 1001 !important;">
+        <div class="glass rounded-2xl p-4 sm:p-6 md:p-8 max-w-3xl w-full mx-2 sm:mx-4 max-h-[95vh] sm:max-h-[90vh] overflow-hidden flex flex-col" onclick="event.stopPropagation()" style="background: linear-gradient(135deg, rgba(15, 23, 41, 0.98) 0%, rgba(26, 31, 53, 0.98) 100%); border: 1px solid rgba(64, 224, 208, 0.3);">
+            <div class="flex items-center justify-between mb-4 flex-shrink-0">
+                <h2 class="text-lg sm:text-xl font-black text-turquoise flex items-center gap-2">
+                    <span>📜</span>
+                    <span>لائحة تعليمات وسياسات عمل موظفي الاستقبال</span>
+                </h2>
+                <button type="button" onclick="closeInstructionsModal()" class="text-gray-400 hover:text-white transition-colors text-2xl font-bold min-w-[44px] min-h-[44px] flex items-center justify-center rounded-lg hover:bg-white/10">&times;</button>
+            </div>
+            <div id="instructionsModalBody" class="overflow-y-auto flex-1 pr-1 space-y-4 text-sm text-gray-300 leading-relaxed" style="min-height: 0;">
+                <!-- يُعبّأ من JS -->
+            </div>
+            <div class="mt-4 flex-shrink-0 pt-3 border-t border-white/10 flex flex-wrap gap-2 justify-end">
+                <button type="button" onclick="printInstructionsModal()" class="glass px-4 sm:px-6 py-2.5 rounded-lg text-sm font-bold text-turquoise hover:bg-turquoise/10 border border-turquoise/30 transition-colors min-h-[44px] flex items-center justify-center gap-2">
+                    <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 6 2 18 2 18 9"/><path d="M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2"/><rect x="6" y="14" width="12" height="8"/></svg>
+                    <span>طباعة اللائحة</span>
+                </button>
+                <button type="button" onclick="closeInstructionsModal()" class="glass px-4 sm:px-6 py-2.5 rounded-lg text-sm font-bold text-gray-300 hover:bg-white/10 transition-colors min-h-[44px] w-full sm:w-auto">
+                    إغلاق
+                </button>
+            </div>
         </div>
     </div>
 
@@ -884,11 +903,11 @@
                             <span class="text-red-400">🏷️</span>
                             <span>نوع الخصم:</span>
                         </label>
-                        <div class="flex gap-1.5" style="position: relative; z-index: 30;">
-                            <select id="discountTypeSelect" class="flex-1 px-2 py-1.5 rounded-lg text-xs sm:text-sm text-white bg-white/10 border border-white/20 focus:outline-none focus:border-red-400 focus:ring-2 focus:ring-red-400/30 transition-all min-h-[36px]" style="position: relative; z-index: 30;">
+                        <div class="flex gap-2 items-stretch" style="position: relative; z-index: 30;">
+                            <select id="discountTypeSelect" class="flex-1 min-w-0 px-3 py-2.5 rounded-lg text-sm text-white bg-white/10 border border-white/20 focus:outline-none focus:border-red-400 focus:ring-2 focus:ring-red-400/30 transition-all min-h-[44px] cursor-pointer" style="position: relative; z-index: 30;">
                                 <option value="">-- اختر نوع الخصم --</option>
                             </select>
-                            <button onclick="showManageDiscountTypesModal()" class="btn-modern px-2 py-1.5 bg-white/10 text-gray-200 rounded-lg text-xs font-bold border border-white/20 hover:bg-white/15 hover:border-turquoise/40 transition-all min-h-[36px] min-w-[36px] flex items-center justify-center relative z-[35]" title="إدارة أنواع الخصومات" style="z-index: 35 !important;">
+                            <button onclick="showManageDiscountTypesModal()" class="btn-modern flex-shrink-0 px-3 py-2.5 bg-white/10 text-gray-200 rounded-lg text-sm font-bold border border-white/20 hover:bg-white/15 hover:border-turquoise/40 transition-all min-h-[44px] min-w-[44px] w-11 flex items-center justify-center relative z-[35]" title="إدارة أنواع الخصومات" style="z-index: 35 !important;">
                                 ⚙️
                             </button>
                         </div>
@@ -931,6 +950,22 @@
                 <div id="discountsList" class="space-y-2 max-h-[280px] overflow-y-auto pr-2">
                     <!-- Discounts will be populated here -->
                 </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- عرض أسباب الخصومات وتواريخها وقيمها (من كارت أكثر الموظفين خصومات) -->
+    <div id="mostDiscountsDetailModal" class="fixed inset-0 z-[1005] hidden flex items-center justify-center bg-black/70 backdrop-blur-sm" onclick="closeMostDiscountsDetailModal(event)" style="z-index: 1005 !important;">
+        <div class="glass rounded-xl sm:rounded-2xl p-4 sm:p-6 max-w-2xl w-full mx-2 sm:mx-4 max-h-[85vh] overflow-y-auto" onclick="event.stopPropagation()" style="background: linear-gradient(135deg, rgba(15, 23, 41, 0.98) 0%, rgba(26, 31, 53, 0.98) 100%); border: 2px solid rgba(239, 68, 68, 0.4);">
+            <div class="flex items-center justify-between mb-4 pb-3 border-b border-white/10">
+                <h2 class="text-lg sm:text-xl font-black text-red-400 flex items-center gap-2">
+                    <span>💰</span>
+                    <span id="mostDiscountsDetailTitle">أسباب الخصومات وتواريخها وقيمها</span>
+                </h2>
+                <button type="button" onclick="closeMostDiscountsDetailModal()" class="text-gray-400 hover:text-white transition-colors text-2xl font-bold min-w-[36px] min-h-[36px] flex items-center justify-center hover:bg-white/10 rounded-lg">&times;</button>
+            </div>
+            <div id="mostDiscountsDetailBody" class="space-y-3 text-sm text-gray-200">
+                <!-- يُعبّأ بواسطة showMostDiscountsDetail -->
             </div>
         </div>
     </div>
@@ -982,6 +1017,8 @@
         </div>
     </div>
 
+    <!-- البنود الـ 55 للتعليمات/أنواع الخصم (قبل أي سكربت يحتاجها) -->
+    <script src="src/discount-clauses-55.js"></script>
     <!-- JavaScript: app-extensions أولاً لأن app.js يتحقق من الرابط (role/token/period) ويحتاج loadAdminTokens و validateAdminAccess -->
     <script src="src/app-extensions.js?v=tab"></script>
     <script src="src/app.js?v=tab"></script>

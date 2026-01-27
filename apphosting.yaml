@@ -1,5 +1,10 @@
 # Firebase App Hosting — مشروع ستاتيك (HTML/JS بدون framework)
-# Build: نسخ الملفات إلى dist ثم السيرفر يقدّمها
+# تفعيل الـ generic bundle ليعرف النظام إن المشروع غير Next/Angular
+env:
+  - variable: GOOGLE_USE_GENERIC_FIREBASEBUNDLE
+    value: "true"
+    availability: [BUILD]
+
 scripts:
   buildCommand: npm run build
   runCommand: npx serve -s dist -l 8080

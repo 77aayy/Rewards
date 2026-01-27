@@ -51,14 +51,8 @@ let discounts = []; // Array of discount objects: { employeeName, discountType, 
 if (typeof window !== 'undefined') {
   window.discounts = discounts;
 }
-let discountTypes = [
-  'تلقائية',
-  'تقييم سيء من نزيل',
-  'تأخير عن الحضور للعمل',
-  'عدم اتباع التعليمات المكتوبة من الإدارة',
-  'الامتناع عن إيصال ملاحظة للشفت التالي (أثرت على رضاء العميل)',
-  'عدم إبلاغ الإدارة بمشكلة في الفرع'
-]; // Default discount types (can be modified by admin)
+// يُعبّأ من loadDiscountTypes (البنود الـ 55 + ما يضيفه المدير)
+let discountTypes = [];
 
 // Load discounts and discount types on initialization
 if (typeof loadDiscounts === 'function') {
@@ -136,9 +130,16 @@ if (isEmployeeMode()) {
 }
 
 // Security: Allow admin، أو من فتح برابط إداري (role+token+period) وقد تم التحقق منه في أعلى الملف
+// عند التطوير المحلي (localhost/127.0.0.1) بدون params يُسمح بالدخول للاختبار
+function isLocalDevAllowed() {
+  if (typeof window === 'undefined' || !window.location || !window.location.hostname) return false;
+  var h = window.location.hostname;
+  if (h !== 'localhost' && h !== '127.0.0.1') return false;
+  return !role && !token && !period && !code;
+}
 const isRbacFromUrl = role && token && period && localStorage.getItem('adora_current_role') === role;
-if (!isAdminMode() && !isRbacFromUrl) {
-  // Not admin, not employee, and not valid RBAC link - block access
+if (!isAdminMode() && !isRbacFromUrl && !isLocalDevAllowed()) {
+  // Not admin, not employee, not valid RBAC link, and not local dev - block access
   document.body.innerHTML = `
     <div style="display: flex; align-items: center; justify-content: center; min-height: 100vh; background: linear-gradient(135deg, #0a0e1a 0%, #1a1f35 100%); color: white; font-family: 'IBM Plex Sans Arabic', sans-serif; text-align: center; padding: 2rem;">
       <div style="background: rgba(255, 255, 255, 0.1); padding: 3rem; border-radius: 20px; border: 2px solid rgba(239, 68, 68, 0.5); max-width: 560px;">
@@ -276,9 +277,17 @@ container.appendChild(particle);
 }
 createParticles();
 
-function doAppInit() {
+async function doAppInit() {
+  try {
+    const live = await (typeof fetchLivePeriodFromFirebase === 'function' ? fetchLivePeriodFromFirebase() : Promise.resolve(null));
+    if (live && Array.isArray(live.db) && live.db.length > 0 && typeof applyLivePeriod === 'function') {
+      applyLivePeriod(live);
+    }
+  } catch (_) {}
   loadDataFromStorage();
-  const currentRole = localStorage.getItem('adora_current_role');
+  if (typeof syncLivePeriodToFirebase === 'function') syncLivePeriodToFirebase();
+  if (isAdminMode()) return;
+  var currentRole = typeof localStorage !== 'undefined' ? localStorage.getItem('adora_current_role') : null;
   if (currentRole && currentRole !== 'admin') {
     if (typeof initializeRoleBasedUI === 'function') {
       initializeRoleBasedUI(currentRole);
@@ -303,7 +312,7 @@ function doRbacThenInit() {
         if (typeof logAdminAction === 'function') {
           logAdminAction(role, 'page_access', { period: period, timestamp: new Date().toISOString() });
         }
-        doAppInit();
+        await doAppInit();
         return;
       }
       document.body.innerHTML = '<div style="display:flex;align-items:center;justify-content:center;min-height:100vh;background:linear-gradient(135deg,#0f172a 0%,#1a1f35 100%);color:#fff;font-family:\'IBM Plex Sans Arabic\',Arial,sans-serif;"><div style="text-align:center;padding:2rem;"><div style="font-size:3rem;margin-bottom:1rem;">⏳</div><h1 style="font-size:1.25rem;font-weight:800;color:#94a3b8;">جاري التحقق من الرابط...</h1></div></div>';
@@ -323,7 +332,7 @@ function doRbacThenInit() {
     })();
     return;
   }
-  doAppInit();
+  doAppInit().catch(function () {});
 }
 
 if (document.readyState === 'loading') {
@@ -729,14 +738,15 @@ showToast('❌ خطأ في قراءة الملف: ' + error.message, 'error');
 reader.readAsArrayBuffer(file);
 });
 // === Data Processing ===
+// عند رفع ملف جديد: نسترجع بيانات الإداريين (تقييمات، التزام، أيام) والخصومات المرتبطة بأسماء الموظفين من adora_rewards_db و adora_rewards_discounts — ما دامت الفترة لم تُغلق (نفس الجلسة/الفترة).
 function processData(rows) {
-// Load old data from localStorage BEFORE clearing db
+// Load old data from localStorage BEFORE clearing db — استرجاع البيانات القديمة المرتبطة بأسماء الموظفين
 const oldDb = [];
 try {
 const savedDb = localStorage.getItem('adora_rewards_db');
 if (savedDb) {
 oldDb.push(...JSON.parse(savedDb));
-console.log('✅ Loaded old data:', oldDb.length, 'employees');
+console.log('✅ Loaded old data:', oldDb.length, 'employees (merge: evaluations, attendance, discounts by name)');
 }
 } catch (error) {
 console.error('❌ Error loading old data:', error);
@@ -799,29 +809,14 @@ const key = `${newEmp.name}|${newEmp.branch}`;
 const oldEmp = oldEmployeesMap.get(key);
   
 if (oldEmp) {
-// Employee exists in both old and new: keep old data, update only count
+// Employee exists in both old and new: update only count from new file.
+// بيانات الإداريين والخصومات تبقى كما هي حتى إغلاق الفترة — الارتباط باسم الموظف.
 const employeeCode = getOrCreateEmployeeCode(newEmp.name);
 const mergedEmp = {
-...oldEmp, // Keep all old data (evaluations, discounts, attendance, etc.)
-count: newEmp.count, // Update only count from new file
-employeeCode: employeeCode, // Ensure employee code exists
-// Recalculate totalAttendanceDays
-totalAttendanceDays: (() => {
-if (oldEmp.attendanceDaysPerBranch && typeof oldEmp.attendanceDaysPerBranch === 'object') {
-return Object.values(oldEmp.attendanceDaysPerBranch).reduce((sum, d) => sum + (parseInt(d) || 0), 0);
-}
-return oldEmp.totalAttendanceDays || 0;
-})(),
-// Auto-update attendance26Days based on totalAttendanceDays
-attendance26Days: (() => {
-const totalDays = (() => {
-if (oldEmp.attendanceDaysPerBranch && typeof oldEmp.attendanceDaysPerBranch === 'object') {
-return Object.values(oldEmp.attendanceDaysPerBranch).reduce((sum, d) => sum + (parseInt(d) || 0), 0);
-}
-return oldEmp.totalAttendanceDays || 0;
-})();
-return totalDays >= 26;
-})()
+...oldEmp, // كل بيانات الإداري: تقييمات، تم/لم يتم، أيام المتكررين، إلخ
+count: newEmp.count, // من الملف الجديد فقط
+employeeCode: employeeCode
+// لا نعيد حساب totalAttendanceDays ولا attendance26Days — نُبقي ما أدخله الإداري كما هو
 };
 db.push(mergedEmp);
 // Update window.db
@@ -871,10 +866,9 @@ console.log(`🗑️ Deleted employees (not in new file):`, deletedEmployees.map
 }
 
 if (db.length > 0) {
-// Save to localStorage
+// Save to localStorage — adora_rewards_discounts لا تُمس؛ تبقى مرتبطة باسم الموظف حتى إغلاق الفترة
 try {
 localStorage.setItem('adora_rewards_db', JSON.stringify(db));
-// Update window.db after saving
 if (typeof window !== 'undefined') {
   window.db = db;
 }
@@ -883,6 +877,7 @@ localStorage.setItem('adora_rewards_evalRate', currentEvalRate.toString());
 if (reportStartDate) {
 localStorage.setItem('adora_rewards_startDate', reportStartDate);
 }
+if (typeof syncLivePeriodToFirebase === 'function') syncLivePeriodToFirebase();
 console.log('✅ Data saved to localStorage:', {
 totalEmployees: db.length,
 branches: [...branches],
@@ -1120,6 +1115,12 @@ if (currentRole && currentRole !== 'supervisor' && currentRole !== 'admin') {
   if (inputEl) inputEl.value = item.evaluationsBooking || 0;
   return;
 }
+// المشرف: التقييمات في الفروع فقط — رفض التعديل عند عرض "الكل"
+if (currentRole === 'supervisor' && typeof currentFilter !== 'undefined' && currentFilter === 'الكل') {
+  showToast('❌ التقييمات تُدخل في الفروع فقط وليس في الكل', 'error');
+  if (inputEl) inputEl.value = item.evaluationsBooking || 0;
+  return;
+}
 // Ensure valid number
 const newVal = parseInt(val) || 0;
 const oldVal = item.evaluationsBooking || 0;
@@ -1137,6 +1138,7 @@ if (typeof logAdminAction === 'function' && currentRole) {
 // Save to localStorage
 try {
 localStorage.setItem('adora_rewards_db', JSON.stringify(db));
+if (typeof syncLivePeriodToFirebase === 'function') syncLivePeriodToFirebase();
 } catch (error) {
 console.error('❌ Error saving to localStorage:', error);
 }
@@ -1163,6 +1165,12 @@ if (currentRole && currentRole !== 'supervisor' && currentRole !== 'admin') {
   if (inputEl) inputEl.value = item.evaluationsGoogle || 0;
   return;
 }
+// المشرف: التقييمات في الفروع فقط — رفض التعديل عند عرض "الكل"
+if (currentRole === 'supervisor' && typeof currentFilter !== 'undefined' && currentFilter === 'الكل') {
+  showToast('❌ التقييمات تُدخل في الفروع فقط وليس في الكل', 'error');
+  if (inputEl) inputEl.value = item.evaluationsGoogle || 0;
+  return;
+}
 // Ensure valid number
 const newVal = parseInt(val) || 0;
 const oldVal = item.evaluationsGoogle || 0;
@@ -1180,6 +1188,7 @@ if (typeof logAdminAction === 'function' && currentRole) {
 // Save to localStorage immediately (always save, even during typing)
 try {
 localStorage.setItem('adora_rewards_db', JSON.stringify(db));
+if (typeof syncLivePeriodToFirebase === 'function') syncLivePeriodToFirebase();
 } catch (error) {
 console.error('❌ Error saving to localStorage:', error);
 }
@@ -1245,12 +1254,13 @@ updateAttendanceDaysForBranch(empName, branchName, 0, true);
 }
 }
 function updateAttendanceDaysForBranch(empName, branchName, days, shouldRender = true) {
-// Check role permissions
-const currentRole = localStorage.getItem('adora_current_role');
+var currentRole = localStorage.getItem('adora_current_role');
 if (currentRole && currentRole !== 'hr' && currentRole !== 'admin') {
-  if (shouldRender) {
-    showToast('❌ غير مصرح لك بتعديل أيام الحضور', 'error');
-  }
+  if (shouldRender) showToast('❌ غير مصرح لك بتعديل أيام الحضور', 'error');
+  return;
+}
+if (currentRole === 'hr' && typeof currentFilter !== 'undefined' && currentFilter === 'الكل') {
+  if (shouldRender) showToast('❌ أرقام الأيام للمتكررين تُدخل في الفروع فقط وليس في الكل', 'error');
   return;
 }
 // Ensure days is a valid positive number (accepts any number: odd, even, single-digit, multi-digit)
@@ -1294,10 +1304,10 @@ if (typeof logAdminAction === 'function' && currentRole && shouldRender) {
 // Save to localStorage
 try {
 localStorage.setItem('adora_rewards_db', JSON.stringify(db));
-// Update window.db after saving
 if (typeof window !== 'undefined') {
   window.db = db;
 }
+if (typeof syncLivePeriodToFirebase === 'function') syncLivePeriodToFirebase();
 } catch (error) {
 console.error('❌ Error saving to localStorage:', error);
 }
@@ -1452,11 +1462,14 @@ function moveToPreviousEvalInput(currentInput) {
 function updateAttendance(id, checked, toggleEl) {
 const item = db.find(i => i.id === id);
 if (!item) return;
-// Check role permissions
-const currentRole = localStorage.getItem('adora_current_role');
+var currentRole = localStorage.getItem('adora_current_role');
 if (currentRole && currentRole !== 'hr' && currentRole !== 'admin') {
   showToast('❌ غير مصرح لك بتعديل الحضور', 'error');
-  // Revert toggle
+  if (toggleEl) toggleEl.checked = item.attendance26Days === true;
+  return;
+}
+if (currentRole === 'hr' && typeof currentFilter !== 'undefined' && currentFilter === 'الكل') {
+  showToast('❌ تم/لم يتم يُدخل في الفروع فقط وليس في الكل', 'error');
   if (toggleEl) toggleEl.checked = item.attendance26Days === true;
   return;
 }
@@ -1609,10 +1622,10 @@ updateBadges();
 // Save to localStorage after update
 try {
 localStorage.setItem('adora_rewards_db', JSON.stringify(db));
-// Update window.db after saving
 if (typeof window !== 'undefined') {
   window.db = db;
 }
+if (typeof syncLivePeriodToFirebase === 'function') syncLivePeriodToFirebase();
 } catch (error) {
 console.error('❌ Error saving to localStorage:', error);
 }
@@ -1670,14 +1683,10 @@ updateBadges();
 }, 200);
 }
 function updatePrintButtonText() {
-const printBtn = document.getElementById('printAllBtn');
-if (printBtn) {
-if (currentFilter === 'الكل') {
-printBtn.innerText = 'طباعة الكل 🖨️';
-} else {
-printBtn.innerText = `طباعة ${currentFilter} 🖨️`;
-}
-}
+var lb = document.getElementById('printAllBtnLabel');
+var lbM = document.getElementById('printAllBtnLabelMobile');
+if (lb) lb.textContent = (currentFilter === 'الكل') ? 'طباعة الكل' : 'طباعة ' + currentFilter;
+if (lbM) lbM.textContent = (currentFilter === 'الكل') ? 'الكل' : currentFilter;
 }
 // === Checkbox Management ===
 function toggleAll(master) {
@@ -1687,11 +1696,12 @@ box.checked = master.checked;
 updateSelectedUI();
 }
 function updateSelectedUI() {
-const selectedCount = document.querySelectorAll('.emp-checkbox:checked').length;
-const btn = document.getElementById('printSelectedBtn');
+var selectedCount = document.querySelectorAll('.emp-checkbox:checked').length;
+var btn = document.getElementById('printSelectedBtn');
+if (!btn) return;
 if (selectedCount > 0) {
 btn.classList.remove('hidden');
-btn.innerHTML = `طباعة المحدد (${selectedCount}) 🎯`;
+btn.innerHTML = '<span class="action-btn-icon" aria-hidden="true"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><circle cx="12" cy="12" r="6"/><circle cx="12" cy="12" r="2"/></svg></span><span class="hidden sm:inline">طباعة المحدد (' + selectedCount + ')</span><span class="sm:hidden">محدد</span>';
 } else {
 btn.classList.add('hidden');
 }
@@ -2526,21 +2536,7 @@ currentFilter = filter;
 
 // Check role and filter restrictions
 const currentRole = localStorage.getItem('adora_current_role');
-if (currentRole === 'supervisor' || currentRole === 'hr') {
-  // Supervisor and HR can only see "الكل" view
-  if (filter !== 'الكل') {
-    filter = 'الكل';
-    currentFilter = 'الكل';
-    // Update filter buttons
-    document.querySelectorAll('.filter-btn').forEach(btn => {
-      if (btn.textContent.trim() === 'الكل') {
-        btn.classList.add('active');
-      } else {
-        btn.classList.remove('active');
-      }
-    });
-  }
-}
+// المشرف: الكل عرض فقط، التقييمات في الفروع. HR: الكل عرض فقط، تم/لم يتم وعدد الأيام للمتكرر في الفروع فقط — لا نفرض "الكل" على HR.
 
 document.getElementById('selectAll').checked = false;
 const tbody = document.getElementById('mainTable');
@@ -2776,9 +2772,10 @@ attendance26Days, attendanceBonus, gross: gross - fund,
 isDuplicate, aggregatedCount, aggregatedEval, aggregatedEvalBooking, aggregatedEvalGoogle, aggregatedDays, isMostCommitted, isMostEval, isMostBook
 };
 };
+// الفروع عند الإداريين مفصولين موظفينهم: عند اختيار فرع معين يُعرض فقط موظفو هذا الفرع (مشرف، HR، حسابات، أدمن).
 let filtered = [...db];
 if (filter !== 'الكل') {
-filtered = filtered.filter(d => d.branch === filter);
+  filtered = filtered.filter(d => d.branch === filter);
 }
 // Calculate nameCounts FIRST (before calcStats) - from ALL db, not just filtered
 // This is critical: we need to know if an employee is duplicate across ALL branches
@@ -3287,8 +3284,11 @@ ${emp.branch}
 <td class="col-count p-2 text-center font-black text-white print:text-black text-lg number-display">
 ${(filter === 'الكل' && isDuplicate) ? (s.aggregatedCount || emp.count) : emp.count}
 </td>
-<td class="col-attendance p-2 text-center">
+<td class="col-attendance p-2 text-center${(() => { try { var r = localStorage.getItem('adora_current_role'); return (r === 'hr' && filter !== 'الكل') ? ' admin-entry-zone admin-entry-hr' : ''; } catch(e) { return ''; } })()}">
 <div class="flex flex-col items-center gap-1">
+<div class="attendance-readonly-accounting flex flex-col items-center gap-1" style="display:none;">${(() => { const allEb = db.filter(e => e.name === emp.name); const isDup = filter === 'الكل' && allEb.length > 1; let days = 0, totalDays = 0, branchDaysStr = (emp.attendanceDaysPerBranch && emp.attendanceDaysPerBranch[emp.branch]) || '0'; if (isDup && filter === 'الكل') { totalDays = allEb.reduce((s, eb) => s + (parseInt(eb.attendanceDaysPerBranch && eb.attendanceDaysPerBranch[eb.branch]) || 0), 0); days = totalDays; } else { days = parseInt(branchDaysStr) || 0; } const colorClass = days >= 26 ? 'text-green-400' : 'text-red-400'; const statusText = days >= 26 ? 'تم' : 'لم يتم'; const daysSpan = days < 26 ? '<span class="text-yellow-300 text-sm font-bold">' + days + ' يوم</span>' : ''; const totalSpan = (isDup && filter === 'الكل') ? '<div class="text-[9px] text-green-400 font-bold">المجموع: ' + totalDays + '</div>' : (!isDup ? '<span class="text-[10px] text-yellow-300">' + emp.branch + ': ' + branchDaysStr + '</span>' : ''); return '<span class="text-[10px] font-bold ' + colorClass + '">' + statusText + '</span>' + daysSpan + totalSpan; })()}</div>
+<div class="attendance-editable">
+<div class="attendance-indicator">
 <label class="relative inline-flex items-center" style="flex-direction: row-reverse; justify-content: center; gap: 6px; ${(() => {
 // In "الكل" view: always read-only (cursor: default)
 if (filter === 'الكل') {
@@ -3325,31 +3325,26 @@ return (emp.attendance26Days === true) ? 'checked' : '';
 ${(() => {
 const currentRole = localStorage.getItem('adora_current_role');
 if (currentRole && currentRole !== 'hr' && currentRole !== 'admin') return 'disabled';
+if (currentRole === 'hr' && filter === 'الكل') return 'disabled';
 const allEmpBranches = db.filter(e => e.name === emp.name);
 const isEmpDuplicate = allEmpBranches.length > 1;
 if (filter === 'الكل' && isEmpDuplicate) return 'disabled';
 if (filter === 'الكل' && (currentRole !== 'hr' && currentRole !== 'admin')) return 'disabled';
-return isEmpDuplicate ? 'disabled' : '';
+return ''; // في الفروع: كل الموظفين (بما فيهم من له وجود في أكثر من فرع) قابلة للإدخال
 })()}
 ${(() => {
 const currentRole = localStorage.getItem('adora_current_role');
 if (currentRole && currentRole !== 'hr' && currentRole !== 'admin') return '';
+if (currentRole === 'hr' && filter === 'الكل') return '';
 const allEmpBranches = db.filter(e => e.name === emp.name);
 const isEmpDuplicate = allEmpBranches.length > 1;
 if (filter === 'الكل' && isEmpDuplicate) return '';
 if (filter === 'الكل' && (currentRole !== 'hr' && currentRole !== 'admin')) return '';
-if (isEmpDuplicate) return '';
-return 'onchange="updateAttendance(\'' + emp.id + '\', this.checked, this)"';
+return 'onchange="updateAttendance(\'' + emp.id + '\', this.checked, this)"'; // في الفروع: كل الصفوف قابلة للتعديل
 })()}
 title="${(() => {
-// In "الكل" view: always read-only message
-if (filter === 'الكل') {
-return 'للقراءة فقط - التعديل في صفحة الفرع';
-}
-// In branch views: check if employee is duplicate
-const allEmpBranches = db.filter(e => e.name === emp.name);
-const isEmpDuplicate = allEmpBranches.length > 1;
-return isEmpDuplicate ? 'يتم التفعيل تلقائياً بناءً على عدد الأيام (26 أو أكثر)' : 'تفعيل/إلغاء تفعيل إتمام 26 يوم دوام';
+if (filter === 'الكل') return 'للقراءة فقط - التعديل في الفرع';
+return 'تفعيل/إلغاء تفعيل إتمام 26 يوم دوام';
 })()}">
 <div></div>
 <span class="text-[10px] font-bold ${(() => {
@@ -3394,6 +3389,7 @@ return emp.attendance26Days === true ? 'تم' : 'لم يتم';
 })()}
 </span>
 </label>
+</div>
 ${(function() {
 // Check if employee is duplicate (exists in multiple branches)
 const allEmpBranches = db.filter(function(e) { return e.name === emp.name; });
@@ -3444,14 +3440,16 @@ if (isReadOnly) {
 return inputsHtml;
 })()}
 </div>
+</div>
 </td>
 <td class="col-rate p-2 text-center text-xs text-gray-300 print:text-black font-medium">
 ${(emp.count > 100 ? 3 : (emp.count > 50 ? 2 : 1))} ريال
 </td>
-<td class="p-2 text-center">
+<td class="col-eval-booking p-2 text-center${(() => { try { var r = localStorage.getItem('adora_current_role'); return (r === 'supervisor' && filter !== 'الكل') ? ' admin-entry-zone admin-entry-supervisor' : ''; } catch(e) { return ''; } })()}">
 ${(() => {
   const currentRole = localStorage.getItem('adora_current_role');
-  const isReadOnly = (currentRole && currentRole !== 'supervisor' && currentRole !== 'admin');
+  const supervisorViewOnly = (currentRole === 'supervisor' && filter === 'الكل');
+  const isReadOnly = supervisorViewOnly || (currentRole && currentRole !== 'supervisor' && currentRole !== 'admin');
   if (isReadOnly) {
     return `<span class="text-blue-400 font-bold text-base number-display">${isDuplicate ? (s.aggregatedEvalBooking || emp.evaluationsBooking || 0) : (emp.evaluationsBooking || 0)}</span>`;
   }
@@ -3463,10 +3461,11 @@ onkeydown="handleEvalKey(event, this)"
 class="eval-input text-blue-400 w-16 bg-white/5 border border-blue-400/50 rounded px-2 py-1 text-center focus:outline-none focus:border-blue-400 transition-colors number-display font-sans">`;
 })()}
 </td>
-<td class="p-2 text-center">
+<td class="col-eval-google p-2 text-center${(() => { try { var r = localStorage.getItem('adora_current_role'); return (r === 'supervisor' && filter !== 'الكل') ? ' admin-entry-zone admin-entry-supervisor' : ''; } catch(e) { return ''; } })()}">
 ${(() => {
   const currentRole = localStorage.getItem('adora_current_role');
-  const isReadOnly = (currentRole && currentRole !== 'supervisor' && currentRole !== 'admin');
+  const supervisorViewOnly = (currentRole === 'supervisor' && filter === 'الكل');
+  const isReadOnly = supervisorViewOnly || (currentRole && currentRole !== 'supervisor' && currentRole !== 'admin');
   if (isReadOnly) {
     return `<span class="text-green-400 font-bold text-base number-display">${isDuplicate ? (s.aggregatedEvalGoogle || emp.evaluationsGoogle || 0) : (emp.evaluationsGoogle || 0)}</span>`;
   }
@@ -3853,28 +3852,38 @@ if (typeof loadCurrentPeriodStats === 'function') {
 // Hide/show elements based on role (after render)
 setTimeout(() => {
   const currentRole = localStorage.getItem('adora_current_role');
+  const tbl = document.getElementById('targetTable');
   if (currentRole === 'supervisor') {
-    // Hide attendance inputs
+    // المشرف: خانات التقييمات فقط — إخفاء عمود الحضور بالكامل
+    if (tbl) {
+      tbl.querySelectorAll('th.col-attendance, td.col-attendance').forEach(el => { el.style.display = 'none'; });
+    }
     document.querySelectorAll('.attendance-toggle, .attendance-days-input').forEach(el => {
       el.style.display = 'none';
     });
-    // Hide filter buttons except "الكل"
-    document.querySelectorAll('.filter-btn').forEach(btn => {
-      if (btn.textContent.trim() !== 'الكل') {
-        btn.style.display = 'none';
-      }
-    });
   } else if (currentRole === 'hr') {
-    // Hide evaluation inputs فقط؛ HR يرى كل الفروع لتعديل تم/لم يتم وعدد الأيام
-    document.querySelectorAll('.eval-input').forEach(el => {
-      el.style.display = 'none';
-    });
+    // HR: ما يخصه فقط — إخفاء أعمدة التقييمات وإخفاء مؤشر تم/لم يتم
+    if (tbl) {
+      tbl.querySelectorAll('th.col-eval-booking, th.col-eval-google, td.col-eval-booking, td.col-eval-google').forEach(el => { el.style.display = 'none'; });
+    }
+    document.querySelectorAll('.attendance-indicator').forEach(el => { el.style.display = 'none'; });
+    document.querySelectorAll('.eval-input').forEach(el => { el.style.display = 'none'; });
   } else if (currentRole === 'accounting') {
-    // Hide all inputs (read-only)
+    // الحسابات: كل الأعمدة والمؤشرات للعرض فقط — إظهار بلوك القراءة وإخفاء الخانات القابلة للتعديل
+    document.querySelectorAll('.attendance-readonly-accounting').forEach(el => { el.style.display = 'flex'; });
+    document.querySelectorAll('.attendance-editable').forEach(el => { el.style.display = 'none'; });
     document.querySelectorAll('.eval-input, .attendance-toggle, .attendance-days-input').forEach(el => {
       el.style.display = 'none';
     });
-    // Keep filter buttons visible (for viewing different branches)
+  } else {
+    // أدمن أو بدون دور: إظهار كل الأعمدة والمؤشرات
+    if (tbl) {
+      tbl.querySelectorAll('th.col-attendance, td.col-attendance, th.col-eval-booking, th.col-eval-google, td.col-eval-booking, td.col-eval-google').forEach(el => { el.style.removeProperty('display'); });
+    }
+    document.querySelectorAll('.attendance-indicator').forEach(el => { el.style.removeProperty('display'); });
+    document.querySelectorAll('.attendance-readonly-accounting').forEach(el => { el.style.display = 'none'; });
+    document.querySelectorAll('.attendance-editable').forEach(el => { el.style.removeProperty('display'); });
+    document.querySelectorAll('.eval-input, .attendance-toggle, .attendance-days-input').forEach(el => { el.style.removeProperty('display'); });
   }
 }, 100);
 // Get winner objects for badges
@@ -4937,6 +4946,66 @@ modal.classList.add('hidden');
 modal.classList.remove('flex');
 }
 }
+
+function showInstructionsModal() {
+var body = document.getElementById('instructionsModalBody');
+var modal = document.getElementById('instructionsModal');
+if (!body || !modal) return;
+// تُحدَّث في كل فتح لظهور أنواع الخصم الإضافية التي أضافها المدير
+body.innerHTML = getInstructionsContent();
+modal.classList.remove('hidden');
+modal.classList.add('flex');
+}
+
+function closeInstructionsModal(event) {
+if (event && event.target !== event.currentTarget) return;
+const modal = document.getElementById('instructionsModal');
+if (modal) {
+modal.classList.add('hidden');
+modal.classList.remove('flex');
+}
+}
+
+function printInstructionsModal() {
+var content = typeof getInstructionsContent === 'function' ? getInstructionsContent() : (document.getElementById('instructionsModalBody') && document.getElementById('instructionsModalBody').innerHTML) || '';
+var base = window.location.origin + (window.location.pathname || '').replace(/[^/]*$/, '');
+var printWin = window.open('', '_blank');
+if (!printWin) { if (typeof showToast === 'function') showToast('❌ يرجى السماح بالنوافذ المنبثقة للطباعة', 'error'); return; }
+printWin.document.write('<!DOCTYPE html><html dir="rtl" lang="ar"><head><meta charset="UTF-8"><title>لائحة تعليمات وسياسات عمل موظفي الاستقبال</title><link rel="stylesheet" href="' + base + 'src/styles.css"><style>@media print{body{background:#0f172a;color:#e2e8f0;} .no-print{display:none;}}</style></head><body class="bg-[#0f172a] text-gray-300 p-4" style="background:#0f172a;color:#e2e8f0;padding:1rem;font-family:\'IBM Plex Sans Arabic\',Arial,sans-serif;">' +
+  '<h1 style="font-size:1.25rem;font-weight:900;color:#40E0D0;margin-bottom:1rem;text-align:center;border-bottom:2px solid rgba(64,224,208,0.4);padding-bottom:0.5rem;">لائحة تعليمات وسياسات عمل موظفي الاستقبال</h1>' +
+  '<div style="max-width:800px;margin:0 auto;">' + content + '</div></body></html>');
+printWin.document.close();
+printWin.focus();
+setTimeout(function () { printWin.print(); }, 400);
+}
+
+function getCustomInstructionsSectionHtml() {
+try {
+var all = [];
+try { all = JSON.parse(localStorage.getItem('adora_rewards_discountTypes') || '[]'); } catch (e) { }
+var def = (typeof window !== 'undefined' && window.DEFAULT_DISCOUNT_CLAUSES_55) ? window.DEFAULT_DISCOUNT_CLAUSES_55 : [];
+var custom = all.filter(function (t) { return t && def.indexOf(t) < 0; });
+if (custom.length === 0) return '';
+var lis = custom.map(function (t) {
+var s = String(t).replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+return '<li class="flex gap-2"><span class="text-purple-400">•</span><span>' + s + '</span></li>';
+}).join('');
+return '<div class="bg-purple-500/10 rounded-xl p-4 border border-purple-500/30"><h4 class="text-purple-400 font-bold mb-2 text-base">أنواع خصم إضافية (أضافها المدير)</h4><p class="text-gray-400 text-xs mb-2">تظهر تلقائياً هنا عند إضافة المدير نوع خصم جديد من نافذة الخصومات.</p><ul class="space-y-2 text-gray-300 list-none">' + lis + '</ul></div>';
+} catch (e) { return ''; }
+}
+
+function getInstructionsContent() {
+return '<div class="space-y-5">' +
+'<p class="text-gray-300 text-center border-b border-white/10 pb-3">تهدف هذه اللائحة إلى تنظيم سير العمل في قسم الاستقبال وضمان تقديم أفضل خدمة ممكنة للنزلاء. يجب على جميع الموظفين الالتزام التام بالتعليمات والسياسات المذكورة أدناه.</p>' +
+'<div class="bg-turquoise/10 rounded-xl p-4 border border-turquoise/30"><h4 class="text-turquoise font-bold mb-2 text-base">القسم الأول: المظهر العام والسلوكيات الأساسية</h4><ul class="space-y-2 text-gray-300 list-none"><li class="flex gap-2"><span class="text-turquoise">•</span><span>المظهر الشخصي: يجب على الموظف العناية بنظافته الشخصية، بما في ذلك نظافة الأسنان، الملابس، والرائحة وتعليق الاسم والالتزام بالزي السعودي الرسمي.</span></li><li class="flex gap-2"><span class="text-turquoise">•</span><span>التواجد في مكان العمل: يلتزم الموظف بالتواجد في مكتب الاستقبال خلال فترة دوامه، ولا يجوز له التواجد في أماكن غير مخصصة لعمله مثل المقهى أو المخزن أو خارج المبنى.</span></li><li class="flex gap-2"><span class="text-turquoise">•</span><span>استخدام الهاتف: يمنع استخدام الهاتف الجوال الشخصي أمام النزلاء خلال ساعات العمل. كما يمنع إعطاء الرقم الشخصي للنزيل تحت أي ظرف.</span></li><li class="flex gap-2"><span class="text-turquoise">•</span><span>التعامل مع النزلاء: يمنع الجلوس في حال وجود نزيل في منطقة الاستقبال. يجب إعطاء الأولوية للنزيل وعدم الانشغال بأي شيء آخر أثناء التحدث معه.</span></li><li class="flex gap-2"><span class="text-turquoise">•</span><span>يُمنع تسجيل دخول النزيل دون إثبات هوية ساري المفعول. يجب التحقق من الهوية بمطابقة الأصل عند تسجيل الدخول وتسجيل بياناتها فقط، دون طلب أو أخذ نسخة منها (كارت العائلة غير الزامي).</span></li><li class="flex gap-2"><span class="text-turquoise">•</span><span>في حال تأخر إدخال النزيل إلى الوحدة المحجوزة في الوقت المحدد، يجب استلام الحقائب وحفظها، وتوفير مكان مناسب للسائح يتم فيه تقديم المشروبات أو الوجبات مجانًا أثناء الانتظار.</span></li><li class="flex gap-2"><span class="text-turquoise">•</span><span>السلوك العام: ممنوع تناول الطعام أو الشراب أمام النزلاء. يجب الحفاظ على نظافة وترتيب مكتب الاستقبال بشكل دائم، وتجنب ترك الأوراق والأكواب وغيرها من الأشياء المتناثرة.</span></li><li class="flex gap-2"><span class="text-turquoise">•</span><span>التعامل مع الخلافات: في حال حدوث أي خلاف بين الموظفين، يمنع منعًا باتًا مناقشة الأمر أمام النزلاء. يجب إبلاغ المدير المسؤول فورًا.</span></li><li class="flex gap-2"><span class="text-turquoise">•</span><span>الهدوء: يجب أن يكون موظف الاستقبال مسؤولًا عن الحفاظ على بيئة هادئة ومنظمة في منطقة الاستقبال. يمنع تواجد أكثر من ثلاثة أشخاص في الاستقبال، سواء كانوا موظفين أو عمالًا أو إداريين.</span></li><li class="flex gap-2"><span class="text-turquoise">•</span><span>الخصوصية: ممنوع إعطاء أي معلومات عن النزلاء لأي شخص كان في حال طلب أي شخص معلومات عن نزيل، يجب إخباره بالاتصال به مباشرة او بضرورة احضار اذن رسمي من الجهة الرسمية المختصة.</span></li><li class="flex gap-2"><span class="text-turquoise">•</span><span>المهام الشخصية: يجب الاحتفاظ بالأمور الشخصية، مثل المكالمات الهاتفية ورسائل الجوال ومواقع التواصل الاجتماعي، بعيدًا عن وقت ومكان العمل.</span></li><li class="flex gap-2"><span class="text-turquoise">•</span><span>تسجيل كافة الملاحظات: تسجيل أي ملاحظه للنزلاء مكتوبه حتى لو تم حلها وإبلاغ مشرف الاستقبال بها كسجل توثيق.</span></li><li class="flex gap-2"><span class="text-turquoise">•</span><span>التأكد من جاهزية أدوات العمل: عند بدء الدوام يجب التأكد من جاهزية (الكاميرات – التلفون – الانترنت – تكييف الاستقبال – تلفزيون الاستقبال – موسيقي الاستقبال – الطابعة – صرف نقدي – تسجيل المرافقين – ترحيل شموس – التواصل مع الحجوزات – فتح الغرف الشاغرة – الحضور وعدم الحضور – توقيع كل العقود – الرد على كل الرسائل – تحصيل كل الرسوم – فحص برنامج المفاتيح – تدوين ملاحظات الشفت السابق) في حال وجود أي تقصير من الموظف السابق يجب ابلاغ المشرف فوراً.</span></li><li class="flex gap-2"><span class="text-turquoise">•</span><span>في حال وجود موظف سياحة: في فرع الكورنيش يتم فتح الغرف القديمة فقط وغير مسموح بفتح الغرف الجديدة بالدور الثالث والرابع.</span></li></ul></div>' +
+'<div class="bg-blue-500/10 rounded-xl p-4 border border-blue-500/30"><h4 class="text-blue-400 font-bold mb-2 text-base">القسم الثاني: إجراءات الحجوزات والدفع</h4><ul class="space-y-2 text-gray-300 list-none"><li class="flex gap-2"><span class="text-blue-400">•</span><span>التسعير: غير مسموح بالتفاوض على الأسعار المكتوبة في قائمة الأسعار إلا في حالات محددة يتم إبلاغ الموظف بها مسبقًا. لا يختص مدير التشغيل أو المشرف بالتفاوض على الأسعار مع النزلاء.</span></li><li class="flex gap-2"><span class="text-blue-400">•</span><span>الحجوزات الشهرية: يجب أن تكون الإيجارات الشهرية مدفوعة مقدمًا وغير مستردة.</span></li><li class="flex gap-2"><span class="text-blue-400">•</span><span>العقود: من الضروري توقيع النزيل على عقد تسجيل الدخول لضمان حقوق المنشأة في حال وجود أي مشكلة.</span></li><li class="flex gap-2"><span class="text-blue-400">•</span><span>التأمين: يتم احتساب مبلغ تأمين قدره 100 ريال كحد أدنى على كل نزيل. يُستحسن تحصيل التأمين كاش فيجب سؤال النزيل عن توافر كاش. يتم رد مبلغ التأمين عند تسجيل الخروج بعد خصم خدمات الفندق (مثل المغسلة والميني بار إن وجد). في حال عدم أخذ التأمين، يتحمل الموظف مسؤولية أي مستحقات للنزيل. بعض الحالات يتم التغاضي فيها عن تحصيل التأمين (حجوزات المطار – تابي وتمارا – بوكينج الأجانب).</span></li><li class="flex gap-2"><span class="text-blue-400">•</span><span>يُمنع اشتراط أن يكون حجز الوحدة لأكثر من ليلة واحدة.</span></li><li class="flex gap-2"><span class="text-blue-400">•</span><span>غير مسموح بتسجيل رقم جوال غير دقيق او مكتمل للنزيل (يطبق على الأرقام الدولية يتم كتابه رقم النزيل في الملاحظات فقط على نزيل مع تسجيل رقم الفندق ببيانات النزيل).</span></li><li class="flex gap-2"><span class="text-blue-400">•</span><span>المستحقات المالية: في حال تجاوز المبلغ المستحق على النزيل إيجار ليلة واحدة، يجب على موظف الاستقبال إبلاغ المشرف المباشر لمطالبة النزيل بالدفع قبل بداية الشفت التالي وفي حال عدم القدرة على التحصيل يتم نقل مسؤوليه التحصيل لشفت الليل.</span></li><li class="flex gap-2"><span class="text-blue-400">•</span><span>المدفوعات: عند رد أي مبالغ متبقية للنزيل (بخلاف التأمين)، يجب توقيعه على سند الصرف.</span></li><li class="flex gap-2"><span class="text-blue-400">•</span><span>السندات والفواتير: مسموح بإعطاء النزيل صوره من العقد والسندات والفاتورة بعد الخروج وممنوع تسجيل سند خدمه او فاتورة بقيمة صفر.</span></li><li class="flex gap-2"><span class="text-blue-400">•</span><span>الحسابات: كل موظف مسؤول عن حسابه على النظام. يجب إغلاق الحساب بعد انتهاء الدوام.</span></li></ul></div>' +
+'<div class="bg-green-500/10 rounded-xl p-4 border border-green-500/30"><h4 class="text-green-400 font-bold mb-2 text-base">القسم الثالث: التعامل مع النزلاء والخدمات</h4><ul class="space-y-2 text-gray-300 list-none"><li class="flex gap-2"><span class="text-green-400">•</span><span>ترحيل العقود: يجب ترحيل جميع العقود على نظام شموس وتسجيل المرافقين خصوصاً الحجوزات المجمعة ومراجعة ذلك بداية كل شفت وفي حال وجود عميل غير مرحل من خلال نزيل يتم ترحيله يدوي وفي حال عدم الترحيل يجب ابلاغ المشرف ومدير التشغيل.</span></li><li class="flex gap-2"><span class="text-green-400">•</span><span>الضيافة: يمكن تقديم ضيافة مجانية (قهوة، شاي، تمر) لأي نزيل حسب تقدير موظف الاستقبال للأمر.</span></li><li class="flex gap-2"><span class="text-green-400">•</span><span>النزلاء المميزون: يتم تقديم ضيافة خاصة (قهوة وتمر) لعملاء أجنحة الـ VIP وضيوف المالك. كما يجب منحهم اهتمامًا خاصًا اثناء استقبالهم، خصوصًا في حال وجود نزلاء آخرين كما يجب ارسال العمال قبل دخول النزل لإعادة تنظيف الملحق مع إعطاء النزيل أولوية الخروج المتأخر.</span></li><li class="flex gap-2"><span class="text-green-400">•</span><span>لنزلاء تجهيزات ذكري الزواج – تقليل التواصل مع النزيل وعدم التواصل المتكرر لتسجيل الخروج.</span></li><li class="flex gap-2"><span class="text-green-400">•</span><span>النظافة: رسمياً تتوفر خدمة التنظيف للنزلاء من الساعة 11:00 صباحًا إلى 9:00 مساءً. يحصل النزلاء الشهري على هذه الخدمة مرتين إلى ثلاث مرات أسبوعيًا كحد أقصى. لا تدخل في مشكله مع نزيل على شيء بسيط اجعل المرونة ورضاء النزيل هما البوصلة.</span></li><li class="flex gap-2"><span class="text-green-400">•</span><span>تحديد صلاحية الغرف: غير مسموح بتحويل حالة الغرفة إلى نظيفة إلا بعد فحص وتأكيد من مشرف العمال.</span></li><li class="flex gap-2"><span class="text-green-400">•</span><span>فحص الغرف: مشرف العمال هو المسؤول الأول عن فحص الغرفة عند خروج النزيل في حال الانشغال يمكن لحامل الحقائب القيام بعمليه فحص الغرفة. لا يسمح بتسجيل خروج النزيل دون فحص الغرفة. يتحمل الموظف مسؤولية أي تلف أو نقصان بعد خروج النزيل في حال عدم فحص الغرفة. يتم ابلاغ النزيل بالانتظار في الاستقبال لحين التأكد من عدم نسيان أغراض له في الغرفة.</span></li><li class="flex gap-2"><span class="text-green-400">•</span><span>تغيير الغرف: غير مسموح بنقل نزيل من غرفة إلى أخرى دون ذكر سبب النقل في نزيل.</span></li><li class="flex gap-2"><span class="text-green-400">•</span><span>الصيانة: لا يجوز إدخال أي غرفة للصيانة دون ذكر السبب الفعلي على برنامج نزيل ومن ثم إبلاغ مشرف العمال وفني الصيانة.</span></li><li class="flex gap-2"><span class="text-green-400">•</span><span>الاستجابة للطلبات: يجب الرد على اتصالات الفندق ورسائل الواتساب وبوكينج في أسرع وقت ممكن. ممنوع وضع هاتف الفندق او الجوال على الوضع الصامت.</span></li><li class="flex gap-2"><span class="text-green-400">•</span><span>الاتصال: يجب استخدام تحية رسمية عند الرد على الهاتف، مثل: السلام عليكم، معك فندق إليت، أنا (اسم الموظف)، كيف أقدر أخدمك؟</span></li><li class="flex gap-2"><span class="text-green-400">•</span><span>تحويل المكالمات: في حال طلب النزيل خدمة غير مختص بها الموظف، يجب تحويل الاتصال بطريقة مؤدبة، مثل: دقيقة من فضلك، سيتم تحويل المكالمة إلى الإدارة.</span></li><li class="flex gap-2"><span class="text-green-400">•</span><span>إشعار النزيل بوقتٍ كافٍ قبل البدء بأي أعمال صيانة أو نحوها تخص المرافق أو التجهيزات، والتي قد ينتج عنها إزعاج أو ضوضاء تصل إلى الوحدة التي يقيم فيها، مع توضيح موعد بدء الأعمال وانتهائها بشكلٍ دقيق.</span></li><li class="flex gap-2"><span class="text-green-400">•</span><span>المفقودات: يُبلغ السائح بأي مفقودات تخصه يتم العثور عليها، ويتم الاحتفاظ بها مدة لا تقل عن (30) يومًا وتُحتسب المدة من تاريخ إبلاغ النزيل، وفي حال تعذر إبلاغه تُخطر الجهات المختصة بذلك.</span></li><li class="flex gap-2"><span class="text-green-400">•</span><span>يُحظر الامتناع عن إعادة أمتعة النزيل أو مقتنياته الشخصية، سواء كانت مودعة في الاستقبال أو موجودة داخل الوحدة التي يشغلها.</span></li><li class="flex gap-2"><span class="text-green-400">•</span><span>يُمنع اتخاذ أي إجراء يُلزم السائح بمغادرة الوحدة بعد تسجيل دخوله مثل فصل الكهرباء.</span></li><li class="flex gap-2"><span class="text-green-400">•</span><span>يُلتزم بإبلاغ الجهات المختصة والوزارة فورًا، وبشكلٍ مباشر، من خلال القنوات المخصصة لذلك، عن أي حادث يتعلق بالأمن أو السلامة في الفندق.</span></li><li class="flex gap-2"><span class="text-green-400">•</span><span>تأكد من توفير وحدة بديلة للسائح فورًا في الفرع الثاني او مكان قريب مساوية أو أعلى فئة وتصنيفًا، أو إعادة المبلغ المدفوع، في الحالات التالية: انقطاع الخدمات الأساسية مثل الكهرباء والماء لأكثر من ساعتين. كما يجب توفير وحدة بديلة أو إعادة المبلغ إذا تعذّر على السائح دخول الوحدة المحجوزة بعد تجاوز موعد الدخول بساعتين.</span></li><li class="flex gap-2"><span class="text-green-400">•</span><span>الخروج من الغرف: يمنع على موظف الاستقبال الصعود منفرداً إلى أي غرفة (شاغرة أو مشغولة) تحت أي مبرر، إلا بعلم الإدارة.</span></li><li class="flex gap-2"><span class="text-green-400">•</span><span>الزوار: يمنع صعود أي شخص (مندوب، سائق، توصيل مطاعم) إلى الغرفة إلا بعد تواصل النزيل بالاستقبال ومرافقة أحد العمال له. في حال بقاء الزائر في الغرفة لأكثر من دقيقة، يجب تسجيل هويته في ملاحظات الغرفة.</span></li><li class="flex gap-2"><span class="text-green-400">•</span><span>التواصل اللاسلكي: يجب أن يكون التواصل مع مشرف النظافة أو العمال عبر الجهاز اللاسلكي إن وجدت في أضيق الحدود بكلمات مختصره متفق عليها مسبقاً، وبنداء طارئ وبدون تفاصيل مطوله.</span></li><li class="flex gap-2"><span class="text-green-400">•</span><span>الخروج المتأخر: يُسمح للنزيل بالخروج ورد المبلغ المدفوع في حال لم يمر على دخوله أكثر من نصف ساعة، ودون استخدام محتويات الغرفة. يتم فحص الغرفة من قبل عامل قبل رد المبلغ للنزيل وتوقيعه على سند استلام المبلغ.</span></li></ul></div>' +
+'<div class="bg-yellow-500/10 rounded-xl p-4 border border-yellow-500/30"><h4 class="text-yellow-400 font-bold mb-2 text-base">القسم الرابع: إجراءات بوكينج وتسجيل الخروج</h4><ul class="space-y-2 text-gray-300 list-none"><li class="flex gap-2"><span class="text-yellow-400">•</span><span><strong>الحجوزات عبر بوكينج:</strong> غير مسموح بطلب إلغاء الحجز من النزيل. يتم منح أولوية التواصل صباحاً لنزيل بوكينج، حتى لو كان رقمه خاطئًا يتم التواصل معه عن طريق رسائل الموقع، الحالة الوحيدة المسموح فيها بعدم التواصل معه هي امتلاء الفندق بالكامل. يمنع محاسبة نزلاء بوكينج بمبلغ مخالف للحجز أو بعدد ليال أقل. يُسمح بطلب التأمين من نزلاء بوكينج بقيمة 100 ريال كحد أدنى وتزيد قيمة التأمين حسب رؤية الموظف. يجب متابعة إلغاء الحجوزات عبر بوكينج، حيث يتم فتح الغرفة تلقائيًا على الموقع. يجب على الموظف تعديل وضع المتاح ورفع السعر لضمان عدم الحجز. لا يُسمح ابلاغ النزيل بإلغاء حجز نزيل بوكينج بسبب عدم توفر غرفة في حال وصوله للفندق في الوقت الرسمي للدخول. يجب عرض خيارين: ترقية مجانية للحجز، أو تحويله إلى فرعنا الآخر مع ذكر المميزات المتاحة. يتم عمل عدم حضور للنزلاء الساعة 12 الليل.</span></li><li class="flex gap-2"><span class="text-yellow-400">•</span><span><strong>تسجيل الخروج:</strong> موعد الخروج الرسمي هو الساعة 2:00 ظهرًا. يتم الاتصال بالنزيل من الساعة 12 ظهراً للاستفسار عن تجديد الإقامة أو المغادرة. الخروج المتأخر: في حال رغبة النزيل في الخروج بعد الموعد الرسمي (بحد أقصى الساعة 8:00 مساءً)، يتم احتساب خدمة خروج متأخر. يتم تفعيل هذه الخدمة في الأيام التي لا توجد فيها مواسم. الدخول المبكر: في حال رغبة النزيل في الدخول المبكر (من الساعة 4:00 فجرًا)، يتم احتساب خدمة دخول مبكر. يتم تفعيل هذه الخدمة في الأيام التي لا توجد فيها حجوزات، وفي حال توافر أكثر من 3 شقق شاغرة.</span></li></ul><p class="mt-3 text-yellow-200/90 text-xs">أثناء مغادرة نزيل بوكينج، يمكنك تشجيعه على حجز إقامته القادمة مباشرةً من الفندق للاستفادة من المزايا: خصم 5% عند الاحتفاظ بكارت الفندق، مرونة في المواعيد، إمكانية الحجز المسبق عبر الهاتف، الانضمام لعضوية (Elite) لخصومات تصل إلى 15%، وسؤال النزيل عن الملاحظات والاقتراحات وطلب تقييم الفندق على خرائط جوجل.</p></div>' +
+'<div class="bg-red-500/10 rounded-xl p-4 border border-red-500/30"><h4 class="text-red-400 font-bold mb-2 text-base">القسم الخامس: سياسات الدوام والإجازات</h4><ul class="space-y-2 text-gray-300 list-none"><li class="flex gap-2"><span class="text-red-400">•</span><span>الدوام الرسمي: يجب على جميع الموظفين الالتزام بالجدول المحدد والمعتمد من مشرف الاستقبال.</span></li><li class="flex gap-2"><span class="text-red-400">•</span><span>استبدال الدوام: يمنع استبدال أيام الإجازة أو الدوام إلا بالتنسيق مع الزميل وقبل 24 ساعة ويوجد ما يثبت الطلب وموافقه الزميل على ذلك.</span></li><li class="flex gap-2"><span class="text-red-400">•</span><span>التأخير: مسموح بتأخير بحد أقصى 15 دقيقة في الظروف الطارئة. يتم تطبيق جزاء حسب رؤية الإدارة ويتم مضاعفة الجزاء وتوجيه إنذار رسمي في حال تكرار التأخير.</span></li><li class="flex gap-2"><span class="text-red-400">•</span><span>الغياب: في حال الرغبة في الغياب، يجب تقديم طلب مكتوب قبل 24 ساعة على الأقل. الغياب بدون طلب مكتوب يعتبر غيابًا بدون اذن ويتم خصم يومين. يتم مضاعفة الجزاء وتوجيه إنذار رسمي في حال التكرار.</span></li></ul></div>' +
+(getCustomInstructionsSectionHtml()) +
+'</div>';
+}
+
 // === Reports Page Functions ===
 let currentReportsBranchFilter = 'الكل';
 function showReportsPage() {
@@ -4994,6 +5063,7 @@ function showAdminSubmittedScreen() {
         if (typeof reportStartDate !== 'undefined') localStorage.setItem('adora_rewards_startDate', reportStartDate || '');
         if (typeof currentEvalRate !== 'undefined') localStorage.setItem('adora_rewards_evalRate', String(currentEvalRate || 20));
         if (typeof employeeCodesMap !== 'undefined') localStorage.setItem('adora_rewards_employeeCodes', JSON.stringify(employeeCodesMap || {}));
+        if (typeof syncLivePeriodToFirebase === 'function') syncLivePeriodToFirebase();
       } catch (e) {}
     }
     const periodId = typeof getCurrentPeriodId === 'function' ? getCurrentPeriodId() : '';
@@ -6069,19 +6139,26 @@ function initializeRoleBasedUI(role) {
     dashboard.classList.remove('hidden');
   }
   
-  // Hide elements based on role
+  // Hide elements based on role — أزرار الفروع (الكل + كل فرع) تبقى ظاهرة؛ عند اختيار فرع يُعرض فقط موظفوه
   if (role === 'supervisor') {
-    // Supervisor: Only "الكل" tab, only evaluation inputs
+    // المشرف: يرى الكل + كل فرع؛ الكل للعرض فقط، التقييمات يُدخلها في الفروع فقط
     hideElementsForSupervisor();
   } else if (role === 'hr') {
-    // HR: Only "الكل" tab, only attendance toggle and days inputs
+    // HR: يرى الكل + كل فرع؛ الكل للعرض فقط، تم/لم يتم وأيام المتكررين في الفروع فقط
     hideElementsForHR();
   } else if (role === 'accounting') {
-    // Accounting: All tabs (view only), clickable names, print button
+    // الحسابات: كل الفروع (عرض + طباعة حسب الفرع المختار)
     hideElementsForAccounting();
   } else if (role === 'manager') {
-    // Manager: Statistics page only
+    // Manager: Statistics page only — إخفاء زر الأكواد وزر الرجوع عن المدير العام
     hideElementsForManager();
+    var rp = document.getElementById('reportsPage');
+    if (rp) {
+      var backBtn = rp.querySelector('button[onclick*="hideReportsPage"]');
+      var codesBtn = rp.querySelector('button[onclick*="showEmployeeCodesModal"]');
+      if (backBtn) backBtn.style.display = 'none';
+      if (codesBtn) codesBtn.style.display = 'none';
+    }
   }
   
   // منع رجوع المتصفح من فتح المشروع الكامل: عند ضغط "رجوع المتصفح" نعرض شاشة إنهاء فقط
@@ -6108,13 +6185,16 @@ function initializeRoleBasedUI(role) {
 }
 
 function hideElementsForSupervisor() {
-  // Hide all filter buttons except "الكل"
-  const filterButtons = document.querySelectorAll('.filter-btn');
-  filterButtons.forEach(btn => {
-    if (btn.textContent.trim() !== 'الكل') {
-      btn.style.display = 'none';
-    }
-  });
+  // المشرف يرى "الكل" + كل فرع — الكل للعرض فقط، يدخل التقييمات في الفروع فقط. لا نخفي أزرار الفروع.
+  // زر شروط المكافآت معروض لكل الإداريين والموظفين
+  var actionBtns = document.getElementById('actionBtns');
+  if (actionBtns) {
+    actionBtns.style.display = 'flex';
+    actionBtns.style.removeProperty && actionBtns.style.removeProperty('display');
+    actionBtns.querySelectorAll('button').forEach(function (b) {
+      b.style.display = (b.getAttribute('onclick') || '').indexOf('showConditionsModal') >= 0 ? '' : 'none';
+    });
+  }
   
   // Hide attendance inputs and toggles
   document.querySelectorAll('.attendance-toggle, .attendance-days-input').forEach(el => {
@@ -6148,7 +6228,15 @@ function hideElementsForSupervisor() {
 
 function hideElementsForHR() {
   // HR يرى كل الفروع (الكل + كل فرع) لتعديل تم/لم يتم وعدد الأيام في كل فرع
-  // لا نخفي أزرار الفروع
+  // لا نخفي أزرار الفروع. زر شروط المكافآت معروض لكل الإداريين والموظفين
+  var actionBtns = document.getElementById('actionBtns');
+  if (actionBtns) {
+    actionBtns.style.display = 'flex';
+    actionBtns.style.removeProperty && actionBtns.style.removeProperty('display');
+    actionBtns.querySelectorAll('button').forEach(function (b) {
+      b.style.display = (b.getAttribute('onclick') || '').indexOf('showConditionsModal') >= 0 ? '' : 'none';
+    });
+  }
   
   // Hide evaluation inputs
   document.querySelectorAll('.eval-input').forEach(el => {
@@ -6203,9 +6291,22 @@ function hideElementsForAccounting() {
   const adminBtn = document.querySelector('[onclick*="showAdminManagementModal"]');
   if (adminBtn) adminBtn.style.display = 'none';
   
-  // Keep print buttons visible
-  // Keep reports button visible
-  // Keep filter buttons visible (for viewing different branches)
+  // الحسابات: إظهار الترويسة + زر شروط المكافآت + أزرار الطباعة (الكل والمحدد)
+  var actionBtns = document.getElementById('actionBtns');
+  if (actionBtns) {
+    actionBtns.style.display = 'flex';
+    actionBtns.style.removeProperty && actionBtns.style.removeProperty('display');
+    actionBtns.querySelectorAll('button').forEach(function (b) {
+      var onclick = b.getAttribute('onclick') || '';
+      var isConditions = onclick.indexOf('showConditionsModal') >= 0;
+      var isPrint = onclick.indexOf('smartPrint') >= 0 || (b.id === 'printAllBtn' || b.id === 'printSelectedBtn');
+      b.style.display = (isConditions || isPrint) ? '' : 'none';
+    });
+  }
+  var printAllBtn = document.getElementById('printAllBtn');
+  var printSelectedBtn = document.getElementById('printSelectedBtn');
+  if (printAllBtn) printAllBtn.style.display = '';
+  if (printSelectedBtn) printSelectedBtn.style.display = '';
   
   // Disable all inputs
   document.querySelectorAll('input[type="text"], input[type="checkbox"]').forEach(input => {
@@ -6214,7 +6315,6 @@ function hideElementsForAccounting() {
   });
   
   // Make employee names clickable (already implemented in renderUI)
-  // Ensure names are clickable in "الكل" view too
   setTimeout(() => {
     document.querySelectorAll('.col-name span[onclick]').forEach(span => {
       span.style.cursor = 'pointer';
@@ -6226,7 +6326,15 @@ function hideElementsForAccounting() {
 function hideElementsForManager() {
   document.getElementById('dashboard')?.classList.add('hidden');
   document.getElementById('uploadBox')?.classList.add('hidden');
-  document.getElementById('actionBtns')?.style.setProperty('display', 'none', 'important');
+  // المدير: إظهار زر شروط المكافآت فقط (معروض لكل الإداريين والموظفين)
+  var actionBtns = document.getElementById('actionBtns');
+  if (actionBtns) {
+    actionBtns.style.display = 'flex';
+    actionBtns.style.removeProperty && actionBtns.style.removeProperty('display');
+    actionBtns.querySelectorAll('button').forEach(function (b) {
+      b.style.display = (b.getAttribute('onclick') || '').indexOf('showConditionsModal') >= 0 ? '' : 'none';
+    });
+  }
   
   const reportsPage = document.getElementById('reportsPage');
   if (reportsPage) {
@@ -6248,31 +6356,41 @@ function hideElementsForManager() {
 }
 
 function showRoleWelcomeMessage(role) {
-  const roleNames = {
-    supervisor: 'المشرف',
-    hr: 'HR',
-    accounting: 'الحسابات',
-    manager: 'المدير العام'
-  };
-  
-  const roleName = roleNames[role] || role;
-  
-  const banner = document.createElement('div');
+  var roleNames = { supervisor: 'المشرف', hr: 'HR', accounting: 'الحسابات', manager: 'المدير العام' };
+  var roleName = roleNames[role] || role;
+  var isViewOnly = (role === 'accounting' || role === 'manager');
+  var displayName = '';
+  try {
+    var params = new URLSearchParams(window.location.search);
+    var nameFromUrl = params.get('name');
+    if (nameFromUrl) displayName = decodeURIComponent(nameFromUrl).trim();
+    if (!displayName && typeof getAdminNameForRole === 'function') displayName = (getAdminNameForRole(role) || '').trim();
+    if (!displayName) displayName = roleName;
+  } catch (e) { displayName = roleName; }
+  var banner = document.createElement('div');
   banner.id = 'roleWelcomeBanner';
-  banner.className = 'fixed top-0 left-0 right-0 z-[9999] bg-gradient-to-r from-purple-600/90 to-purple-800/90 text-white p-3 text-center font-bold shadow-lg';
-  banner.innerHTML = `
-    <div class="flex items-center justify-center gap-3 flex-wrap" style="flex-direction: row; justify-content: center; align-items: center;">
-      <span>👋</span>
-      <span>مرحباً ${roleName} - نظام المكافآت</span>
-      <button type="button" onclick="submitAdminAndLock()" style="background: rgba(110, 231, 183, 0.3); border: 2px solid #6ee7b7; color: #fff; padding: 6px 14px; border-radius: 8px; font-weight: 800; cursor: pointer;">
-        إرسال الرابط
-      </button>
-      <button type="button" onclick="document.getElementById('roleWelcomeBanner').remove()" class="ml-2 text-white/80 hover:text-white" style="background: none; border: none; cursor: pointer;">✕</button>
-    </div>
-  `;
+  banner.className = 'fixed top-0 left-0 right-0 z-[9999] bg-gradient-to-r from-purple-600/90 to-purple-800/90 text-white p-3 shadow-lg';
+  if (isViewOnly) {
+    banner.innerHTML = '<div class="flex flex-col items-center justify-center gap-1 sm:gap-2 text-center max-w-4xl mx-auto">' +
+      '<div class="flex items-center justify-center gap-2 flex-wrap"><span>👋</span><span class="font-bold">مرحباً ' + (displayName || roleName) + ' – نظام المكافآت</span>' +
+      '<button type="button" onclick="document.getElementById(\'roleWelcomeBanner\').remove()" class="text-white/80 hover:text-white" style="background:none;border:none;cursor:pointer;padding:2px;">✕</button></div>' +
+      '<p class="text-sm font-normal text-white/95" style="margin:0;line-height:1.4;">للعرض والطباعة فقط. يمكنك إغلاق الصفحة عند الانتهاء.</p></div>';
+  } else {
+    var instruction = '';
+    if (role === 'supervisor') {
+      instruction = 'الرجاء إدخال عدد تقييمات Booking و Google في كل فرع، ثم اضغط «إرسال الرابط» للإرسال لإدارة التشغيل.';
+    } else if (role === 'hr') {
+      instruction = 'الرجاء إدخال معدلات الالتزام (تم/لم يتم وعدد الأيام للمتكررين) بناءً على البصمة في كل فرع، ثم اضغط «إرسال الرابط» للإرسال لإدارة التشغيل.';
+    } else {
+      instruction = 'أدخل البيانات المطلوبة ثم اضغط «إرسال الرابط» للإرسال لإدارة التشغيل.';
+    }
+    banner.innerHTML = '<div class="flex flex-col items-center justify-center gap-1 sm:gap-2 text-center max-w-4xl mx-auto">' +
+      '<div class="flex items-center justify-center gap-2 flex-wrap"><span>👋</span><span class="font-bold">مرحباً ' + roleName + ' – نظام المكافآت</span>' +
+      '<button type="button" onclick="submitAdminAndLock()" style="background:rgba(110,231,183,0.3);border:2px solid #6ee7b7;color:#fff;padding:6px 14px;border-radius:8px;font-weight:800;cursor:pointer;">إرسال الرابط</button>' +
+      '<button type="button" onclick="document.getElementById(\'roleWelcomeBanner\').remove()" class="text-white/80 hover:text-white" style="background:none;border:none;cursor:pointer;padding:2px;">✕</button></div>' +
+      '<p class="text-sm font-normal text-white/95" style="margin:0;line-height:1.4;">' + instruction + '</p></div>';
+  }
   document.body.insertBefore(banner, document.body.firstChild);
-  
-  // للإداريين: لا نخفي البانر كي يبقى زر «إرسال الرابط» متاحاً حتى ينتهوا من الإدخال
   var adminRoles = ['supervisor', 'hr', 'accounting', 'manager'];
   if (adminRoles.indexOf(role) < 0) {
     setTimeout(function () {
@@ -6293,7 +6411,7 @@ const printContent = `
 <style>
 @page {
 size: A4 portrait;
-margin: 20mm 15mm;
+margin: 10mm 12mm;
 }
 * {
 margin: 0;
@@ -6302,29 +6420,30 @@ box-sizing: border-box;
 }
 body {
 font-family: 'Arial', 'Segoe UI', 'Tahoma', sans-serif;
-padding: 25px 20px;
+padding: 10px 14px;
 background: #fff;
 color: #000;
-line-height: 1.6;
+line-height: 1.4;
 direction: rtl;
+font-size: 11px;
 }
 h1 {
-font-size: 24px;
+font-size: 18px;
 font-weight: 900;
 color: #000;
-margin-bottom: 30px;
+margin-bottom: 10px;
 text-align: center;
-border-bottom: 3px solid #40E0D0;
-padding-bottom: 15px;
+border-bottom: 2px solid #40E0D0;
+padding-bottom: 8px;
 letter-spacing: 0.5px;
 }
 .section {
-margin-bottom: 25px;
-padding: 18px 20px;
-border-radius: 10px;
-border: 2px solid #ddd;
+margin-bottom: 8px;
+padding: 8px 12px;
+border-radius: 6px;
+border: 1px solid #ddd;
 page-break-inside: avoid;
-box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+box-shadow: 0 1px 2px rgba(0,0,0,0.08);
 }
 .section.contracts {
 background-color: rgba(59, 130, 246, 0.08);
@@ -6352,14 +6471,14 @@ border-color: rgba(239, 68, 68, 0.4);
 border-right: 5px solid rgba(239, 68, 68, 0.6);
 }
 h2 {
-font-size: 16px;
+font-size: 12px;
 font-weight: 800;
 color: #000;
-margin: 0 0 15px 0;
+margin: 0 0 6px 0;
 display: flex;
 align-items: center;
-gap: 8px;
-padding-bottom: 8px;
+gap: 6px;
+padding-bottom: 4px;
 border-bottom: 1px solid rgba(0,0,0,0.1);
 }
 ul {
@@ -6368,14 +6487,14 @@ padding: 0;
 margin: 0;
 }
 li {
-font-size: 13px;
+font-size: 10px;
 font-weight: 600;
 color: #000;
-margin: 12px 0;
-padding-right: 25px;
-padding-left: 10px;
+margin: 4px 0;
+padding-right: 18px;
+padding-left: 8px;
 position: relative;
-line-height: 1.8;
+line-height: 1.5;
 text-align: right;
 }
 li::before {
@@ -6385,47 +6504,66 @@ right: 0;
 top: 0;
 font-weight: 900;
 color: #000;
-font-size: 16px;
+font-size: 12px;
 }
 .highlight-red {
 color: #dc2626;
 font-weight: 700;
 background-color: rgba(220, 38, 38, 0.05);
-padding: 10px 15px;
-border-radius: 6px;
-border-right: 3px solid #dc2626;
+padding: 6px 10px;
+border-radius: 4px;
+border-right: 2px solid #dc2626;
+margin: 4px 0;
 }
 .highlight-green {
 color: #10b981;
 font-weight: 700;
 background-color: rgba(16, 185, 129, 0.05);
-padding: 10px 15px;
-border-radius: 6px;
-border-right: 3px solid #10b981;
+padding: 6px 10px;
+border-radius: 4px;
+border-right: 2px solid #10b981;
+margin: 4px 0;
 }
 @media print {
+@page {
+size: A4 portrait;
+margin: 10mm 12mm;
+}
 body {
-padding: 15mm 10mm;
+padding: 8px 12px;
+page-break-after: avoid;
+}
+.conditions-one-page {
+page-break-after: avoid;
+page-break-inside: avoid;
 }
 .section {
 page-break-inside: avoid;
-margin-bottom: 20px;
+margin-bottom: 6px;
+padding: 6px 10px;
 }
 h1 {
-font-size: 22px;
-margin-bottom: 25px;
+font-size: 16px;
+margin-bottom: 8px;
+padding-bottom: 6px;
 }
 h2 {
-font-size: 15px;
+font-size: 11px;
+margin-bottom: 4px;
 }
 li {
-font-size: 12px;
-line-height: 1.7;
+font-size: 9.5px;
+margin: 3px 0;
+line-height: 1.45;
+}
+.highlight-red, .highlight-green {
+padding: 4px 8px;
 }
 }
 </style>
 </head>
 <body>
+<div class="conditions-one-page">
 <h1>شروط الحصول على المكافآت</h1>
 <div class="section contracts">
 <h2>📊 مكافآت العقود</h2>
@@ -6458,14 +6596,13 @@ line-height: 1.7;
 <div class="section discounts" style="background-color: rgba(239, 68, 68, 0.08); border-color: rgba(239, 68, 68, 0.4); border-right: 5px solid rgba(239, 68, 68, 0.6);">
 <h2>💰 خصومات التقصير</h2>
 <ul>
-<li class="highlight-red">تطبق خصومات التقصير من خلال إدارة التشغيل على الموظفين الذين يخالفون التعليمات واللوائح المعمول بها</li>
-<li>نسبة الخصم: <strong>من 15% إلى 50%</strong> من المبلغ الصافي المستحق</li>
-<li>يتم تحديد نسبة الخصم الدقيقة حسب تقدير إدارة التشغيل لتأثير التقصير على سير العمل وجودة الخدمة المقدمة</li>
-<li>الحد الأدنى للخصم: <strong>15%</strong> - للتقصيرات البسيطة التي لا تؤثر بشكل كبير على العمل</li>
-<li>الحد الأقصى للخصم: <strong>50%</strong> - للتقصيرات الجسيمة التي تؤثر سلبياً على العمل والخدمة</li>
-<li>يتم تطبيق الخصم على المبلغ الصافي النهائي (بعد جميع الحوافز والمكافآت) ويظهر في تقرير الموظف مع بيان سبب الخصم</li>
-<li class="highlight-red">تسجل الخصومات في أرشيف الموظف</li>
+<li>الحفاظ علي معايير الجودة والأداء 💎</li>
+<li class="highlight-red">تطبق إدارة التشغيل خصومات تتراوح بين 15% إلى 50% من صافي المستحق في حالات تقصير الموظفين وعدم اتباع التعليمات</li>
+<li>( فى حال عدم استلامك نسخه من التعليمات اطلب نسختك المطبوعه الان ).</li>
+<li>تُحدد نسبة الخصم بناءً على جسامة التأثير على جودة الخدمة، وتُسجل رسمياً في سجل وأرشيف الموظف وتؤثر على تقييم اداءه.</li>
+<li>هدفنا الالتزام بالتعليمات لضمان استمرار تميز "إليت" وتجنب أي إجراءات تؤثر على مبلغ المكافأة النهائي.</li>
 </ul>
+</div>
 </div>
 </body>
 </html>
@@ -6538,6 +6675,81 @@ async function testFirebaseConnection() {
     console.warn('⚠️ Firebase Storage connection test failed:', error.message);
     // Don't set storage to null, as it might still work for actual operations
   }
+}
+
+// === مزامنة الفترة الحية مع Firebase (آخر وضع على كل الأجهزة) ===
+const LIVE_PERIOD_PATH = 'periods/live.json';
+let syncLivePeriodTimer = null;
+
+/** يجلب آخر وضع الفترة الحية من Firebase. يُستخدم عند فتح التطبيق. */
+async function fetchLivePeriodFromFirebase() {
+  const st = typeof storage !== 'undefined' ? storage : (typeof window !== 'undefined' ? window.storage : null);
+  if (!st || typeof st.ref !== 'function') return null;
+  try {
+    const ref = st.ref(LIVE_PERIOD_PATH);
+    const url = await ref.getDownloadURL();
+    const res = await fetch(url);
+    if (!res || !res.ok) return null;
+    const data = await res.json();
+    if (!data || !Array.isArray(data.db)) return null;
+    return data;
+  } catch (e) {
+    return null;
+  }
+}
+
+/** يطبّق بيانات الفترة المُحمّلة من Firebase على localStorage دون إعادة رسم الواجهة. */
+function applyLivePeriod(data) {
+  if (!data || !Array.isArray(data.db)) return;
+  try {
+    localStorage.setItem('adora_rewards_db', JSON.stringify(data.db));
+    const br = data.branches;
+    localStorage.setItem('adora_rewards_branches', JSON.stringify(Array.isArray(br) ? br : (br && typeof br.forEach === 'function' ? [...br] : [])));
+    if (data.reportStartDate != null) localStorage.setItem('adora_rewards_startDate', String(data.reportStartDate));
+    if (data.periodText != null) localStorage.setItem('adora_rewards_periodText', String(data.periodText));
+    if (data.evalRate != null) localStorage.setItem('adora_rewards_evalRate', String(data.evalRate));
+    if (Array.isArray(data.discounts)) localStorage.setItem('adora_rewards_discounts', JSON.stringify(data.discounts));
+    if (Array.isArray(data.discountTypes)) localStorage.setItem('adora_rewards_discountTypes', JSON.stringify(data.discountTypes));
+    if (data.employeeCodes && typeof data.employeeCodes === 'object') localStorage.setItem('adora_rewards_employeeCodes', JSON.stringify(data.employeeCodes));
+  } catch (e) {
+    console.warn('⚠️ applyLivePeriod:', e);
+  }
+}
+
+/** يرفع آخر وضع الفترة الحية إلى Firebase (مع debounce 400ms). */
+function syncLivePeriodToFirebase() {
+  clearTimeout(syncLivePeriodTimer);
+  syncLivePeriodTimer = setTimeout(async () => {
+    const st = typeof storage !== 'undefined' ? storage : (typeof window !== 'undefined' ? window.storage : null);
+    if (!st || typeof st.ref !== 'function') return;
+    try {
+      const savedDb = localStorage.getItem('adora_rewards_db');
+      if (!savedDb) return;
+      const parsed = JSON.parse(savedDb);
+      if (!Array.isArray(parsed) || parsed.length === 0) return;
+      const payload = {
+        db: parsed,
+        branches: JSON.parse(localStorage.getItem('adora_rewards_branches') || '[]'),
+        reportStartDate: localStorage.getItem('adora_rewards_startDate') || null,
+        periodText: localStorage.getItem('adora_rewards_periodText') || null,
+        evalRate: parseInt(localStorage.getItem('adora_rewards_evalRate'), 10) || 20,
+        discounts: (() => { try { return JSON.parse(localStorage.getItem('adora_rewards_discounts') || '[]'); } catch (_) { return []; } })(),
+        discountTypes: (() => { try { return JSON.parse(localStorage.getItem('adora_rewards_discountTypes') || '[]'); } catch (_) { return []; } })(),
+        employeeCodes: (() => { try { return JSON.parse(localStorage.getItem('adora_rewards_employeeCodes') || '{}'); } catch (_) { return {}; } })(),
+        lastModified: Date.now()
+      };
+      const blob = new Blob([JSON.stringify(payload)], { type: 'application/json' });
+      await st.ref(LIVE_PERIOD_PATH).put(blob);
+    } catch (e) {
+      // صامت عند الفشل لئلا نزعج المستخدم
+    }
+  }, 400);
+}
+
+if (typeof window !== 'undefined') {
+  window.syncLivePeriodToFirebase = syncLivePeriodToFirebase;
+  window.fetchLivePeriodFromFirebase = fetchLivePeriodFromFirebase;
+  window.applyLivePeriod = applyLivePeriod;
 }
 
 // Wait for Firebase SDK to load
