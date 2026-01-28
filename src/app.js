@@ -322,8 +322,9 @@ function doRbacThenInit() {
         return;
       }
       document.body.innerHTML = '<div style="display:flex;align-items:center;justify-content:center;min-height:100vh;background:linear-gradient(135deg,#0f172a 0%,#1a1f35 100%);color:#fff;font-family:\'IBM Plex Sans Arabic\',Arial,sans-serif;"><div style="text-align:center;padding:2rem;"><div style="font-size:3rem;margin-bottom:1rem;">⏳</div><h1 style="font-size:1.25rem;font-weight:800;color:#94a3b8;">جاري التحقق من الرابط...</h1></div></div>';
+      if (typeof initializeFirebase === 'function') initializeFirebase();
       let ok = false;
-      for (let i = 0; i < 16; i++) {
+      for (let i = 0; i < 40; i++) {
         if (typeof window !== 'undefined' && window.storage) break;
         await new Promise(r => setTimeout(r, 500));
       }
@@ -334,6 +335,9 @@ function doRbacThenInit() {
       } catch (e) { if (console && console.warn) console.warn(e); }
       if (ok) { location.reload(); return; }
       var reason = v.reason || 'الرابط غير صحيح أو الفترة مغلقة';
+      if (reason === 'الفترة غير موجودة') {
+        reason = 'تعذّر جلب بيانات الرابط من الخادم. تأكد أن الأدمن نسخ الرابط من «إدارة الإداريين» بعد رفع ملف الفترة، وأن اتصال الإنترنت يعمل.';
+      }
       document.body.innerHTML = '<div style="display:flex;align-items:center;justify-content:center;min-height:100vh;background:linear-gradient(135deg,#0f172a 0%,#1a1f35 100%);color:#fff;font-family:\'IBM Plex Sans Arabic\',Arial,sans-serif;"><div style="text-align:center;padding:2rem;max-width:560px;"><div style="font-size:4rem;margin-bottom:1rem;">🔒</div><h1 style="font-size:1.5rem;font-weight:900;margin-bottom:1rem;color:#ef4444;">رابط الإداري لا يفتح</h1><p style="color:#fbbf24;font-weight:700;margin-bottom:0.5rem;font-size:0.95rem;">سبب عدم فتح الرابط:</p><p style="color:#94a3b8;margin-bottom:1rem;">' + reason + '</p><p style="color:#6ee7b7;font-weight:600;margin-bottom:1rem;font-size:0.9rem;">✅ الإداريون يدخلون البيانات ويُغلقون — روابطهم تعمل أثناء الفترة ولا تحتاج إغلاقًا. من لوحة الأدمن → «إدارة الإداريين» → انسخ الرابط وأرسله للإداري؛ التفعيل فوراً بعد النسخ.</p><p style="color:#64748b;font-size:0.875rem;">يرجى التواصل مع من يملك صلاحية الأدمن.</p></div></div>';
     })();
     return;
@@ -6776,6 +6780,7 @@ function syncLivePeriodToFirebase() {
 }
 
 if (typeof window !== 'undefined') {
+  window.initializeFirebase = initializeFirebase;
   window.syncLivePeriodToFirebase = syncLivePeriodToFirebase;
   window.fetchLivePeriodFromFirebase = fetchLivePeriodFromFirebase;
   window.applyLivePeriod = applyLivePeriod;

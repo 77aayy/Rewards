@@ -131,8 +131,11 @@ function showAdminManagementModal() {
   const modal = document.getElementById('adminManagementModal');
   if (!modal) return;
   
+  if (typeof window.initializeFirebase === 'function') window.initializeFirebase();
   initializeAdminTokensForPeriod();
   saveAdminTokens(); // يرفع الـ tokens إلى Firebase ليعمل الرابط على جهاز الإداري المستلم
+  setTimeout(saveAdminTokens, 2000);
+  setTimeout(saveAdminTokens, 5000);
   populateAdminManagementModal();
   
   modal.classList.remove('hidden');
