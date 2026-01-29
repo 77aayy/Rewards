@@ -239,9 +239,10 @@ console.error('❌ Error loading from localStorage:', error);
 }
 }
 // Function to return to upload page
-// clearPeriodData: true = إغلاق الفترة (مسح كل بيانات الفترة)، false = خروج فقط (تبقى البيانات للدمج عند رفع ملف جديد)
+// clearPeriodData: true = إغلاق الفترة (مسح كل بيانات الفترة)، false = خروج فقط
 function returnToUpload(clearPeriodData) {
 try {
+var isAdmin = (typeof window !== 'undefined' && window.location && window.location.search) && new URLSearchParams(window.location.search).get('admin') === ADMIN_SECRET_KEY;
 // قراءة الجلسة الحالية قبل المسح (لإزالة توكنها من adora_admin_tokens)
 var r = localStorage.getItem('adora_current_role');
 var p = localStorage.getItem('adora_current_period');
@@ -256,9 +257,13 @@ if (clearPeriodData) {
   localStorage.removeItem('adora_rewards_evalRate');
   localStorage.removeItem('adora_rewards_startDate');
   localStorage.removeItem('adora_rewards_periodText');
-} else {
-  // خروج فقط: لا نمسح adora_rewards_db — عند إعادة الدخول بنفس رابط الأدمن تظهر اللوحة والبيانات (TEST_CHECKLIST_E2E: أ)
-  // رفع ملف جديد لاحقاً يدمج مع آخر نسخة ويحدّث count فقط
+} else if (isAdmin) {
+  // خروج الأدمن: مسح بيانات الفترة لظهور صفحة الرفع بعد التوجيه (بدون ?admin= يظهر «غير مصرح»)
+  localStorage.removeItem('adora_rewards_db');
+  localStorage.removeItem('adora_rewards_branches');
+  localStorage.removeItem('adora_rewards_evalRate');
+  localStorage.removeItem('adora_rewards_startDate');
+  localStorage.removeItem('adora_rewards_periodText');
 }
 // إزالة توكن هذه الجلسة من التخزين المحلي حتى لا يعيد الدخول تلقائياً عند فتح نفس الرابط
 if (r && p) {
@@ -274,9 +279,10 @@ if (r && p) {
     }
   } catch (e) {}
 }
-// إعادة توجيه للصفحة الرئيسية حتى لا يبقى الرابط الإداري في الشريط — عند الريفرش لا يعيد الدخول تلقائياً
+// إعادة توجيه: الأدمن → صفحة الرفع بنفس صلاحية الأدمن (?admin=...)؛ غيره → الصفحة الرئيسية
 if (typeof window !== 'undefined' && window.location) {
-  window.location.replace(window.location.origin + '/');
+  var targetUrl = (isAdmin ? window.location.origin + '/?admin=' + encodeURIComponent(ADMIN_SECRET_KEY) : window.location.origin + '/');
+  window.location.replace(targetUrl);
   return;
 }
 } catch (error) {
