@@ -1,5 +1,5 @@
 /**
- * E2E Full Checklist - TEST_CHECKLIST_E2E.md
+ * E2E Full Checklist — راجع DOCS.md (قسم اختبار E2E)
  * Base URL: https://rewards-63e43.web.app
  * ملف الإكسيل الاختباري: UserStatisticsReport_Ar.xlsx في جذر المشروع
  * Run: npx playwright test e2e-full.spec.js --project=chromium

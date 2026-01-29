@@ -131,6 +131,8 @@ function isLocalDevAllowed() {
 const isRbacFromUrl = role && token && period && localStorage.getItem('adora_current_role') === role;
 if (!isAdminMode() && !isRbacFromUrl && !isLocalDevAllowed()) {
   // Not admin, not employee, not valid RBAC link, and not local dev - block access
+  var existingBanner = document.getElementById('roleWelcomeBanner');
+  if (existingBanner && existingBanner.parentNode) existingBanner.parentNode.removeChild(existingBanner);
   document.body.innerHTML = `
     <div style="display: flex; align-items: center; justify-content: center; min-height: 100vh; background: linear-gradient(135deg, #0a0e1a 0%, #1a1f35 100%); color: white; font-family: 'IBM Plex Sans Arabic', sans-serif; text-align: center; padding: 2rem;">
       <div style="background: rgba(255, 255, 255, 0.1); padding: 3rem; border-radius: 20px; border: 2px solid rgba(239, 68, 68, 0.5); max-width: 560px;">
@@ -419,7 +421,9 @@ async function doAppInit() {
   if (!isEmployeeMode() && typeof startLivePeriodPolling === 'function') startLivePeriodPolling();
   if (isAdminMode()) return;
   var currentRole = typeof localStorage !== 'undefined' ? localStorage.getItem('adora_current_role') : null;
-  if (currentRole && currentRole !== 'admin') {
+  // عدم تطبيق دور من localStorage إلا عندما الرابط نفسه مصرح (role+token+period) حتى لا يظهر بانر «مرحباً، HR/المشرف» فوق صفحة غير مصرح
+  var urlAuthorizedRole = urlRole && urlToken && urlPeriod && currentRole === urlRole;
+  if (currentRole && currentRole !== 'admin' && urlAuthorizedRole) {
     if (typeof initializeRoleBasedUI === 'function') initializeRoleBasedUI(currentRole);
   }
 }
