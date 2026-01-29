@@ -337,7 +337,13 @@ async function doAppInit() {
   var urlPeriod = (typeof window !== 'undefined' && window.location && window.location.search) ? new URLSearchParams(window.location.search).get('period') : null;
   var isAdminLinkOpen = urlRole && urlToken && urlPeriod && !isAdminMode() && ['supervisor', 'hr', 'accounting', 'manager'].indexOf(urlRole) >= 0;
   if (isAdminLinkOpen && db.length === 0) {
-    // فتح رابط إداري على جهاز جديد: عرض الواجهة فوراً وجلب بيانات الفترة في الخلفية (استجابة سريعة)
+    // فتح رابط إداري على جهاز جديد: إظهار لوحة التحكم فوراً (بدون انتظار بيانات) ثم جلب الفترة من Firebase
+    var uploadBoxEl = document.getElementById('uploadBox');
+    var dashboardEl = document.getElementById('dashboard');
+    var actionBtnsEl = document.getElementById('actionBtns');
+    if (uploadBoxEl) uploadBoxEl.classList.add('hidden');
+    if (dashboardEl) dashboardEl.classList.remove('hidden');
+    if (actionBtnsEl) actionBtnsEl.style.display = 'flex';
     if (typeof initializeRoleBasedUI === 'function') initializeRoleBasedUI(urlRole);
     var tableContainer = document.getElementById('mainTable') && document.getElementById('mainTable').closest('.table-scroll-container');
     if (tableContainer) {
@@ -362,6 +368,9 @@ async function doAppInit() {
       } catch (_) {
         var el2 = document.getElementById('adminLinkLoadingWrap');
         if (el2 && el2.parentNode) el2.parentNode.removeChild(el2);
+        if (typeof updateFilters === 'function') updateFilters();
+        if (typeof updatePrintButtonText === 'function') updatePrintButtonText();
+        if (typeof renderUI === 'function') renderUI('الكل');
       }
     })();
     if (!isEmployeeMode() && typeof syncLivePeriodToFirebase === 'function') syncLivePeriodToFirebase();
