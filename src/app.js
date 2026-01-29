@@ -257,14 +257,9 @@ if (clearPeriodData) {
   localStorage.removeItem('adora_rewards_startDate');
   localStorage.removeItem('adora_rewards_periodText');
 } else {
-  // خروج: مسح بيانات الفترة أيضاً حتى تظهر واجهة الرفع فارغة بعد إعادة التوجيه
-  localStorage.removeItem('adora_rewards_db');
-  localStorage.removeItem('adora_rewards_branches');
-  localStorage.removeItem('adora_rewards_evalRate');
-  localStorage.removeItem('adora_rewards_startDate');
-  localStorage.removeItem('adora_rewards_periodText');
+  // خروج فقط: لا نمسح adora_rewards_db — عند إعادة الدخول بنفس رابط الأدمن تظهر اللوحة والبيانات (TEST_CHECKLIST_E2E: أ)
+  // رفع ملف جديد لاحقاً يدمج مع آخر نسخة ويحدّث count فقط
 }
-// خروج بدون إغلاق: لا نمسح adora_rewards_db — رفع ملف جديد يدمج مع آخر نسخة ويحدّث count فقط
 // إزالة توكن هذه الجلسة من التخزين المحلي حتى لا يعيد الدخول تلقائياً عند فتح نفس الرابط
 if (r && p) {
   try {
@@ -1420,7 +1415,11 @@ if (currentRole && currentRole !== 'hr' && currentRole !== 'admin') {
   if (shouldRender) showToast('❌ غير مصرح لك بتعديل أيام الحضور', 'error');
   return;
 }
-// HR وأدمن يمكنهما إدخال أيام الحضور في الكل للجميع (موظف عادي ومتكرر)
+// الكل للعرض فقط — إدخال أيام الحضور من الفروع فقط (المشرف وHR يدخلون في الفرع)
+if (typeof currentFilter !== 'undefined' && currentFilter === 'الكل') {
+  if (shouldRender) showToast('❌ التعديل في الفروع فقط — الكل للعرض والتجميع', 'error');
+  return;
+}
 // Ensure days is a valid positive number (accepts any number: odd, even, single-digit, multi-digit)
 days = Math.max(0, parseInt(days) || 0);
 // No restriction on odd/even numbers - accept 8, 22, 30, 15, etc.
@@ -3583,9 +3582,9 @@ ${(filter === 'الكل' && isDuplicate) ? (s.aggregatedCount || emp.count) : em
 <label class="relative inline-flex items-center" style="flex-direction: row-reverse; justify-content: center; gap: 6px; ${(() => {
 const rr = typeof localStorage !== 'undefined' ? localStorage.getItem('adora_current_role') : null;
 const canEditAttendance = rr === 'hr' || rr === 'admin';
-// In "الكل" view: HR وأدمن يمكنهما التعديل (للجميع)
+// الكل للعرض فقط — لا تعديل (المشرف وHR يدخلون من الفروع فقط)
 if (filter === 'الكل') {
-  return canEditAttendance ? 'cursor: pointer;' : 'cursor: default;';
+  return 'cursor: default;';
 }
 // In branch views: check if employee is duplicate
 const allEmpBranches = db.filter(e => e.name === emp.name);

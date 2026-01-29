@@ -77,6 +77,23 @@ tfoot .col-rate {
 display: table-cell !important;
 }
 }
+
+/* محاذاة عمود الموظف مع الترويسة (خاصة عرض HR والمشرف عند إخفاء أعمدة) */
+#targetTable {
+  table-layout: fixed;
+  width: 100%;
+}
+#targetTable thead th.col-name,
+#targetTable tbody td.col-name {
+  vertical-align: middle;
+  text-align: right;
+  min-width: 140px;
+}
+#targetTable tbody td.col-name > div {
+  text-align: right;
+  direction: rtl;
+}
+
 /* Prevent unnecessary word wrapping in bonus rows and footer labels */
 #commitmentBonusText,
 #excellenceBonusText {
