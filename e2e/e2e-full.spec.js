@@ -7,7 +7,7 @@
 const path = require('path');
 const { test, expect } = require('@playwright/test');
 
-const BASE_URL = process.env.E2E_BASE_URL || 'https://rewards-63e43.web.app';
+const BASE_URL = (process.env.E2E_BASE_URL || 'https://rewards-63e43.web.app').trim().replace(/\/+$/, '');
 const ADMIN_URL = `${BASE_URL}/?admin=ayman5255`;
 const EXCEL_PATH = path.resolve(__dirname, '..', 'UserStatisticsReport_Ar.xlsx');
 

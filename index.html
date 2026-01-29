@@ -7,7 +7,9 @@
     <meta name="theme-color" content="#14b8a6">
     <meta name="description" content="نظام إدارة مكافآت فندق إليت">
     <title>إليت | كشف المكافآت النهائي</title>
-    
+    <!-- تقني: تسريع الاتصال بـ Firebase عند فتح رابط الإداري -->
+    <link rel="preconnect" href="https://firebasestorage.googleapis.com" crossorigin>
+    <link rel="preconnect" href="https://www.gstatic.com" crossorigin>
     <!-- PWA Manifest -->
     <link rel="manifest" href="manifest.json">
     <link rel="apple-touch-icon" href="icon-192.png">
@@ -17,6 +19,20 @@
     <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
     <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-app-compat.js"></script>
     <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-storage-compat.js"></script>
+    <script src="/src/firebase-config.js"></script>
+    <script>
+      (function () {
+        if (typeof firebase === 'undefined' || !window.firebaseConfig) return;
+        try {
+          if (!firebase.apps || firebase.apps.length === 0) {
+            firebase.initializeApp(window.firebaseConfig);
+          }
+          if (typeof firebase.storage === 'function') {
+            window.storage = firebase.storage();
+          }
+        } catch (e) { /* صامت؛ app.js سيعيد المحاولة */ }
+      })();
+    </script>
     <script src="https://cdn.jsdelivr.net/npm/qrcodejs@1.0.0/qrcode.min.js"></script>
 
     <!-- Arabic Font -->

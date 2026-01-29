@@ -26,28 +26,8 @@ const admin = urlParams.get('admin');
 // RBAC: التحقق من الرابط يتم عند التشغيل (تحت doRbacThenInit) ليدعم التحقق من Firebase عند فشل localStorage
 
 // === Firebase Configuration ===
-// ⚠️ SECURITY NOTE: This API key is PUBLIC but PROTECTED by:
-// 1. API Key Restrictions in Google Cloud Console (HTTP referrers + API restrictions)
-// 2. Firebase Security Rules (storage.rules)
-// 3. Domain restrictions (only works on authorized domains)
-// 
-// To secure this key:
-// 1. Go to: https://console.cloud.google.com/apis/credentials
-// 2. Edit the API key
-// 3. Add HTTP referrer restrictions: rewards-63e43.web.app, rewards-63e43.firebaseapp.com
-// 4. Restrict to Firebase Storage API only
-//
-// This key MUST be in client-side code for Firebase Client SDK to work.
-const firebaseConfig = {
-  apiKey: "AIzaSyAKpUAnc_EJXxGrhPPfTAgnFB13Qvs_ogk",
-  authDomain: "rewards-63e43.firebaseapp.com",
-  projectId: "rewards-63e43",
-  storageBucket: "rewards-63e43.firebasestorage.app",
-  messagingSenderId: "453256410249",
-  appId: "1:453256410249:web:b7edd6afe3922c3e738258"
-};
-
-// Initialize Firebase (will be initialized after Firebase SDK loads)
+// مصدر واحد للإعداد: src/firebase-config.js (يُحمّل من الـ head لتهيئة مبكرة). راجع API_KEY_SETUP_GUIDE.md
+// Initialize Firebase — قد يكون مُهيّأ مسبقاً من الـ head (window.storage)
 let storage = null;
 let firebaseApp = null;
 
@@ -332,13 +312,23 @@ container.appendChild(particle);
 createParticles();
 
 async function doAppInit() {
-  loadDataFromStorage();
   var urlRole = (typeof window !== 'undefined' && window.location && window.location.search) ? new URLSearchParams(window.location.search).get('role') : null;
   var urlToken = (typeof window !== 'undefined' && window.location && window.location.search) ? new URLSearchParams(window.location.search).get('token') : null;
   var urlPeriod = (typeof window !== 'undefined' && window.location && window.location.search) ? new URLSearchParams(window.location.search).get('period') : null;
+  // الرابط الجذر (/) بدون admin أو role/token/period: مسح دور الجلسة حتى لا تظهر واجهة المشرف/HR من زيارة سابقة
+  if (!isAdminMode() && !(urlRole && urlToken && urlPeriod) && !isEmployeeMode()) {
+    try {
+      if (typeof localStorage !== 'undefined') {
+        localStorage.removeItem('adora_current_role');
+        localStorage.removeItem('adora_current_token');
+        localStorage.removeItem('adora_current_period');
+      }
+    } catch (e) {}
+  }
+  loadDataFromStorage();
   var isAdminLinkOpen = urlRole && urlToken && urlPeriod && !isAdminMode() && ['supervisor', 'hr', 'accounting', 'manager'].indexOf(urlRole) >= 0;
   if (isAdminLinkOpen && db.length === 0) {
-    // فتح رابط إداري على جهاز جديد: إظهار لوحة التحكم فوراً (بدون انتظار بيانات) ثم جلب الفترة من Firebase
+    // فتح رابط إداري على جهاز جديد: إظهار لوحة التحكم فوراً ثم جلب الفترة من Firebase (مع إعادة محاولة ورسالة خطأ عند الفشل)
     var uploadBoxEl = document.getElementById('uploadBox');
     var dashboardEl = document.getElementById('dashboard');
     var actionBtnsEl = document.getElementById('actionBtns');
@@ -346,41 +336,78 @@ async function doAppInit() {
     if (dashboardEl) dashboardEl.classList.remove('hidden');
     if (actionBtnsEl) actionBtnsEl.style.display = 'flex';
     if (typeof initializeRoleBasedUI === 'function') initializeRoleBasedUI(urlRole);
+    // عرض الفترة من الرابط فوراً حتى لا يظهر "الفترة : -"
+    if (urlPeriod) {
+      var periodLabel = urlPeriod.replace(/_/g, ' - ');
+      var periodRangeEl = document.getElementById('periodRange');
+      var headerPeriodRangeEl = document.getElementById('headerPeriodRange');
+      if (periodRangeEl) periodRangeEl.innerText = periodLabel;
+      if (headerPeriodRangeEl) headerPeriodRangeEl.innerText = periodLabel;
+    }
     var tableContainer = document.getElementById('mainTable') && document.getElementById('mainTable').closest('.table-scroll-container');
     if (tableContainer) {
       var loadingWrap = document.createElement('div');
       loadingWrap.id = 'adminLinkLoadingWrap';
       loadingWrap.setAttribute('aria-live', 'polite');
-      loadingWrap.className = 'flex items-center justify-center gap-3 py-12 px-4 text-white/90';
-      loadingWrap.innerHTML = '<span class="admin-link-load-spinner inline-block w-8 h-8 border-2 border-[rgba(64,224,208,0.4)] rounded-full border-t-[#40E0D0]"></span><span class="font-bold">جاري تحميل بيانات الفترة...</span>';
+      loadingWrap.className = 'flex flex-col items-center justify-center gap-3 py-12 px-4 text-white/90';
+      loadingWrap.innerHTML = '<span class="admin-link-load-spinner inline-block w-8 h-8 border-2 border-[rgba(64,224,208,0.4)] rounded-full border-t-[#40E0D0]"></span><span class="font-bold">جاري تحميل بيانات الفترة من الخادم...</span>';
       var tbody = document.getElementById('mainTable');
       if (tbody && tbody.parentNode) tbody.parentNode.insertBefore(loadingWrap, tbody);
     }
-    (async function () {
+    (async function fetchAndApplyLivePeriod() {
+      var el = document.getElementById('adminLinkLoadingWrap');
       try {
         if (typeof initializeFirebase === 'function') initializeFirebase();
         var waitStart = Date.now();
-        while (!(typeof window !== 'undefined' && window.storage) && (Date.now() - waitStart) < 8000) {
-          await new Promise(function (r) { setTimeout(r, 300); });
+        var maxWaitMs = 8000;
+        while (!(typeof window !== 'undefined' && window.storage) && (Date.now() - waitStart) < maxWaitMs) {
+          await new Promise(function (r) { setTimeout(r, 150); });
         }
-        var live = typeof fetchLivePeriodFromFirebase === 'function' ? await fetchLivePeriodFromFirebase() : null;
-        if (!isEmployeeMode() && live && Array.isArray(live.db) && live.db.length > 0 && typeof applyLivePeriod === 'function') applyLivePeriod(live);
-        loadDataFromStorage();
-        var el = document.getElementById('adminLinkLoadingWrap');
-        if (el && el.parentNode) el.parentNode.removeChild(el);
-        if (typeof updateFilters === 'function') updateFilters();
-        if (typeof updatePrintButtonText === 'function') updatePrintButtonText();
-        if (typeof renderUI === 'function') renderUI('الكل');
+        var live = null;
+        var maxAttempts = 3;
+        for (var attempt = 0; attempt < maxAttempts; attempt++) {
+          if (typeof fetchLivePeriodFromFirebase === 'function') live = await fetchLivePeriodFromFirebase();
+          if (live && Array.isArray(live.db) && live.db.length > 0) break;
+          if (attempt < maxAttempts - 1) await new Promise(function (r) { setTimeout(r, 1000); });
+        }
+        if (!isEmployeeMode() && live && Array.isArray(live.db) && live.db.length > 0 && typeof applyLivePeriod === 'function') {
+          applyLivePeriod(live);
+          loadDataFromStorage();
+          if (el && el.parentNode) el.parentNode.removeChild(el);
+          if (typeof updateFilters === 'function') updateFilters();
+          if (typeof updatePrintButtonText === 'function') updatePrintButtonText();
+          if (typeof renderUI === 'function') renderUI('الكل');
+        } else {
+          if (el) {
+            el.innerHTML = '<div class="text-center"><p class="font-bold text-amber-400 mb-2">تعذّر تحميل بيانات الفترة</p><p class="text-sm text-gray-400 mb-4">تحقق من الاتصال بالإنترنت. تأكد أن الأدمن رفع ملف الفترة وفتح «إدارة الإداريين» لتفعيل الرابط.</p><button type="button" id="retryPeriodBtn" onclick="location.reload()" class="px-4 py-2 rounded-xl font-bold focus:outline-none focus:ring-2 focus:ring-[#14b8a6] focus:ring-offset-2 focus:ring-offset-[#0f172a]" style="background:rgba(20,184,166,0.2);color:#14b8a6;border:1px solid rgba(20,184,166,0.5);">إعادة المحاولة</button></div>';
+            el.classList.remove('flex', 'flex-col', 'items-center', 'justify-center', 'gap-3', 'py-12', 'px-4', 'text-white/90');
+            el.classList.add('text-center', 'py-8', 'px-4');
+            setTimeout(function () {
+              var btn = document.getElementById('retryPeriodBtn');
+              if (btn) btn.focus();
+            }, 100);
+          }
+          if (typeof updateFilters === 'function') updateFilters();
+          if (typeof updatePrintButtonText === 'function') updatePrintButtonText();
+          if (typeof renderUI === 'function') renderUI('الكل');
+        }
       } catch (_) {
-        var el2 = document.getElementById('adminLinkLoadingWrap');
-        if (el2 && el2.parentNode) el2.parentNode.removeChild(el2);
+        if (el) {
+          el.innerHTML = '<div class="text-center"><p class="font-bold text-amber-400 mb-2">حدث خطأ أثناء التحميل</p><p class="text-sm text-gray-400 mb-4">تحقق من الاتصال وجرّب مرة أخرى.</p><button type="button" id="retryPeriodBtn" onclick="location.reload()" class="px-4 py-2 rounded-xl font-bold focus:outline-none focus:ring-2 focus:ring-[#14b8a6] focus:ring-offset-2 focus:ring-offset-[#0f172a]" style="background:rgba(20,184,166,0.2);color:#14b8a6;border:1px solid rgba(20,184,166,0.5);">إعادة المحاولة</button></div>';
+          el.classList.remove('flex', 'flex-col', 'items-center', 'justify-center', 'gap-3', 'py-12', 'px-4', 'text-white/90');
+          el.classList.add('text-center', 'py-8', 'px-4');
+          setTimeout(function () {
+            var btn = document.getElementById('retryPeriodBtn');
+            if (btn) btn.focus();
+          }, 100);
+        }
         if (typeof updateFilters === 'function') updateFilters();
         if (typeof updatePrintButtonText === 'function') updatePrintButtonText();
         if (typeof renderUI === 'function') renderUI('الكل');
       }
+      if (!isEmployeeMode() && typeof startLivePeriodPolling === 'function') startLivePeriodPolling();
     })();
     if (!isEmployeeMode() && typeof syncLivePeriodToFirebase === 'function') syncLivePeriodToFirebase();
-    if (!isEmployeeMode() && typeof startLivePeriodPolling === 'function') startLivePeriodPolling();
     return;
   }
   try {
@@ -445,7 +472,11 @@ function doRbacThenInit() {
       }
       var elOverlay = document.getElementById('rbacVerifyOverlay');
       if (elOverlay && elOverlay.parentNode) elOverlay.parentNode.removeChild(elOverlay);
-      if (ok) { location.reload(); return; }
+      if (ok) {
+        // بدون reload: توكن محفوظ في localStorage من tryValidateAdminAccessFromFirebase — نتابع مباشرة لتسريع فتح الرابط
+        await doAppInit();
+        return;
+      }
       if (role && token && period && typeof acceptAdminAccessFromUrl === 'function') {
         try {
           if (acceptAdminAccessFromUrl(role, token, period)) {
@@ -492,6 +523,37 @@ if (document.readyState === 'loading') {
 } else {
   doRbacThenInit();
 }
+// إغلاق النوافذ المنبثقة بمفتاح Escape (UX)
+(function setupEscapeCloseModals() {
+  var modalCloseMap = {
+    conditionsModal: 'closeConditionsModal',
+    ratingExplanationModal: 'closeRatingExplanationModal',
+    instructionsModal: 'closeInstructionsModal',
+    employeeReportModal: 'closeEmployeeReportModal',
+    closePeriodModal: 'closeClosePeriodModal',
+    employeeCodesModal: 'closeEmployeeCodesModal',
+    adminManagementModal: 'closeAdminManagementModal',
+    discountsModal: 'closeDiscountsModal',
+    mostDiscountsDetailModal: 'closeMostDiscountsDetailModal',
+    manageDiscountTypesModal: 'closeManageDiscountTypesModal'
+  };
+  function onKeyDown(e) {
+    if (e.key !== 'Escape') return;
+    var modals = document.querySelectorAll('[id$="Modal"]');
+    for (var i = modals.length - 1; i >= 0; i--) {
+      var m = modals[i];
+      if (!m.classList.contains('hidden') && m.style.display !== 'none') {
+        var closeFn = modalCloseMap[m.id];
+        if (closeFn && typeof window[closeFn] === 'function') {
+          e.preventDefault();
+          window[closeFn](e);
+        }
+        return;
+      }
+    }
+  }
+  document.addEventListener('keydown', onKeyDown);
+})();
 // === File Upload Handler ===
 document.getElementById('fileInput').addEventListener('change', (e) => {
 const file = e.target.files[0];
@@ -5225,17 +5287,15 @@ alert('حدث خطأ أثناء الطباعة: ' + error.message);
 }
 // === Toast Notifications ===
 function showToast(message, type = 'success') {
-const toast = document.createElement('div');
-toast.className = 'toast';
-toast.innerText = message;
-if (type === 'error') {
-toast.style.background = 'linear-gradient(135deg, #ef4444 0%, #dc2626 100%)';
-}
-document.body.appendChild(toast);
-setTimeout(() => {
-toast.style.animation = 'slideInRight 0.5s ease-out reverse';
-setTimeout(() => toast.remove(), 500);
-}, 3000);
+  var toast = document.createElement('div');
+  toast.className = 'toast toast--' + (type === 'error' ? 'error' : type === 'info' ? 'info' : 'success');
+  toast.setAttribute('role', 'alert');
+  toast.innerText = message;
+  document.body.appendChild(toast);
+  setTimeout(function () {
+    toast.style.animation = 'toastSlideIn 0.35s ease-out reverse';
+    setTimeout(function () { toast.remove(); }, 400);
+  }, 3200);
 }
 // === Loading Overlay (رفع الملف / المزامنة) ===
 function showLoadingOverlay(message) {
@@ -5246,7 +5306,7 @@ function showLoadingOverlay(message) {
   el.id = 'loadingOverlay';
   el.setAttribute('aria-busy', 'true');
   el.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,0.7);display:flex;align-items:center;justify-content:center;z-index:99999;backdrop-filter:blur(4px);';
-  el.innerHTML = '<div style="background:rgba(15,23,41,0.95);padding:1.5rem 2rem;border-radius:1rem;border:1px solid rgba(64,224,208,0.3);text-align:center;"><div style="width:40px;height:40px;border:3px solid rgba(64,224,208,0.3);border-top-color:#40E0D0;border-radius:50%;animation:spin 0.8s linear infinite;margin:0 auto 0.75rem;"></div><p style="color:#e2e8f0;font-weight:700;">' + (message || 'جاري التحميل...') + '</p></div>';
+  el.innerHTML = '<div style="background:rgba(15,23,41,0.95);padding:1.5rem 2rem;border-radius:1rem;border:1px solid rgba(20,184,166,0.35);text-align:center;"><div style="width:40px;height:40px;border:3px solid rgba(20,184,166,0.3);border-top-color:#14b8a6;border-radius:50%;animation:spin 0.8s linear infinite;margin:0 auto 0.75rem;"></div><p style="color:#e2e8f0;font-weight:700;">' + (message || 'جاري التحميل...') + '</p></div>';
   document.body.appendChild(el);
 }
 function hideLoadingOverlay() {
@@ -7081,11 +7141,11 @@ let firebaseInitAttempts = 0;
 const MAX_INIT_ATTEMPTS = 5;
 
 function initializeFirebase() {
-  // Check if Firebase SDK is loaded
+  var config = typeof window !== 'undefined' && window.firebaseConfig ? window.firebaseConfig : null;
   if (typeof firebase === 'undefined') {
     firebaseInitAttempts++;
     if (firebaseInitAttempts < MAX_INIT_ATTEMPTS) {
-      console.log(`⏳ Waiting for Firebase SDK... (attempt ${firebaseInitAttempts}/${MAX_INIT_ATTEMPTS})`);
+      console.log('⏳ Waiting for Firebase SDK... (attempt ' + firebaseInitAttempts + '/' + MAX_INIT_ATTEMPTS + ')');
       setTimeout(initializeFirebase, 1000);
       return;
     } else {
@@ -7094,24 +7154,27 @@ function initializeFirebase() {
       return;
     }
   }
-
+  if (typeof window !== 'undefined' && window.storage) {
+    storage = window.storage;
+    firebaseApp = firebase.apps && firebase.apps[0] ? firebase.apps[0] : null;
+    if (storage) return;
+  }
+  if (!config) {
+    console.warn('⚠️ firebaseConfig not found (load firebase-config.js)');
+    return;
+  }
   try {
-    // Check if Firebase is already initialized
     if (!firebase.apps || firebase.apps.length === 0) {
-      firebaseApp = firebase.initializeApp(firebaseConfig);
+      firebaseApp = firebase.initializeApp(config);
       console.log('✅ Firebase app initialized');
     } else {
       firebaseApp = firebase.apps[0];
       console.log('✅ Firebase app already initialized');
     }
-
-    // Initialize Storage
     if (firebaseApp && typeof firebase.storage === 'function') {
       storage = firebase.storage();
       if (typeof window !== 'undefined') window.storage = storage;
       console.log('✅ Firebase Storage initialized');
-      
-      // Test storage connection
       testFirebaseConnection();
     } else {
       console.error('❌ Firebase Storage function not available');

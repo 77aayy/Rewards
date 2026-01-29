@@ -1,5 +1,27 @@
 # قائمة اختبار الدائرة الكاملة (E2E)
 
+## 0. تثبيت الاعتماديات (مطلوب قبل تشغيل E2E)
+
+إذا ظهر خطأ `Cannot find module '@playwright/test'`:
+
+1. **تثبيت الحزم (مع اتصال إنترنت):**
+   ```bash
+   npm install
+   ```
+2. **(اختياري) تثبيت متصفحات Playwright لأول مرة:**
+   ```bash
+   npx playwright install chromium
+   ```
+3. **تشغيل الاختبارات:**
+   ```bash
+   set E2E_BASE_URL=http://localhost:3999
+   npm run test:e2e
+   ```
+   أو ضد الموقع المنشور:
+   ```bash
+   npm run test:e2e
+   ```
+
 ## 1. إصلاح التصميم (تم)
 - **صفحة HR:** محاذاة أعمدة صفحة التش ار — تم إضافة `body.role-hr #targetTable` مع `table-layout: fixed` ومحاذاة `col-name` و`col-attendance` في `src/styles.css`.
 

@@ -9,7 +9,7 @@ module.exports = defineConfig({
   workers: 1,
   reporter: 'list',
   use: {
-    baseURL: process.env.E2E_BASE_URL || 'https://rewards-63e43.web.app',
+    baseURL: (process.env.E2E_BASE_URL || 'https://rewards-63e43.web.app').trim().replace(/\/+$/, ''),
     trace: 'on-first-retry',
     headless: true,
     viewport: { width: 1280, height: 720 },

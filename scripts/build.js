@@ -53,5 +53,7 @@ fs.mkdirSync(destSrc, { recursive: true });
 fs.readdirSync(srcDir).forEach((f) => {
   fs.copyFileSync(path.join(srcDir, f), path.join(destSrc, f));
 });
-
+if (fs.existsSync(path.join(srcDir, 'firebase-config.js'))) {
+  fs.copyFileSync(path.join(srcDir, 'firebase-config.js'), path.join(destSrc, 'firebase-config.js'));
+}
 console.log('Build done: dist/');

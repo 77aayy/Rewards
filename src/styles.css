@@ -1,6 +1,8 @@
 :root {
 --turquoise: #40E0D0;
 --turquoise-light: #7FFFD4;
+--primary-500: #14b8a6;
+--primary-glow: rgba(20, 184, 166, 0.35);
 --dark-bg: #0a0e1a;
 --dark-card: #0f1729;
 --glow-turquoise: rgba(64, 224, 208, 0.4);
@@ -561,30 +563,35 @@ box-shadow: 0 10px 40px rgba(64, 224, 208, 0.4);
 .btn:active {
 transform: translateY(0);
 }
-/* Upload Zone Enhancement */
+/* Upload Zone Enhancement — توحيد بصري مع primary */
 #uploadBox {
-transition: all 0.5s cubic-bezier(0.4, 0, 0.2, 1);
-position: relative;
-overflow: hidden;
-border-color: rgba(224, 62, 86, 1) !important;
+  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+  position: relative;
+  overflow: hidden;
+  border-color: rgba(255, 255, 255, 0.1);
 }
 #uploadBox::after {
-content: '';
-position: absolute;
-top: -50%;
-left: -50%;
-width: 200%;
-height: 200%;
-background: linear-gradient(45deg,
-transparent,
-rgba(64, 224, 208, 0.1),
-transparent);
-animation: shimmer 3s infinite;
+  content: '';
+  position: absolute;
+  top: -50%;
+  left: -50%;
+  width: 200%;
+  height: 200%;
+  background: linear-gradient(45deg,
+    transparent,
+    var(--primary-glow),
+    transparent);
+  animation: shimmer 3s infinite;
 }
-#uploadBox:hover {
-transform: scale(1.02);
-border-color: var(--turquoise) !important;
-box-shadow: 0 0 40px rgba(64, 224, 208, 0.3);
+#uploadBox:hover,
+#uploadBox:focus-within {
+  transform: scale(1.01);
+  border-color: var(--primary-500) !important;
+  box-shadow: 0 0 32px var(--primary-glow);
+}
+#uploadBox:focus-within {
+  outline: 2px solid var(--primary-500);
+  outline-offset: 2px;
 }
 /* Table Container with Fixed Height */
 .table-scroll-container {
@@ -1691,18 +1698,47 @@ background: var(--turquoise-light);
 font-variant-numeric: tabular-nums;
 letter-spacing: 0.5px;
 }
-/* Success Toast */
+/* Toast: موقع ثابت، ألوان حسب النوع (توحيد بصري مع primary) */
 .toast {
-position: fixed;
-top: 20px;
-right: 20px;
-padding: 16px 24px;
-background: linear-gradient(135deg, #10b981 0%, #059669 100%);
-color: white;
-border-radius: 12px;
-box-shadow: 0 10px 40px rgba(16, 185, 129, 0.3);
-z-index: 1000;
-animation: slideInRight 0.5s ease-out;
+  position: fixed;
+  top: 1.25rem;
+  right: 1.25rem;
+  left: 1.25rem;
+  margin-left: auto;
+  margin-right: auto;
+  max-width: 22rem;
+  padding: 0.875rem 1.25rem;
+  color: #fff;
+  border-radius: 12px;
+  box-shadow: 0 10px 40px rgba(0, 0, 0, 0.2);
+  z-index: 100000;
+  animation: toastSlideIn 0.35s ease-out;
+  font-weight: 600;
+  font-size: 0.9375rem;
+  line-height: 1.4;
+  border: 1px solid rgba(255, 255, 255, 0.15);
+}
+.toast.toast--success {
+  background: linear-gradient(135deg, var(--primary-500) 0%, #0d9488 100%);
+  box-shadow: 0 10px 40px var(--primary-glow);
+}
+.toast.toast--error {
+  background: linear-gradient(135deg, #ef4444 0%, #dc2626 100%);
+  box-shadow: 0 10px 40px rgba(239, 68, 68, 0.3);
+}
+.toast.toast--info {
+  background: linear-gradient(135deg, #3b82f6 0%, #2563eb 100%);
+  box-shadow: 0 10px 40px rgba(59, 130, 246, 0.3);
+}
+@keyframes toastSlideIn {
+  from {
+    transform: translateX(100%);
+    opacity: 0;
+  }
+  to {
+    transform: translateX(0);
+    opacity: 1;
+  }
 }
 @keyframes slideInRight {
 from {
@@ -1810,6 +1846,10 @@ opacity: 1;
 
 .btn-modern:active {
   transform: scale(0.98);
+}
+.btn-modern:focus-visible {
+  outline: 2px solid var(--primary-500);
+  outline-offset: 2px;
 }
 
 /* Header Logo Styling */
