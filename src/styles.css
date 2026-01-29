@@ -102,6 +102,9 @@ min-height: 100vh;
 overflow-x: hidden;
 -webkit-text-size-adjust: 100%;
 -webkit-tap-highlight-color: transparent;
+padding-left: env(safe-area-inset-left);
+padding-right: env(safe-area-inset-right);
+padding-bottom: env(safe-area-inset-bottom);
 }
 /* Mobile-specific improvements */
 @media (max-width: 480px) {
@@ -127,10 +130,46 @@ padding: 1rem !important;
 .stats-card {
 min-height: 80px !important;
 }
-/* Table improvements */
+/* Table: تمرير أفقي سلس على الجوال */
 .table-scroll-container {
 margin: 0 -0.5rem;
 padding: 0 0.5rem;
+overflow-x: auto;
+-webkit-overflow-scrolling: touch;
+}
+/* فلتر الفروع على الجوال: لف وعدم امتداد */
+#branchFilters {
+flex-wrap: wrap;
+justify-content: center;
+padding: 0.5rem !important;
+gap: 0.5rem !important;
+}
+#branchFilters button {
+min-height: 40px !important;
+padding: 0.5rem 0.75rem !important;
+font-size: 0.8rem !important;
+}
+/* الهيدر على الجوال: تقليل الحشو وتمكين لف الأزرار */
+header.glass {
+padding: 0.75rem 1rem !important;
+gap: 0.5rem !important;
+}
+#actionBtns {
+max-height: 50vh;
+overflow-y: auto;
+-webkit-overflow-scrolling: touch;
+gap: 0.5rem !important;
+}
+#actionBtns .btn-modern {
+padding: 0.5rem 0.75rem !important;
+font-size: 0.75rem !important;
+min-height: 40px !important;
+}
+/* مساحة المحتوى الرئيسي على الجوال */
+.max-w-full.mx-auto.space-y-4 {
+padding-left: 0.5rem !important;
+padding-right: 0.5rem !important;
+gap: 0.75rem !important;
 }
 /* Better spacing on mobile */
 .space-y-4 > * + * {

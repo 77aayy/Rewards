@@ -357,6 +357,11 @@ async function doAppInit() {
     }
     (async function () {
       try {
+        if (typeof initializeFirebase === 'function') initializeFirebase();
+        var waitStart = Date.now();
+        while (!(typeof window !== 'undefined' && window.storage) && (Date.now() - waitStart) < 8000) {
+          await new Promise(function (r) { setTimeout(r, 300); });
+        }
         var live = typeof fetchLivePeriodFromFirebase === 'function' ? await fetchLivePeriodFromFirebase() : null;
         if (!isEmployeeMode() && live && Array.isArray(live.db) && live.db.length > 0 && typeof applyLivePeriod === 'function') applyLivePeriod(live);
         loadDataFromStorage();
@@ -415,21 +420,6 @@ function doRbacThenInit() {
         await doAppInit();
         return;
       }
-      // قبول من الرابط أولاً: حتى يفتح الرابط عند الموظف دون انتظار Firebase (لا شاشة تحميل ولا اعتماد على الخادم)
-      if (role && token && period && typeof acceptAdminAccessFromUrl === 'function') {
-        try {
-          if (acceptAdminAccessFromUrl(role, token, period)) {
-            localStorage.setItem('adora_current_role', role);
-            localStorage.setItem('adora_current_token', token);
-            localStorage.setItem('adora_current_period', period);
-            if (typeof logAdminAction === 'function') {
-              logAdminAction(role, 'page_access', { period: period, fromUrlFallback: true, timestamp: new Date().toISOString() });
-            }
-            await doAppInit();
-            return;
-          }
-        } catch (e) { if (console && console.warn) console.warn(e); }
-      }
       var overlay = document.createElement('div');
       overlay.id = 'rbacVerifyOverlay';
       overlay.setAttribute('role', 'status');
@@ -445,16 +435,30 @@ function doRbacThenInit() {
         if (typeof window !== 'undefined' && window.storage) break;
         await new Promise(function(r) { setTimeout(r, 500); });
       }
-      for (var attempt = 0; attempt < 2 && !ok && (Date.now() - startTime) < maxWaitMs; attempt++) {
+      for (var attempt = 0; attempt < 3 && !ok && (Date.now() - startTime) < maxWaitMs; attempt++) {
         try {
           if (typeof tryValidateAdminAccessFromFirebase === 'function') ok = await tryValidateAdminAccessFromFirebase(role, token, period);
         } catch (e) { if (console && console.warn) console.warn(e); }
         if (ok) break;
-        if (attempt < 1) await new Promise(function(r) { setTimeout(r, 1500); });
+        if (attempt < 2) await new Promise(function(r) { setTimeout(r, 1500); });
       }
       var elOverlay = document.getElementById('rbacVerifyOverlay');
       if (elOverlay && elOverlay.parentNode) elOverlay.parentNode.removeChild(elOverlay);
       if (ok) { location.reload(); return; }
+      if (role && token && period && typeof acceptAdminAccessFromUrl === 'function') {
+        try {
+          if (acceptAdminAccessFromUrl(role, token, period)) {
+            localStorage.setItem('adora_current_role', role);
+            localStorage.setItem('adora_current_token', token);
+            localStorage.setItem('adora_current_period', period);
+            if (typeof logAdminAction === 'function') {
+              logAdminAction(role, 'page_access', { period: period, fromUrlFallback: true, timestamp: new Date().toISOString() });
+            }
+            await doAppInit();
+            return;
+          }
+        } catch (e) { if (console && console.warn) console.warn(e); }
+      }
       var reason = v.reason || 'الرابط غير صحيح أو الفترة مغلقة';
       if (reason === 'الفترة غير موجودة') {
         reason = 'تعذّر جلب بيانات الرابط من الخادم. تأكد أن الأدمن نسخ الرابط من «إدارة الإداريين» بعد رفع ملف الفترة، وأن اتصال الإنترنت يعمل.';
