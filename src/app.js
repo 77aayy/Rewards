@@ -882,7 +882,11 @@ localStorage.setItem('adora_rewards_periodText', periodText);
 // 2. Parse as RAW for reliable Data Processing (numbers as numbers)
 const rowsRaw = XLSX.utils.sheet_to_json(sheet, { header: 1, raw: true });
 processData(rowsRaw);
-showToast('✅ تم تحميل البيانات بنجاح');
+if (db.length > 0) {
+  showToast('✅ تم تحميل البيانات بنجاح');
+} else {
+  showToast('الرجاء رفع ملف تقرير إحصائيات الموظفين بصيغة اكسيل', 'error');
+}
 } catch (error) {
 console.error(error);
 showToast('❌ خطأ في قراءة الملف: ' + error.message, 'error');
@@ -7247,8 +7251,9 @@ function doSyncLivePeriodNow() {
   });
 }
 
-/** جلب دوري (كل 15 ثانية) لآخر وضع الفترة من Firebase وتحديث الواجهة إن وُجدت نسخة أحدث — بديل بسيط عن real-time listener لأن المشروع يستخدم Storage وليس Firestore. */
+/** جلب دوري لآخر وضع الفترة من Firebase وتحديث الواجهة — الأدمن كل 3 ثوانٍ (تحديث فوري بعد إرسال المشرف/HR)، وباقي الأدوار كل 15 ثانية. */
 const LIVE_POLL_INTERVAL_MS = 15000;
+const ADMIN_POLL_INTERVAL_MS = 3000;
 let livePollTimerId = null;
 
 function startLivePeriodPolling() {
@@ -7291,9 +7296,12 @@ function startLivePeriodPolling() {
         if (indicator) indicator.style.display = 'none';
       }
     })();
-    livePollTimerId = setTimeout(poll, LIVE_POLL_INTERVAL_MS);
+    var intervalMs = (typeof isAdminMode === 'function' && isAdminMode()) ? ADMIN_POLL_INTERVAL_MS : LIVE_POLL_INTERVAL_MS;
+    livePollTimerId = setTimeout(poll, intervalMs);
   }
-  livePollTimerId = setTimeout(poll, LIVE_POLL_INTERVAL_MS);
+  var isAdmin = typeof isAdminMode === 'function' && isAdminMode();
+  var firstDelay = isAdmin ? 0 : LIVE_POLL_INTERVAL_MS;
+  livePollTimerId = setTimeout(poll, firstDelay);
 }
 
 function stopLivePeriodPolling() {
@@ -7306,6 +7314,7 @@ function stopLivePeriodPolling() {
 if (typeof window !== 'undefined') {
   window.initializeFirebase = initializeFirebase;
   window.syncLivePeriodToFirebase = syncLivePeriodToFirebase;
+  window.doSyncLivePeriodNow = doSyncLivePeriodNow;
   window.fetchLivePeriodFromFirebase = fetchLivePeriodFromFirebase;
   window.applyLivePeriod = applyLivePeriod;
   window.startLivePeriodPolling = startLivePeriodPolling;

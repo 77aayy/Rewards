@@ -161,20 +161,38 @@ function initializeAdminTokensForPeriod() {
   }
 }
 
-// Show admin management modal
+// Show admin management modal — عند الفتح: تحديث فوري لـ Firebase (الفترة الحية + التوكنات) حتى يعرف أن هناك فترة مفتوحة وملف مُرفع فيسمح للإداريين برؤية خانات الإدخال
 function showAdminManagementModal() {
   const modal = document.getElementById('adminManagementModal');
   if (!modal) return;
-  
+
   if (typeof window.initializeFirebase === 'function') window.initializeFirebase();
   initializeAdminTokensForPeriod();
-  saveAdminTokens(); // يرفع الـ tokens إلى Firebase ليعمل الرابط على جهاز الإداري المستلم
-  setTimeout(saveAdminTokens, 2000);
-  setTimeout(saveAdminTokens, 5000);
-  populateAdminManagementModal();
-  
-  modal.classList.remove('hidden');
-  modal.style.display = 'flex';
+  saveAdminTokens();
+
+  (async function () {
+    try {
+      var hasData = false;
+      try {
+        var savedDb = localStorage.getItem('adora_rewards_db');
+        if (savedDb) {
+          var parsed = JSON.parse(savedDb);
+          hasData = Array.isArray(parsed) && parsed.length > 0;
+        }
+      } catch (_) {}
+      if (hasData && typeof window.doSyncLivePeriodNow === 'function') {
+        if (typeof showToast === 'function') showToast('جاري تحديث Firebase...', 'info');
+        await window.doSyncLivePeriodNow();
+        if (typeof showToast === 'function') showToast('تم تحديث البيانات النشطة — يمكنك نسخ الروابط للإداريين', 'success');
+      }
+    } catch (_) {}
+    saveAdminTokens();
+    setTimeout(saveAdminTokens, 2000);
+    setTimeout(saveAdminTokens, 5000);
+    populateAdminManagementModal();
+    modal.classList.remove('hidden');
+    modal.style.display = 'flex';
+  })();
 }
 
 // Close admin management modal
