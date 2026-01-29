@@ -229,13 +229,13 @@ function populateAdminManagementModal() {
             class="w-full px-3 py-2 rounded-lg text-sm text-white bg-white/10 border border-white/20 focus:outline-none focus:border-purple-400"
             onchange="updateAdminName('${role.key}', this.value)">
         </div>
-        <div class="mb-3">
+        <div class="mb-3 min-w-0">
           <label class="block text-sm font-bold text-gray-300 mb-1">الرابط:</label>
-          <div class="flex gap-2">
+          <div class="flex gap-2 items-stretch min-w-0">
             <input type="text" id="adminLink_${role.key}" value="${link.replace(/"/g, '&quot;')}" readonly
-              class="flex-1 px-3 py-2 rounded-lg text-xs text-gray-300 bg-white/5 border border-white/10">
+              class="flex-1 min-w-0 px-3 py-2 rounded-lg text-xs text-gray-300 bg-white/5 border border-white/10 truncate">
             <button onclick="copyAdminLink('${role.key}')" 
-              class="px-3 py-2 bg-purple-500/20 text-purple-400 rounded-lg hover:bg-purple-500/30 transition-colors text-sm font-bold">
+              class="flex-shrink-0 px-3 py-2 bg-purple-500/20 text-purple-400 rounded-lg hover:bg-purple-500/30 transition-colors text-sm font-bold whitespace-nowrap">
               📋 نسخ
             </button>
           </div>
