@@ -25,7 +25,7 @@
         rel="stylesheet">
 
     <!-- Custom Styles (v=dropdowns = نافذة الخصومات + قوائم منسدلة داكنة) -->
-    <link rel="stylesheet" href="src/styles.css?v=dropdowns">
+    <link rel="stylesheet" href="/src/styles.css?v=dropdowns">
 </head>
 
 <body class="p-2 sm:p-4 md:p-6">
@@ -38,7 +38,7 @@
             class="flex flex-col sm:flex-row justify-between items-start sm:items-center glass p-4 sm:p-6 md:p-8 rounded-2xl sm:rounded-[30px] md:rounded-[40px] no-print border-r-4 sm:border-r-6 md:border-r-8 border-turquoise animate-in gap-4 sm:gap-5">
             <div class="flex items-center gap-3 sm:gap-4 md:gap-5 w-full sm:w-auto">
                 <div class="flex-shrink-0">
-                    <img src="unnamed.png" alt="إليت" class="w-12 h-12 sm:w-16 sm:h-16 md:w-20 md:h-20 object-contain rounded-lg" style="max-width: 80px; max-height: 80px;" onerror="this.style.display='none'; this.nextElementSibling.style.display='block';">
+                    <img src="/unnamed.png" alt="إليت" class="w-12 h-12 sm:w-16 sm:h-16 md:w-20 md:h-20 object-contain rounded-lg" style="max-width: 80px; max-height: 80px;" onerror="this.style.display='none'; this.nextElementSibling.style.display='block';">
                     <div class="text-2xl sm:text-3xl md:text-4xl lg:text-5xl hidden" style="animation: pulse 2s infinite; font-size: clamp(1.5rem, 4vw, 3rem);">💎</div>
                 </div>
                 <div class="flex-1 min-w-0">
@@ -168,20 +168,6 @@
                     <div class="text-sm sm:text-base md:text-lg lg:text-xl font-black text-green-400 number-display" id="statTotal" style="font-size: clamp(0.75rem, 2.5vw, 1.25rem);">0</div>
                     <div class="text-[8px] sm:text-[9px] md:text-[10px] lg:text-xs text-gray-400 mt-0.5 sm:mt-1 font-semibold leading-tight" style="font-size: clamp(0.5rem, 1.5vw, 0.75rem);">إجمالي المستحقات</div>
                 </div>
-                <!-- New Bonus Cards -->
-                <div class="stats-card glass rounded-lg sm:rounded-xl md:rounded-2xl p-1.5 sm:p-2 md:p-3 text-center relative overflow-hidden flex flex-col justify-center min-h-0">
-                    <div class="absolute top-0 right-0 w-full h-0.5 sm:h-1 bg-gradient-to-r from-turquoise to-transparent"></div>
-                    <div class="text-[8px] sm:text-[9px] md:text-[10px] lg:text-xs text-turquoise mb-0.5 sm:mb-1 font-bold" style="font-size: clamp(0.5rem, 1.5vw, 0.75rem);">✨ حافز التفوق</div>
-                    <div class="text-[10px] sm:text-xs md:text-sm font-black text-white truncate px-0.5 sm:px-1" id="topExcellenceName" style="font-size: clamp(0.625rem, 1.8vw, 0.875rem);">-</div>
-                    <div class="text-[8px] sm:text-[9px] md:text-[10px] lg:text-xs text-gray-400 mt-0 number-display" id="topExcellenceValue" style="font-size: clamp(0.5rem, 1.5vw, 0.75rem);">0</div>
-                </div>
-                <div class="stats-card glass rounded-lg sm:rounded-xl md:rounded-2xl p-1.5 sm:p-2 md:p-3 text-center relative overflow-hidden flex flex-col justify-center min-h-0">
-                    <div class="absolute top-0 right-0 w-full h-0.5 sm:h-1 bg-gradient-to-r from-green-500 to-transparent"></div>
-                    <div class="text-[8px] sm:text-[9px] md:text-[10px] lg:text-xs text-green-400 mb-0.5 sm:mb-1 font-bold" style="font-size: clamp(0.5rem, 1.5vw, 0.75rem);">✓ حافز الأكثر التزاماً</div>
-                    <div class="text-[10px] sm:text-xs md:text-sm font-black text-white truncate px-0.5 sm:px-1" id="topCommitmentName" style="font-size: clamp(0.625rem, 1.8vw, 0.875rem);">-</div>
-                    <div class="text-[8px] sm:text-[9px] md:text-[10px] lg:text-xs text-gray-400 mt-0 number-display" id="topCommitmentValue" style="font-size: clamp(0.5rem, 1.5vw, 0.75rem);">0</div>
-                </div>
-
                 <!-- New Cards -->
                 <div class="stats-card glass rounded-lg sm:rounded-xl md:rounded-2xl p-1.5 sm:p-2 md:p-3 text-center relative overflow-hidden flex flex-col justify-center min-h-0">
                     <div class="absolute top-0 right-0 w-full h-0.5 sm:h-1 bg-gradient-to-r from-yellow-500 to-transparent"></div>
@@ -216,11 +202,11 @@
                         <thead
                             class="bg-gradient-to-r from-white/[0.08] to-white/[0.04] text-sm text-turquoise font-black border-b border-white/10 uppercase tracking-wider">
                             <tr>
-                                <th class="checkbox-col no-print w-12 p-4">
+                                <th class="checkbox-col no-print w-12 p-4 text-right">
                                     <input type="checkbox" id="selectAll" onclick="toggleAll(this)"
                                         class="cursor-pointer accent-turquoise checkbox-custom">
                                 </th>
-                                <th class="col-m p-4 text-center" style="min-width: 40px; width: 3%;">م</th>
+                                <th class="col-m p-4 text-right" style="min-width: 40px; width: 3%;">م</th>
                                 <th class="col-name p-4 text-right" style="min-width: 150px; width: 20%;">
                                     الموظف
                                 </th>
@@ -248,33 +234,26 @@
                         </thead>
                         <tbody id="mainTable" class="divide-y divide-white/10"></tbody>
                         <tfoot class="bg-gradient-to-r from-white/[0.08] to-white/[0.05] font-black border-t-2 border-white/20">
-                            <!-- Commitment Bonus Row -->
-                            <tr id="commitmentBonusRow" class="footer-row text-white border-b border-white/10" style="display: none !important;">
-                                <td class="checkbox-col no-print p-2"></td>
-                                <td class="col-m p-2"></td>
-                                <td class="col-name p-2 text-right text-sm font-black text-turquoise">
-                                    <div id="commitmentBonusText" class="flex flex-wrap items-center gap-2" style="direction: rtl; white-space: normal;">حافز التزام في الفرع</div>
+                            <!-- صف الحوافز: حافز التزام | حافز تفوق جنباً إلى جنب (بدون خلايا فارغة) -->
+                            <tr id="bonusesCombinedRow" class="footer-row text-white border-b border-white/10" style="display: none !important;">
+                                <td colspan="8" class="p-3 sm:p-4 text-right align-top">
+                                    <div class="flex flex-col sm:flex-row gap-4 sm:gap-6 flex-wrap" style="direction: rtl;">
+                                        <div id="commitmentBonusBlock" class="flex-1 min-w-0 rounded-xl bg-white/5 border border-turquoise/30 p-3">
+                                            <div class="text-turquoise font-bold text-sm sm:text-base mb-2">حافز التزام</div>
+                                            <div id="commitmentBonusText" class="flex flex-wrap gap-2 text-xs sm:text-sm" style="direction: rtl; white-space: normal;"></div>
+                                            <div id="commitmentBonusValue" class="text-turquoise font-bold mt-2 number-display text-sm">+0.00</div>
+                                        </div>
+                                        <div id="excellenceBonusBlock" class="flex-1 min-w-0 rounded-xl bg-white/5 border border-turquoise/30 p-3">
+                                            <div class="text-turquoise font-bold text-sm sm:text-base mb-2">حافز تفوق</div>
+                                            <div id="excellenceBonusText" class="flex flex-wrap gap-2 text-xs sm:text-sm" style="direction: rtl; white-space: normal;"></div>
+                                            <div id="excellenceBonusValue" class="text-turquoise font-bold mt-2 number-display text-sm">+0.00</div>
+                                        </div>
+                                    </div>
                                 </td>
-                                <td class="col-count p-2"></td>
-                                <td class="col-attendance p-2"></td>
-                                <td class="col-rate p-2"></td>
-                                <td class="p-2 border-x border-white/10"></td>
-                                <td class="col-fund p-2 border-x border-white/10"></td>
-                                <td id="commitmentBonusValue" class="col-net p-2 text-left px-8 text-turquoise font-bold text-base number-display">+50.00</td>
-                            </tr>
-                            <!-- Excellence Bonus Row -->
-                            <tr id="excellenceBonusRow" class="footer-row text-white border-b border-white/10" style="display: none !important;">
-                                <td class="checkbox-col no-print p-2"></td>
-                                <td class="col-m p-2"></td>
-                                <td class="col-name p-2 text-right text-sm font-black text-turquoise">
-                                    <div id="excellenceBonusText" class="flex flex-wrap items-center gap-2" style="direction: rtl; white-space: normal;">حافز تفوق في الفرع</div>
+                                <td class="col-net p-2 align-top w-0 whitespace-nowrap text-left text-turquoise font-bold text-sm number-display" style="vertical-align: top;">
+                                    <span id="bonusesCombinedValueLabel" class="text-gray-400 text-xs block">الحوافز</span>
+                                    <span id="bonusesCombinedValue">+0.00</span>
                                 </td>
-                                <td class="col-count p-2"></td>
-                                <td class="col-attendance p-2"></td>
-                                <td class="col-rate p-2"></td>
-                                <td class="p-2 border-x border-white/10"></td>
-                                <td class="col-fund p-2 border-x border-white/10"></td>
-                                <td id="excellenceBonusValue" class="col-net p-2 text-left px-8 text-turquoise font-bold text-base number-display">+50.00</td>
                             </tr>
                             <!-- Counts Row - Hidden -->
                             <tr class="footer-row text-white border-b border-white/10" style="display: none;">
@@ -305,7 +284,7 @@
                                 <td id="footNetNoEval" class="col-net p-2 text-left px-8 text-gray-400 number-display font-bold">-</td>
                             </tr>
                             <!-- Values Row - إجمالي (عمال + موظفين) -->
-                            <tr class="footer-row text-white">
+                            <tr id="footerRowTotal" class="footer-row text-white">
                                 <td class="checkbox-col no-print p-2"></td>
                                 <td class="col-m p-2"></td>
                                 <td class="col-name p-2 text-right text-lg font-black total-label whitespace-nowrap">
@@ -319,7 +298,7 @@
                                 <td id="footNet" class="col-net p-2 text-left text-xl bg-gradient-to-l from-turquoise/20 to-transparent text-turquoise px-8 font-black total-val-net number-display">0</td>
                             </tr>
                             <!-- Total Team Row - إجمالي النهائي لكل فريق العمل -->
-                            <tr class="footer-row text-white border-t-2 border-white/30">
+                            <tr id="footerRowFinalTotal" class="footer-row text-white border-t-2 border-white/30">
                                 <td class="checkbox-col no-print p-2"></td>
                                 <td class="col-m p-2"></td>
                                 <td class="col-name p-2 text-right text-lg font-black total-label">
@@ -409,10 +388,10 @@
         </div>
 
         <!-- Reports Page -->
-        <div id="reportsPage" class="hidden space-y-6 relative" style="z-index: 1;">
-            <div class="glass p-6 rounded-2xl border border-turquoise/30">
-                <div class="flex items-center justify-between mb-6">
-                    <h2 class="text-2xl font-black text-turquoise flex items-center gap-2">
+        <div id="reportsPage" class="hidden space-y-4 sm:space-y-6 relative w-full overflow-x-hidden" style="z-index: 1;">
+            <div class="glass p-4 sm:p-6 rounded-xl sm:rounded-2xl border border-turquoise/30 w-full min-w-0">
+                <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 mb-4 sm:mb-6">
+                    <h2 class="text-xl sm:text-2xl font-black text-turquoise flex items-center gap-2" style="font-size: clamp(1.125rem, 4vw, 1.5rem);">
                         <span>📊</span>
                         <span>تقارير الموظفين</span>
                     </h2>
@@ -430,15 +409,15 @@
                     </div>
                 </div>
                 
-                <!-- Tabs -->
-                <div class="flex gap-2 mb-6 border-b border-white/10">
-                    <button onclick="switchReportsTab('current')" id="reportsTabCurrent" class="px-4 py-2 text-sm font-bold text-turquoise border-b-2 border-turquoise transition-colors">
+                <!-- Tabs: تمرير أفقي على الجوال -->
+                <div class="flex gap-1 sm:gap-2 mb-4 sm:mb-6 border-b border-white/10 overflow-x-auto -webkit-overflow-scrolling-touch scrollbar-hide" style="scrollbar-width: none;">
+                    <button onclick="switchReportsTab('current')" id="reportsTabCurrent" class="flex-shrink-0 px-3 sm:px-4 py-2 text-xs sm:text-sm font-bold text-turquoise border-b-2 border-turquoise transition-colors min-h-[44px]">
                         التقارير الحالية
                     </button>
-                    <button onclick="switchReportsTab('archived')" id="reportsTabArchived" class="px-4 py-2 text-sm font-bold text-gray-400 border-b-2 border-transparent hover:text-white transition-colors">
+                    <button onclick="switchReportsTab('archived')" id="reportsTabArchived" class="flex-shrink-0 px-3 sm:px-4 py-2 text-xs sm:text-sm font-bold text-gray-400 border-b-2 border-transparent hover:text-white transition-colors min-h-[44px]">
                         الفترات المغلقة
                     </button>
-                    <button onclick="switchReportsTab('statistics')" id="reportsTabStatistics" class="px-4 py-2 text-sm font-bold text-gray-400 border-b-2 border-transparent hover:text-white transition-colors">
+                    <button onclick="switchReportsTab('statistics')" id="reportsTabStatistics" class="flex-shrink-0 px-3 sm:px-4 py-2 text-xs sm:text-sm font-bold text-gray-400 border-b-2 border-transparent hover:text-white transition-colors min-h-[44px]">
                         الإحصائيات
                     </button>
                 </div>
@@ -452,7 +431,7 @@
                         style="background: rgba(255, 255, 255, 0.1); border: 1px solid rgba(255, 255, 255, 0.2);" 
                         onfocus="this.style.borderColor='rgba(64, 224, 208, 0.6)'; this.style.background='rgba(255, 255, 255, 0.15)';" 
                         onblur="this.style.borderColor='rgba(255, 255, 255, 0.2)'; this.style.background='rgba(255, 255, 255, 0.1)';" 
-                        onkeyup="filterReportsEmployees(this.value)">
+                        onkeyup="scheduleReportsFilter(this)">
                     
                     <!-- Branch Filter -->
                     <div class="flex flex-wrap gap-2">
@@ -497,16 +476,36 @@
 
                 <!-- Statistics Content (شقيق للتقارير الحالية والفترات المغلقة — كان داخل archived فكان يُخفى معها) -->
                 <div id="statisticsReportsContent" class="hidden">
+                    <!-- بانر عرض فترة أرشيف (يُظهر عند الضغط على أيقونة العين في فترة سابقة، ويُخفى عند الرجوع) -->
+                    <div id="archivedViewOnlyBanner" class="hidden mb-6 glass p-4 rounded-xl border border-amber-500/40 bg-amber-500/10">
+                        <div class="flex flex-wrap items-center justify-between gap-3">
+                            <div class="flex items-center gap-2 flex-wrap">
+                                <span class="text-lg" aria-hidden="true">👁</span>
+                                <span class="text-amber-200 font-bold">عرض فترة أرشيف (عرض فقط)</span>
+                                <span id="archivedViewOnlyPeriodText" class="text-white font-medium">—</span>
+                                <span id="archivedViewOnlyClosedAt" class="text-sm text-gray-400">—</span>
+                            </div>
+                            <button type="button" onclick="closeArchivedPeriodView()" class="px-4 py-2 rounded-lg text-sm font-bold bg-white/20 text-white border border-white/30 hover:bg-white/30 transition-colors min-h-[44px] flex items-center gap-2">
+                                <span>←</span>
+                                <span>رجوع للفترة الحالية</span>
+                            </button>
+                        </div>
+                    </div>
                     <div class="mb-8">
                         <h3 class="text-xl font-black text-turquoise mb-4 flex items-center gap-2">
                             <span>📊</span>
-                            <span>إحصائيات الفترة الحالية</span>
+                            <span id="statisticsSectionTitle">إحصائيات الفترة الحالية</span>
                         </h3>
                         <div id="currentPeriodStats" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6 gap-4 mb-6">
                             <!-- Stats cards will be populated here -->
                         </div>
-                        <div class="glass p-4 rounded-xl border border-turquoise/30 mt-6">
-                            <h4 class="text-lg font-bold text-white mb-4">جدول تقييم الموظفين</h4>
+                        <div class="glass p-4 rounded-xl border border-turquoise/30 mt-6 relative overflow-visible">
+                            <h4 class="text-lg font-bold text-white mb-4 flex items-center gap-2 flex-wrap">
+                                <span>جدول تقييم الموظفين</span>
+                                <button type="button" id="ratingExplanationBtn" onclick="showRatingExplanationModal()" class="rating-explanation-btn inline-flex items-center justify-center w-10 h-10 rounded-full bg-turquoise/25 border-2 border-turquoise/60 text-turquoise hover:bg-turquoise/40 hover:border-turquoise hover:scale-110 transition-all duration-300 shadow-[0_0_20px_rgba(64,224,208,0.4)]" title="كيفية حساب التقييم">
+                                    <span class="text-base font-black" aria-hidden="true">ⓘ</span>
+                                </button>
+                            </h4>
                             <div class="overflow-x-auto">
                                 <table id="employeePerformanceTable" class="w-full text-sm">
                                     <thead>
@@ -540,6 +539,12 @@
             </div>
         </div>
         
+        <!-- مؤشر مزامنة الفترة الحية (يظهر أثناء جلب البيانات من Firebase) -->
+        <div id="liveSyncIndicator" class="live-sync-indicator no-print" aria-hidden="true" style="display: none;">
+            <span class="live-sync-spinner" aria-hidden="true"></span>
+            <span class="live-sync-label">جاري التحديث...</span>
+        </div>
+
         <!-- Developer Signature -->
         <footer class="mt-12 mb-2 text-center">
             <p class="text-[9px] text-gray-400/50 font-extralight tracking-wider no-print">
@@ -557,16 +562,9 @@
         </footer>
     </div>
 
-    <!-- Approval Stamp (Print Only) -->
-    <div class="approval-stamp">
-        <span class="checkmark">✓</span>
-        <div class="department">إدارة التشغيل</div>
-        <div class="approved">معتمد</div>
-    </div>
-
     <!-- Conditions Modal (Moved outside container to fix z-index issue) -->
-    <div id="conditionsModal" class="fixed inset-0 z-[999] hidden items-center justify-center bg-black/60 backdrop-blur-sm" onclick="closeConditionsModal(event)" style="z-index: 999 !important;">
-        <div class="glass rounded-2xl p-4 sm:p-6 md:p-8 max-w-2xl w-full mx-2 sm:mx-4 max-h-[95vh] sm:max-h-[90vh] overflow-y-auto" onclick="event.stopPropagation()" style="background: linear-gradient(135deg, rgba(15, 23, 41, 0.95) 0%, rgba(26, 31, 53, 0.95) 100%); border: 1px solid rgba(64, 224, 208, 0.3);">
+    <div id="conditionsModal" class="fixed inset-0 z-[999] hidden flex items-center justify-center bg-black/60 backdrop-blur-sm p-2 sm:p-4" onclick="closeConditionsModal(event)" style="z-index: 999 !important;">
+        <div class="glass rounded-xl sm:rounded-2xl p-4 sm:p-6 md:p-8 max-w-2xl w-full max-h-[95vh] sm:max-h-[90vh] overflow-y-auto min-w-0" onclick="event.stopPropagation()" style="background: linear-gradient(135deg, rgba(15, 23, 41, 0.95) 0%, rgba(26, 31, 53, 0.95) 100%); border: 1px solid rgba(64, 224, 208, 0.3);">
             <div class="flex items-center justify-between mb-4 sm:mb-6">
                 <h2 class="text-lg sm:text-xl md:text-2xl font-black text-turquoise flex items-center gap-2">
                     <span>📋</span>
@@ -700,9 +698,105 @@
         </div>
     </div>
 
+    <!-- نافذة كيفية حساب التقييم (تظهر من صفحة الإحصائيات فقط) -->
+    <div id="ratingExplanationModal" class="fixed inset-0 z-[999] hidden flex items-center justify-center bg-black/60 backdrop-blur-sm p-2 sm:p-4" onclick="closeRatingExplanationModal(event)" style="z-index: 999 !important;">
+        <div class="glass rounded-xl sm:rounded-2xl p-4 sm:p-6 md:p-8 max-w-2xl w-full max-h-[95vh] sm:max-h-[90vh] overflow-y-auto min-w-0" onclick="event.stopPropagation()" style="background: linear-gradient(135deg, rgba(15, 23, 41, 0.95) 0%, rgba(26, 31, 53, 0.95) 100%); border: 1px solid rgba(64, 224, 208, 0.3);">
+            <div class="flex items-center justify-between mb-4 sm:mb-6">
+                <h2 class="text-lg sm:text-xl md:text-2xl font-black text-turquoise flex items-center gap-2">
+                    <span>📊</span>
+                    <span>كيفية حساب التقييم</span>
+                </h2>
+                <button type="button" onclick="closeRatingExplanationModal()" class="text-gray-400 hover:text-white transition-colors text-2xl font-bold min-w-[44px] min-h-[44px] flex items-center justify-center rounded-lg hover:bg-white/10">&times;</button>
+            </div>
+            <div class="space-y-4 text-sm text-gray-300">
+                <p class="text-gray-200 font-medium leading-relaxed">
+                    التقييم المعروض في جدول «تقييم الموظفين» يُحسب تلقائياً بناءً على أدائك مقارنةً بباقي الموظفين، مع مراعاة الحضور والالتزام. فيما يلي الشرح بشكل واضح:
+                </p>
+
+                <div class="bg-turquoise/10 rounded-xl p-4 border border-turquoise/30">
+                    <h3 class="text-base font-bold text-turquoise mb-3 flex items-center gap-2">
+                        <span>1.</span>
+                        <span>ما الذي يُؤخذ في الاعتبار؟</span>
+                    </h3>
+                    <ul class="space-y-2 list-none">
+                        <li class="flex items-start gap-2">
+                            <span class="text-turquoise font-bold mt-0.5">•</span>
+                            <span><strong class="text-white">عدد الحجوزات:</strong> كلما كان عدد حجوزاتك أقرب إلى أعلى موظف في الفريق، زادت نقاطك في هذا الجزء.</span>
+                        </li>
+                        <li class="flex items-start gap-2">
+                            <span class="text-turquoise font-bold mt-0.5">•</span>
+                            <span><strong class="text-white">التقييمات (Booking و Google):</strong> كلما كان إجمالي تقييماتك أقرب إلى أعلى موظف، زادت نقاطك.</span>
+                        </li>
+                        <li class="flex items-start gap-2">
+                            <span class="text-turquoise font-bold mt-0.5">•</span>
+                            <span><strong class="text-white">الحضور 26 يوم وأكثر:</strong> إذا أتممت 26 يوماً وأكثر من العطاء (بطل تحدي الظروف)، يُضاف لك <strong class="text-green-400">+0.15</strong> على النتيجة النهائية كمكافأة التزام.</span>
+                        </li>
+                        <li class="flex items-start gap-2">
+                            <span class="text-red-400 font-bold mt-0.5">•</span>
+                            <span><strong class="text-white">الخصم الإداري:</strong> إذا كان عليك خصم إداري بأي قيمة، يتم <strong class="text-red-400">تخفيض التقييم بمقدار 0.25</strong> ليعكس تأثير التقصير على الأداء.</span>
+                        </li>
+                    </ul>
+                </div>
+
+                <div class="bg-white/5 rounded-xl p-4 border border-white/10">
+                    <h3 class="text-base font-bold text-turquoise mb-3 flex items-center gap-2">
+                        <span>2.</span>
+                        <span>كيف تُترجم النتيجة إلى نقاط ومستوى؟</span>
+                    </h3>
+                    <p class="text-gray-200 mb-3 leading-relaxed">
+                        النتيجة النهائية (بعد الحضور والخصم) تُحوَّل إلى <strong class="text-white">نقاط من 0 إلى 100</strong>. ثم يُحدَّد المستوى حسب الجدول التالي:
+                    </p>
+                    <ul class="space-y-2 list-none">
+                        <li class="flex items-start gap-2">
+                            <span class="text-green-400 font-bold">•</span>
+                            <span><strong class="text-green-400">ممتاز:</strong> من 90 إلى 100 نقطة.</span>
+                        </li>
+                        <li class="flex items-start gap-2">
+                            <span class="text-green-300 font-bold">•</span>
+                            <span><strong class="text-green-300">جيد:</strong> من 80 إلى أقل من 90 نقطة.</span>
+                        </li>
+                        <li class="flex items-start gap-2">
+                            <span class="text-yellow-400 font-bold">•</span>
+                            <span><strong class="text-yellow-400">متوسط:</strong> من 60 إلى أقل من 80 نقطة.</span>
+                        </li>
+                        <li class="flex items-start gap-2">
+                            <span class="text-orange-400 font-bold">•</span>
+                            <span><strong class="text-orange-400">ضعيف:</strong> من 40 إلى أقل من 60 نقطة.</span>
+                        </li>
+                        <li class="flex items-start gap-2">
+                            <span class="text-red-400 font-bold">•</span>
+                            <span><strong class="text-red-400">سيء:</strong> أقل من 40 نقطة.</span>
+                        </li>
+                    </ul>
+                </div>
+
+                <div class="bg-white/5 rounded-xl p-4 border border-white/10">
+                    <p class="text-gray-200 leading-relaxed">
+                        <strong class="text-turquoise">ملاحظة:</strong> التقييم المعروض <strong class="text-white">متراكم</strong> ويعكس صورة أدائك مع مرور الوقت. تُؤخذ هذه النتائج بعين الاعتبار عند نظر الإدارة في قرارات مثل زيادة الراتب والمميزات مستقبلاً. <span class="text-turquoise/90 font-medium">حافظ على تقييمك المتراكم لتعزّز فرصك في الزيادات والمكافآت.</span>
+                    </p>
+                </div>
+
+                <div class="bg-turquoise/5 rounded-xl p-4 border border-turquoise/20">
+                    <h3 class="text-base font-bold text-turquoise mb-2 flex items-center gap-2">
+                        <span>3.</span>
+                        <span>ملخص سريع</span>
+                    </h3>
+                    <p class="text-gray-200 leading-relaxed">
+                        التقييم يُبنى على <strong class="text-white">أداء الحجوزات والتقييمات بالنسبة لباقي الموظفين</strong>، مع <strong class="text-green-400">مكافأة للحضور 26 يوم وأكثر</strong>، و<strong class="text-red-400">تخفيض عند وجود خصم إداري</strong>. النتيجة تُعرض كنقاط (0–100) ومستوى (ممتاز → جيد → متوسط → ضعيف → سيء). كلما كنت أقرب للأعلى في الحجوزات والتقييمات وملتزماً بالحضور (وبلا خصم)، ارتفعت نقاطك إلى «ممتاز».
+                    </p>
+                </div>
+            </div>
+            <div class="mt-4 sm:mt-6 flex justify-end">
+                <button type="button" onclick="closeRatingExplanationModal()" class="glass px-4 sm:px-6 py-2.5 sm:py-2 rounded-lg text-sm font-bold text-gray-300 hover:bg-white/10 transition-colors min-h-[44px]">
+                    إغلاق
+                </button>
+            </div>
+        </div>
+    </div>
+
     <!-- نافذة لائحة التعليمات -->
-    <div id="instructionsModal" class="fixed inset-0 z-[1001] hidden items-center justify-center bg-black/70 backdrop-blur-sm" onclick="closeInstructionsModal(event)" style="z-index: 1001 !important;">
-        <div class="glass rounded-2xl p-4 sm:p-6 md:p-8 max-w-3xl w-full mx-2 sm:mx-4 max-h-[95vh] sm:max-h-[90vh] overflow-hidden flex flex-col" onclick="event.stopPropagation()" style="background: linear-gradient(135deg, rgba(15, 23, 41, 0.98) 0%, rgba(26, 31, 53, 0.98) 100%); border: 1px solid rgba(64, 224, 208, 0.3);">
+    <div id="instructionsModal" class="fixed inset-0 z-[1001] hidden flex items-center justify-center bg-black/70 backdrop-blur-sm p-2 sm:p-4" onclick="closeInstructionsModal(event)" style="z-index: 1001 !important;">
+        <div class="glass rounded-xl sm:rounded-2xl p-4 sm:p-6 md:p-8 max-w-3xl w-full max-h-[95vh] sm:max-h-[90vh] overflow-hidden flex flex-col min-w-0" onclick="event.stopPropagation()" style="background: linear-gradient(135deg, rgba(15, 23, 41, 0.98) 0%, rgba(26, 31, 53, 0.98) 100%); border: 1px solid rgba(64, 224, 208, 0.3);">
             <div class="flex items-center justify-between mb-4 flex-shrink-0">
                 <h2 class="text-lg sm:text-xl font-black text-turquoise flex items-center gap-2">
                     <span>📜</span>
@@ -726,8 +820,8 @@
     </div>
 
     <!-- Employee Report Modal (Moved outside container to fix z-index issue) -->
-    <div id="employeeReportModal" class="fixed inset-0 z-[1000] hidden items-center justify-center" onclick="closeEmployeeReportModal(event)" style="background: rgba(0, 0, 0, 0.85); backdrop-filter: blur(8px); z-index: 1000 !important;">
-        <div class="rounded-2xl p-6 sm:p-8 max-w-4xl w-full mx-4 max-h-[90vh] overflow-y-auto" onclick="event.stopPropagation()" style="background: linear-gradient(135deg, rgba(15, 23, 41, 1) 0%, rgba(26, 31, 53, 1) 100%); border: 2px solid rgba(64, 224, 208, 0.6); box-shadow: 0 25px 70px rgba(0, 0, 0, 0.9), 0 0 50px rgba(64, 224, 208, 0.4);">
+    <div id="employeeReportModal" class="fixed inset-0 z-[1000] hidden flex items-center justify-center p-2 sm:p-4" onclick="closeEmployeeReportModal(event)" style="background: rgba(0, 0, 0, 0.85); backdrop-filter: blur(8px); z-index: 1000 !important;">
+        <div class="rounded-xl sm:rounded-2xl p-4 sm:p-6 md:p-8 max-w-4xl w-full max-h-[90vh] overflow-y-auto min-w-0" onclick="event.stopPropagation()" style="background: linear-gradient(135deg, rgba(15, 23, 41, 1) 0%, rgba(26, 31, 53, 1) 100%); border: 2px solid rgba(64, 224, 208, 0.6); box-shadow: 0 25px 70px rgba(0, 0, 0, 0.9), 0 0 50px rgba(64, 224, 208, 0.4);">
             <div class="flex items-center justify-between mb-6">
                 <h2 class="text-2xl font-black text-turquoise flex items-center gap-2">
                     <span>📊</span>
@@ -743,6 +837,10 @@
                     <span>🖨️</span>
                     <span>طباعة التقرير</span>
                 </button>
+                <button onclick="event.stopPropagation(); openProgressReportPage();" class="glass px-4 sm:px-6 py-2.5 sm:py-2 rounded-lg text-sm font-bold text-white hover:bg-white/10 transition-colors flex items-center justify-center gap-2 min-h-[44px]">
+                    <span>📈</span>
+                    <span>قياس مستوي التقدم</span>
+                </button>
                 <button onclick="event.stopPropagation(); closeEmployeeReportModal();" class="glass px-4 sm:px-6 py-2.5 sm:py-2 rounded-lg text-sm font-bold text-gray-300 hover:bg-white/10 transition-colors min-h-[44px]">
                     إغلاق
                 </button>
@@ -751,8 +849,8 @@
     </div>
 
     <!-- Close Period Modal -->
-    <div id="closePeriodModal" class="fixed inset-0 z-[1001] hidden items-center justify-center bg-black/70 backdrop-blur-sm" onclick="closeClosePeriodModal(event)" style="z-index: 1001 !important;">
-        <div class="glass rounded-2xl p-4 sm:p-6 md:p-8 max-w-md w-full mx-2 sm:mx-4 max-h-[95vh] overflow-y-auto" onclick="event.stopPropagation()" style="background: linear-gradient(135deg, rgba(15, 23, 41, 0.95) 0%, rgba(26, 31, 53, 0.95) 100%); border: 2px solid rgba(239, 68, 68, 0.5);">
+    <div id="closePeriodModal" class="fixed inset-0 z-[1001] hidden flex items-center justify-center bg-black/70 backdrop-blur-sm p-2 sm:p-4" onclick="closeClosePeriodModal(event)" style="z-index: 1001 !important;">
+        <div class="glass rounded-xl sm:rounded-2xl p-4 sm:p-6 md:p-8 max-w-md w-full max-h-[95vh] overflow-y-auto min-w-0" onclick="event.stopPropagation()" style="background: linear-gradient(135deg, rgba(15, 23, 41, 0.95) 0%, rgba(26, 31, 53, 0.95) 100%); border: 2px solid rgba(239, 68, 68, 0.5);">
             <div class="flex items-center justify-between mb-4 sm:mb-6">
                 <h2 class="text-lg sm:text-xl md:text-2xl font-black text-red-400 flex items-center gap-2">
                     <span>🔒</span>
@@ -788,7 +886,7 @@
     </div>
 
     <!-- Employee Codes Modal -->
-    <div id="employeeCodesModal" class="fixed inset-0 z-[1002] hidden items-center justify-center bg-black/70 backdrop-blur-sm" onclick="closeEmployeeCodesModal(event)" style="z-index: 1002 !important;">
+    <div id="employeeCodesModal" class="fixed inset-0 z-[1002] hidden flex items-center justify-center bg-black/70 backdrop-blur-sm p-2 sm:p-4" onclick="closeEmployeeCodesModal(event)" style="z-index: 1002 !important;">
         <div class="glass rounded-2xl p-4 sm:p-6 md:p-8 max-w-4xl w-full mx-2 sm:mx-4 max-h-[95vh] overflow-y-auto" onclick="event.stopPropagation()" style="background: linear-gradient(135deg, rgba(15, 23, 41, 0.95) 0%, rgba(26, 31, 53, 0.95) 100%); border: 2px solid rgba(64, 224, 208, 0.5);">
             <div class="flex items-center justify-between mb-4 sm:mb-6">
                 <h2 class="text-lg sm:text-xl md:text-2xl font-black text-turquoise flex items-center gap-2">
@@ -829,7 +927,7 @@
     </div>
 
     <!-- Admin Management Modal -->
-    <div id="adminManagementModal" class="fixed inset-0 z-[1004] hidden items-center justify-center bg-black/70 backdrop-blur-sm" onclick="closeAdminManagementModal(event)" style="z-index: 1004 !important;">
+    <div id="adminManagementModal" class="fixed inset-0 z-[1004] hidden flex items-center justify-center bg-black/70 backdrop-blur-sm p-2 sm:p-4" onclick="closeAdminManagementModal(event)" style="z-index: 1004 !important;">
         <div class="glass rounded-2xl p-4 sm:p-6 md:p-8 max-w-5xl w-full mx-2 sm:mx-4 max-h-[95vh] overflow-y-auto" onclick="event.stopPropagation()" style="background: linear-gradient(135deg, rgba(15, 23, 41, 0.95) 0%, rgba(26, 31, 53, 0.95) 100%); border: 2px solid rgba(168, 85, 247, 0.5);">
             <div class="flex items-center justify-between mb-4 sm:mb-6">
                 <h2 class="text-lg sm:text-xl md:text-2xl font-black text-purple-400 flex items-center gap-2">
@@ -850,7 +948,7 @@
     </div>
 
     <!-- Discounts Modal -->
-    <div id="discountsModal" class="fixed inset-0 z-[1003] hidden items-center justify-center bg-black/70 backdrop-blur-sm" onclick="closeDiscountsModal(event)" style="z-index: 1003 !important;">
+    <div id="discountsModal" class="fixed inset-0 z-[1003] hidden flex items-center justify-center bg-black/70 backdrop-blur-sm p-2 sm:p-4" onclick="closeDiscountsModal(event)" style="z-index: 1003 !important;">
         <div class="glass rounded-xl sm:rounded-2xl p-4 sm:p-5 md:p-6 max-w-3xl w-full mx-2 sm:mx-4 max-h-[90vh] overflow-y-auto" onclick="event.stopPropagation()" style="background: linear-gradient(135deg, rgba(15, 23, 41, 0.98) 0%, rgba(26, 31, 53, 0.98) 100%); border: 2px solid rgba(239, 68, 68, 0.4); box-shadow: 0 20px 60px rgba(239, 68, 68, 0.2);">
             <!-- Header -->
             <div class="flex items-center justify-between mb-5 pb-3 border-b border-white/10">
@@ -971,7 +1069,7 @@
     </div>
 
     <!-- Manage Discount Types Modal -->
-    <div id="manageDiscountTypesModal" class="fixed inset-0 z-[1004] hidden items-center justify-center bg-black/70 backdrop-blur-sm" onclick="closeManageDiscountTypesModal(event)" style="z-index: 1004 !important;">
+    <div id="manageDiscountTypesModal" class="fixed inset-0 z-[1004] hidden flex items-center justify-center bg-black/70 backdrop-blur-sm p-2 sm:p-4" onclick="closeManageDiscountTypesModal(event)" style="z-index: 1004 !important;">
         <div class="glass rounded-xl sm:rounded-2xl p-4 sm:p-5 md:p-6 max-w-2xl w-full mx-2 sm:mx-4 max-h-[90vh] overflow-y-auto" onclick="event.stopPropagation()" style="background: linear-gradient(135deg, rgba(15, 23, 41, 0.98) 0%, rgba(26, 31, 53, 0.98) 100%); border: 2px solid rgba(239, 68, 68, 0.4); box-shadow: 0 20px 60px rgba(239, 68, 68, 0.2);">
             <!-- Header -->
             <div class="flex items-center justify-between mb-4 sm:mb-5 pb-3 border-b border-white/10">
@@ -1017,11 +1115,24 @@
         </div>
     </div>
 
+    <!-- تقليل ضجيج console في الإنتاج (إبقاء console.error للأخطاء الحقيقية) -->
+    <script>
+      (function() {
+        if (typeof window === 'undefined') return;
+        var h = window.location.hostname || '';
+        if (h === 'localhost' || h === '127.0.0.1' || h === '') return;
+        var noop = function() {};
+        if (typeof console !== 'undefined') {
+          if (console.log) console.log = noop;
+          if (console.warn) console.warn = noop;
+        }
+      })();
+    </script>
     <!-- البنود الـ 55 للتعليمات/أنواع الخصم (قبل أي سكربت يحتاجها) -->
-    <script src="src/discount-clauses-55.js"></script>
+    <script src="/src/discount-clauses-55.js"></script>
     <!-- JavaScript: app-extensions أولاً لأن app.js يتحقق من الرابط (role/token/period) ويحتاج loadAdminTokens و validateAdminAccess -->
-    <script src="src/app-extensions.js?v=tab"></script>
-    <script src="src/app.js?v=tab"></script>
+    <script src="/src/app-extensions.js?v=path-redirect"></script>
+    <script src="/src/app.js?v=path-redirect"></script>
 </body>
 
 </html>

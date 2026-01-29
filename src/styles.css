@@ -5,6 +5,52 @@
 --dark-card: #0f1729;
 --glow-turquoise: rgba(64, 224, 208, 0.4);
 }
+/* ========== Mobile First: عرض الجوال أولاً، تنكمش وتتمدد حسب الشاشة ========== */
+html {
+overflow-x: hidden;
+-webkit-text-size-adjust: 100%;
+}
+body {
+width: 100%;
+min-width: 0;
+max-width: 100vw;
+}
+/* الحاوية الرئيسية: تتكيف مع العرض — على الشاشات الكبيرة تتمدد لاستغلال المساحة */
+.max-w-full.sm\:max-w-7xl.mx-auto,
+[class*="max-w-full"][class*="mx-auto"] {
+width: 100%;
+min-width: 0;
+max-width: min(100%, 80rem);
+padding-left: clamp(0.5rem, 2vw, 1.5rem);
+padding-right: clamp(0.5rem, 2vw, 1.5rem);
+}
+@media (min-width: 1400px) {
+.max-w-full.sm\:max-w-7xl.mx-auto,
+[class*="max-w-full"][class*="mx-auto"] {
+max-width: min(94%, 100rem);
+}
+}
+/* النوافذ المنبثقة: عند الإظهار تكون flex وتتقلص مع الشاشة */
+[id$="Modal"].fixed.inset-0 {
+display: none;
+align-items: center;
+justify-content: center;
+padding: clamp(0.5rem, 2vw, 1rem);
+}
+[id$="Modal"].fixed.inset-0:not(.hidden) {
+display: flex !important;
+}
+[id$="Modal"] .glass.rounded-2xl,
+[id$="Modal"] [class*="max-w-"] {
+width: 100%;
+min-width: 0;
+max-width: min(100%, 42rem);
+margin-left: auto;
+margin-right: auto;
+}
+[id="conditionsModal"] [class*="max-w-2xl"] { max-width: min(100%, 42rem); }
+[id="instructionsModal"] [class*="max-w-3xl"] { max-width: min(100%, 48rem); }
+[id="employeeReportModal"] [class*="max-w-4xl"] { max-width: min(100%, 56rem); }
 /* Hide fund column (العمال) in table body - value is shown in footer */
 tbody .col-fund,
 thead .col-fund {
@@ -93,12 +139,52 @@ margin-top: 1rem;
 .space-y-6 > * + * {
 margin-top: 1.25rem;
 }
-/* Reports page on mobile */
+/* Reports page: جوال أولاً وتكيف مع العرض */
 #reportsPage {
-padding: 1rem !important;
+padding: clamp(0.75rem, 3vw, 1.5rem) !important;
+width: 100%;
+min-width: 0;
 }
 #reportsPage .glass {
-padding: 1rem !important;
+padding: clamp(0.75rem, 3vw, 1.5rem) !important;
+width: 100%;
+min-width: 0;
+}
+#reportsPage .flex.items-center.justify-between {
+flex-wrap: wrap;
+gap: clamp(0.5rem, 2vw, 1rem);
+}
+#reportsPage .flex.gap-2.mb-6.border-b {
+overflow-x: auto;
+-webkit-overflow-scrolling: touch;
+flex-wrap: nowrap;
+gap: 0.25rem;
+padding-bottom: 2px;
+margin-bottom: clamp(1rem, 4vw, 1.5rem);
+}
+#reportsPage .flex.gap-2.mb-6.border-b button {
+flex-shrink: 0;
+padding: clamp(0.5rem, 2vw, 0.75rem) clamp(0.75rem, 2.5vw, 1rem);
+font-size: clamp(0.75rem, 2vw, 0.875rem);
+min-height: 44px;
+}
+#reportsEmployeesGrid,
+#archivedReportsGrid {
+gap: clamp(0.5rem, 2vw, 1rem);
+max-height: min(70vh, 600px);
+}
+#reportsPage h2 {
+font-size: clamp(1.125rem, 4vw, 1.5rem);
+}
+#currentPeriodStats {
+gap: clamp(0.5rem, 2vw, 1rem);
+}
+#employeePerformanceTable {
+font-size: clamp(0.75rem, 2vw, 0.875rem);
+}
+#employeePerformanceTable th,
+#employeePerformanceTable td {
+padding: clamp(0.375rem, 1.5vw, 0.75rem) !important;
 }
 /* Employee cards in reports */
 #reportsEmployeesGrid > div {
@@ -138,6 +224,14 @@ min-height: 90px;
 .table-scroll-container {
 padding: 0;
 }
+}
+/* إخفاء شريط التمرير مع الإبقاء على التمرير (للتبويبات على الجوال) */
+.scrollbar-hide {
+-ms-overflow-style: none;
+scrollbar-width: none;
+}
+.scrollbar-hide::-webkit-scrollbar {
+display: none;
 }
 /* Hide number input spinners */
 input[type=number]::-webkit-inner-spin-button, 
@@ -443,14 +537,18 @@ overflow-y: visible;
 overflow-x: auto;
 position: relative;
 -webkit-overflow-scrolling: touch;
+width: 100%;
+min-width: 0;
 }
-/* Responsive Statistics Cards - Dynamic rows based on screen size */
+/* Responsive Statistics Cards - تتمدد وتنكمش حسب حجم الشاشة */
 .stats-grid-container {
 display: grid;
 grid-auto-flow: row;
-gap: clamp(0.5rem, 1.5vw, 0.75rem);
-/* Dynamic columns based on screen size */
-grid-template-columns: repeat(auto-fit, minmax(120px, 1fr));
+gap: clamp(0.5rem, 1.5vw, 1rem);
+width: 100%;
+min-width: 0;
+/* أعمدة مرنة: حد أدنى للكارت مع نمو لملء العرض */
+grid-template-columns: repeat(auto-fit, minmax(min(120px, 100%), 1fr));
 }
 /* Responsive breakpoints for optimal card distribution */
 @media (max-width: 480px) {
@@ -484,9 +582,9 @@ grid-template-columns: repeat(6, 1fr);
 }
 }
 @media (min-width: 1281px) {
-/* Large desktops: 8 columns (all in one row or 8, 0) */
+/* شاشات كبيرة: عدد أعمدة مرن — الكروت تتمدد لملء العرض (min 160px ثم 1fr) */
 .stats-grid-container {
-grid-template-columns: repeat(8, 1fr);
+grid-template-columns: repeat(auto-fit, minmax(min(160px, 100%), 1fr));
 }
 }
 .stats-card {
@@ -496,6 +594,7 @@ flex-direction: column;
 justify-content: center;
 align-items: center;
 width: 100%;
+min-width: 0;
 }
 /* Responsive Typography with clamp for fluid scaling */
 body {
@@ -667,30 +766,34 @@ background: rgba(255, 255, 255, 0.01);
 tbody tr:nth-child(even) {
 background: rgba(64, 224, 208, 0.03);
 }
-tbody tr:hover {
+/* تأثير الـ hover للجدول الرئيسي فقط — لا يطبق على جدول التقييمات */
+#mainTable tr:hover {
 background: linear-gradient(90deg, rgba(64, 224, 208, 0.2) 0%, rgba(64, 224, 208, 0.05) 100%) !important;
 transform: translateX(-3px);
 box-shadow: 0 2px 8px rgba(64, 224, 208, 0.2);
 }
-/* Disable hover effect on badges-row: no turquoise line/glow, no movement (user asked: اخفيه خالص) */
-tbody tr.badges-row:hover {
+#mainTable tr.badges-row:hover {
 background: rgba(255, 255, 255, 0.02) !important;
 transform: none !important;
 box-shadow: none !important;
 }
-.col-m {
-width: 60px;
+.checkbox-col {
+  text-align: right !important;
 }
 .col-m {
-width: 50px;
+  width: 60px;
+  text-align: right !important;
 }
-/* Custom checkbox size - Responsive for mobile */
+.col-m {
+  width: 50px;
+}
+/* Custom checkbox size - +30% for better visibility (9px→12px, 10px→13px on mobile) */
 .emp-checkbox,
 .checkbox-custom {
-width: 9px !important;
-height: 9px !important;
-min-width: 9px !important;
-min-height: 9px !important;
+width: 12px !important;
+height: 12px !important;
+min-width: 12px !important;
+min-height: 12px !important;
 flex-shrink: 0;
 cursor: pointer;
 }
@@ -698,10 +801,10 @@ cursor: pointer;
 /* Larger touch target on mobile */
 .emp-checkbox,
 .checkbox-custom {
-width: 10px !important;
-height: 10px !important;
-min-width: 10px !important;
-min-height: 10px !important;
+width: 13px !important;
+height: 13px !important;
+min-width: 13px !important;
+min-height: 13px !important;
 }
 }
 .col-name {
@@ -729,6 +832,43 @@ width: 110px;
 width: 250px; /* تكبير عمود الصافي لاستيعاب الملاحظات (حوافز، خصومات، إلخ) */
 min-width: 200px;
 }
+
+/* جدول المشرف: إخفاء أعمدة الحجوزات والحضور والصافي + تثبيت عرض الأعمدة لترتيب الصفوف والاعمدة */
+body.role-supervisor #targetTable {
+  table-layout: fixed;
+  width: 100%;
+}
+body.role-supervisor #targetTable th.col-count,
+body.role-supervisor #targetTable td.col-count,
+body.role-supervisor #targetTable th.col-attendance,
+body.role-supervisor #targetTable td.col-attendance,
+body.role-supervisor #targetTable th.col-net,
+body.role-supervisor #targetTable td.col-net {
+  display: none !important;
+}
+body.role-supervisor #targetTable .checkbox-col {
+  width: 48px;
+  min-width: 48px;
+  max-width: 48px;
+}
+body.role-supervisor #targetTable .col-m {
+  width: 52px;
+  min-width: 52px;
+  max-width: 52px;
+}
+body.role-supervisor #targetTable .col-name {
+  width: 36%;
+  min-width: 140px;
+}
+body.role-supervisor #targetTable .col-eval-booking,
+body.role-supervisor #targetTable .col-eval-google {
+  width: 22%;
+  min-width: 90px;
+}
+body.role-supervisor #mainTable tr.badges-row > td {
+  box-sizing: border-box;
+}
+
 /* Filter Pills - Mobile First */
 .filter-pill, .filter-reports-pill {
 transition: all 0.3s ease;
@@ -895,10 +1035,17 @@ flex-direction: row;
 flex-wrap: wrap;
 }
 }
-/* Make bonus row cells span properly */
-tfoot tr#commitmentBonusRow td,
-tfoot tr#excellenceBonusRow td {
+/* صف الحوافز الموحد: حافز التزام | حافز تفوق جنباً إلى جنب */
+tfoot tr#bonusesCombinedRow td {
 vertical-align: top !important;
+}
+tfoot tr#bonusesCombinedRow td[colspan="8"] {
+width: auto !important;
+max-width: none !important;
+}
+#commitmentBonusBlock,
+#excellenceBonusBlock {
+min-width: 0;
 }
 /* Ensure bonus value cell doesn't break layout */
 tfoot tr.footer-row td.col-net {
@@ -1761,6 +1908,22 @@ header img:hover {
   opacity: 1 !important;
 }
 
+/* زر «كيفية حساب التقييم» — نبض + توهج لجذب البصر */
+@keyframes rating-btn-pulse {
+  0%, 100% { box-shadow: 0 0 0 0 rgba(64, 224, 208, 0.5); transform: scale(1); }
+  50% { box-shadow: 0 0 0 12px rgba(64, 224, 208, 0); transform: scale(1.05); }
+}
+@keyframes rating-btn-glow {
+  0%, 100% { filter: brightness(1); }
+  50% { filter: brightness(1.3); }
+}
+.rating-explanation-btn {
+  animation: rating-btn-pulse 2s ease-in-out infinite, rating-btn-glow 2.5s ease-in-out infinite;
+}
+.rating-explanation-btn:hover {
+  animation: rating-btn-pulse 1s ease-in-out infinite, rating-btn-glow 1.2s ease-in-out infinite;
+}
+
 /* مناطق إدخال الإداريين: حد واضح + بلور خفيف + نبض للمشرف و HR */
 .admin-entry-zone {
   position: relative;
@@ -1790,4 +1953,44 @@ header img:hover {
 }
 @media print {
   .admin-entry-zone { animation: none !important; }
+}
+
+/* مؤشر مزامنة الفترة الحية (أسفل اليمين) */
+.live-sync-indicator {
+  position: fixed;
+  bottom: 1rem;
+  right: 1rem;
+  z-index: 900;
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.5rem 0.75rem;
+  background: rgba(15, 23, 41, 0.95);
+  border: 1px solid rgba(64, 224, 208, 0.4);
+  border-radius: 0.75rem;
+  font-size: 0.75rem;
+  font-weight: 600;
+  color: rgba(64, 224, 208, 0.95);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
+  transition: opacity 0.2s ease, transform 0.2s ease;
+}
+.live-sync-spinner {
+  width: 14px;
+  height: 14px;
+  border: 2px solid rgba(64, 224, 208, 0.3);
+  border-top-color: rgba(64, 224, 208, 1);
+  border-radius: 50%;
+  animation: live-sync-spin 0.7s linear infinite;
+}
+@keyframes live-sync-spin {
+  to { transform: rotate(360deg); }
+}
+.live-sync-label {
+  white-space: nowrap;
+}
+
+/* مؤشر تحميل رابط الإداري (جدول) */
+.admin-link-load-spinner {
+  animation: spin 0.8s linear infinite;
+  border-style: solid;
 }

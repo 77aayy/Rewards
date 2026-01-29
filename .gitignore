@@ -11,6 +11,7 @@ ui-debug.log
 # OS
 .DS_Store
 Thumbs.db
+$null
 
 # IDE
 .vscode/

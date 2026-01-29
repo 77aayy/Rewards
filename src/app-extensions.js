@@ -65,29 +65,64 @@ function saveAdminTokens() {
 }
 
 // التحقق من الرابط عبر Firebase عند فشل localStorage (ليعمل الرابط على جهاز الإداري المستلم)
+// نستخدم getBlob() بدل getDownloadURL()+fetch لتجنب CORS — مع timeout حتى لا يعلق التحميل بلا نهاية
+var ADMIN_LINK_FETCH_TIMEOUT_MS = 6000;
+
 async function tryValidateAdminAccessFromFirebase(role, token, periodId) {
   const st = (typeof window !== 'undefined' && window.storage);
   if (!st || typeof st.ref !== 'function') return false;
-  try {
-    const ref = st.ref('admin_tokens/' + periodId + '.json');
-    const url = await ref.getDownloadURL();
-    const res = await fetch(url);
-    if (!res.ok) return false;
-    const data = await res.json();
-    const admin = data && data[role];
-    if (!admin || admin.token !== token || admin.active === false) return false;
-    if (!adminTokens[periodId]) adminTokens[periodId] = {};
-    adminTokens[periodId][role] = admin;
+  var attempt = 0;
+  var maxAttempts = 3;
+  while (attempt < maxAttempts) {
     try {
-      localStorage.setItem('adora_admin_tokens', JSON.stringify(adminTokens));
-    } catch (e) {}
-    localStorage.setItem('adora_current_role', role);
-    localStorage.setItem('adora_current_token', token);
-    localStorage.setItem('adora_current_period', periodId);
-    return true;
-  } catch (e) {
-    return false;
+      var timeoutPromise = new Promise(function(_, rej) {
+        setTimeout(function() { rej(new Error('timeout')); }, ADMIN_LINK_FETCH_TIMEOUT_MS);
+      });
+      var fetchPromise = (async function() {
+        const ref = st.ref('admin_tokens/' + periodId + '.json');
+        const blob = await ref.getBlob();
+        const text = await (typeof blob.text === 'function' ? blob.text() : new Promise(function(res, rej) { var r = new FileReader(); r.onload = function() { res(r.result); }; r.onerror = rej; r.readAsText(blob); }));
+        const data = JSON.parse(text);
+        const admin = data && data[role];
+        if (!admin || admin.token !== token || admin.active === false) return false;
+        if (!adminTokens[periodId]) adminTokens[periodId] = {};
+        adminTokens[periodId][role] = admin;
+        try {
+          localStorage.setItem('adora_admin_tokens', JSON.stringify(adminTokens));
+        } catch (e) {}
+        localStorage.setItem('adora_current_role', role);
+        localStorage.setItem('adora_current_token', token);
+        localStorage.setItem('adora_current_period', periodId);
+        return true;
+      })();
+      var result = await Promise.race([fetchPromise, timeoutPromise]);
+      if (result === true) return true;
+      if (result === false) return false;
+    } catch (e) {
+      attempt++;
+      if (attempt < maxAttempts) await new Promise(r => setTimeout(r, 1500));
+      else return false;
+    }
   }
+  return false;
+}
+
+/** عند فشل جلب التوكن من الخادم: قبول الرابط (role, token, period) من الـ URL وحفظه محلياً ليعمل الرابط دون الاعتماد على Firebase. */
+function acceptAdminAccessFromUrl(role, token, periodId) {
+  if (!role || !token || !periodId) return false;
+  var allowed = ['supervisor', 'hr', 'accounting', 'manager'];
+  if (allowed.indexOf(role) === -1) return false;
+  if (!adminTokens[periodId]) adminTokens[periodId] = {};
+  adminTokens[periodId][role] = {
+    token: token,
+    name: '',
+    createdAt: new Date().toISOString(),
+    active: true
+  };
+  try {
+    localStorage.setItem('adora_admin_tokens', JSON.stringify(adminTokens));
+  } catch (e) { return false; }
+  return true;
 }
 
 // Initialize admin tokens for current period
@@ -172,9 +207,8 @@ function populateAdminManagementModal() {
   
   roles.forEach(role => {
     const admin = tokens[role.key] || { token: generateAdminToken(), name: '', createdAt: new Date().toISOString(), active: true };
-    const baseUrl = window.location.origin + window.location.pathname;
-    const nameParam = (admin.name || '').trim() ? '&name=' + encodeURIComponent((admin.name || '').trim()) : '';
-    const link = `${baseUrl}?role=${role.key}&token=${admin.token}&period=${periodId}${nameParam}`;
+    const baseUrl = window.location.origin;
+    const link = baseUrl + '/' + role.key + '/' + admin.token + '/' + periodId;
     const adminNameEsc = (admin.name || '').replace(/'/g, "\\'").replace(/"/g, '&quot;');
     const periodEsc = (periodTextAdminMgmt || '').replace(/'/g, "\\'").replace(/"/g, '&quot;');
     const roleLabelEsc = (role.label || '').replace(/'/g, "\\'").replace(/"/g, '&quot;');
@@ -244,10 +278,9 @@ function updateAdminName(role, name) {
   saveAdminTokens();
   var inp = document.getElementById('adminLink_' + role);
   if (inp) {
-    var base = window.location.origin + window.location.pathname;
+    var base = window.location.origin;
     var t = adminTokens[periodId][role].token;
-    var n = (name || '').trim();
-    inp.value = base + '?role=' + encodeURIComponent(role) + '&token=' + encodeURIComponent(t) + '&period=' + encodeURIComponent(periodId) + (n ? '&name=' + encodeURIComponent(n) : '');
+    inp.value = base + '/' + encodeURIComponent(role) + '/' + encodeURIComponent(t) + '/' + encodeURIComponent(periodId);
   }
   showToast('✅ تم تحديث اسم الإداري', 'success');
 }
@@ -261,8 +294,12 @@ function getAdminNameForRole(role) {
   } catch (e) { return ''; }
 }
 
-// Copy admin link
+// Copy admin link — نُفعّل Firebase ونرفع التوكنات عند النسخ ليعمل الرابط على جهاز الإداري
 function copyAdminLink(role) {
+  if (typeof window.initializeFirebase === 'function') window.initializeFirebase();
+  saveAdminTokens();
+  setTimeout(saveAdminTokens, 1500);
+  setTimeout(saveAdminTokens, 4000);
   const input = document.getElementById(`adminLink_${role}`);
   if (input) {
     input.select();
@@ -292,9 +329,8 @@ function testAdminLink(role) {
   const periodId = getCurrentPeriodId();
   const admin = adminTokens[periodId]?.[role];
   if (!admin) return;
-  
-  const baseUrl = window.location.origin + window.location.pathname;
-  const link = `${baseUrl}?role=${role}&token=${admin.token}&period=${periodId}`;
+  const baseUrl = window.location.origin;
+  const link = baseUrl + '/' + role + '/' + admin.token + '/' + periodId;
   window.open(link, '_blank');
 }
 
@@ -487,7 +523,7 @@ async function confirmClosePeriod() {
     }
     
     showToast('✅ تم إغلاق الفترة بنجاح', 'success');
-    returnToUpload();
+    returnToUpload(true); // مسح بيانات الفترة عند الإغلاق
     closeClosePeriodModal();
     
   } catch (error) {
@@ -526,7 +562,7 @@ function showEmployeeCodesModal() {
     let html = '<div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">';
     sortedEmployees.forEach(emp => {
       const code = emp.employeeCode || employeeCodesMap[emp.name] || 'N/A';
-      const url = `${window.location.origin}${window.location.pathname}?code=${code}`;
+      const url = window.location.origin + '/e/' + code;
       html += `
         <div class="glass p-5 rounded-xl border border-white/20 hover:border-turquoise/50 transition-all">
           <div class="text-center">
@@ -564,7 +600,7 @@ function showEmployeeCodesModal() {
         if (code && typeof QRCode !== 'undefined') {
           const qrElement = document.getElementById(`qrcode-${code}`);
           if (qrElement && !qrElement.querySelector('canvas')) {
-            const url = `${window.location.origin}${window.location.pathname}?code=${code}`;
+            const url = window.location.origin + '/e/' + code;
             new QRCode(qrElement, {
               text: url,
               width: 200,
@@ -580,64 +616,19 @@ function showEmployeeCodesModal() {
     }, 100);
   }
   
-  // Populate admin links
-  if (adminLinksList && typeof getCurrentPeriodId === 'function') {
-    const periodId = getCurrentPeriodId();
-    const tokens = adminTokens[periodId] || {};
-    const periodTextAdmin = document.getElementById('headerPeriodRange') ? (document.getElementById('headerPeriodRange').innerText || 'غير محدد') : 'غير محدد';
-
-    const roles = [
-      { key: 'supervisor', label: 'المشرف', icon: '👨‍💼' },
-      { key: 'hr', label: 'HR', icon: '👔' },
-      { key: 'accounting', label: 'الحسابات', icon: '💰' },
-      { key: 'manager', label: 'المدير العام', icon: '👑' }
-    ];
-
-    let html = '<div class="grid grid-cols-1 md:grid-cols-2 gap-4">';
-    roles.forEach(role => {
-      const admin = tokens[role.key];
-      if (admin) {
-        const baseUrl = window.location.origin + window.location.pathname;
-        const link = `${baseUrl}?role=${role.key}&token=${admin.token}&period=${periodId}`;
-        const adminNameEsc = (admin.name || '').replace(/'/g, "\\'").replace(/"/g, '&quot;');
-        const periodEsc = (periodTextAdmin || '').replace(/'/g, "\\'").replace(/"/g, '&quot;');
-        const roleLabelEsc = (role.label || '').replace(/'/g, "\\'").replace(/"/g, '&quot;');
-        html += `
-          <div class="glass p-5 rounded-xl border border-white/20 hover:border-turquoise/50 transition-all">
-            <div class="text-center">
-              <div class="flex items-center justify-center gap-2 mb-3">
-                <span class="text-2xl">${role.icon}</span>
-                <h4 class="text-lg font-bold text-purple-400">${role.label}</h4>
-                ${admin.name ? `<span class="text-xs text-gray-400">(${admin.name})</span>` : ''}
-              </div>
-              <div class="mb-3">
-                <div class="flex gap-2">
-                  <input type="text" value="${link}" readonly
-                    class="flex-1 px-3 py-2 rounded-lg text-xs text-gray-300 bg-white/5 border border-white/10">
-                  <button onclick="copyAdminLinkFromCodes('${role.key}')"
-                    class="px-3 py-2 bg-purple-500/20 text-purple-400 rounded-lg hover:bg-purple-500/30 transition-colors text-sm font-bold">
-                    📋
-                  </button>
-                </div>
-              </div>
-              <button onclick="sendWhatsAppMessageAdmin('${adminNameEsc}', '${roleLabelEsc}', '${periodEsc}', '${link.replace(/'/g, "\\'")}')"
-                class="mt-3 w-full bg-green-500 hover:bg-green-600 text-white font-bold py-2 px-4 rounded-lg flex items-center justify-center gap-2 transition-all">
-                <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor">
-                  <path d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51-.173-.008-.371-.01-.57-.01-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347m-5.421 7.403h-.004a9.87 9.87 0 01-5.031-1.378l-.361-.214-3.741.982.998-3.648-.235-.374a9.86 9.86 0 01-1.51-5.26c.001-5.45 4.436-9.884 9.888-9.884 2.64 0 5.122 1.03 6.988 2.898a9.825 9.825 0 012.893 6.994c-.003 5.45-4.437 9.884-9.885 9.884m8.413-18.297A11.815 11.815 0 0012.05 0C5.495 0 .16 5.335.157 11.892c0 2.096.547 4.142 1.588 5.945L.057 24l6.305-1.654a11.882 11.882 0 005.683 1.448h.005c6.554 0 11.89-5.335 11.893-11.893a11.821 11.821 0 00-3.48-8.413Z"/>
-                </svg>
-                <span>إرسال عبر واتساب</span>
-              </button>
-              <a href="${link}" target="_blank" class="mt-2 text-xs text-turquoise hover:underline inline-flex items-center gap-1">
-                <span>افتح الرابط</span>
-                <span>🔗</span>
-              </a>
-            </div>
-          </div>
-        `;
-      }
-    });
-    html += '</div>';
-    adminLinksList.innerHTML = html;
+  // روابط الإداريين: مصدر واحد فقط — «إدارة الإداريين» من الترويسة (لا نُكرّر التوليد هنا)
+  if (adminLinksList) {
+    adminLinksList.innerHTML = `
+      <div class="glass p-5 rounded-xl border border-purple-400/30 bg-purple-500/5">
+        <p class="text-gray-300 text-sm mb-4 leading-relaxed">
+          روابط الإداريين (المشرف، HR، الحسابات، المدير العام) — مكان واحد لنسخ الروابط وتوليدها وإرسالها عبر واتساب. من الترويسة اضغط «إدارة الإداريين».
+        </p>
+        <button type="button" onclick="closeEmployeeCodesModal(); showAdminManagementModal();" class="w-full px-4 py-3 rounded-xl font-bold text-white transition-all flex items-center justify-center gap-2" style="background: rgba(168, 85, 247, 0.3); border: 1px solid rgba(168, 85, 247, 0.6);">
+          <span>👥</span>
+          <span>فتح إدارة الإداريين</span>
+        </button>
+      </div>
+    `;
   }
   
   modal.classList.remove('hidden');
@@ -645,12 +636,15 @@ function showEmployeeCodesModal() {
 }
 
 function copyAdminLinkFromCodes(role) {
+  if (typeof window.initializeFirebase === 'function') window.initializeFirebase();
+  saveAdminTokens();
+  setTimeout(saveAdminTokens, 1500);
+  setTimeout(saveAdminTokens, 4000);
   const periodId = getCurrentPeriodId();
   const admin = adminTokens[periodId]?.[role];
   if (!admin) return;
-  
-  const baseUrl = window.location.origin + window.location.pathname;
-  const link = `${baseUrl}?role=${role}&token=${admin.token}&period=${periodId}`;
+  const baseUrl = window.location.origin;
+  const link = baseUrl + '/' + role + '/' + admin.token + '/' + periodId;
   
   navigator.clipboard.writeText(link).then(() => {
     showToast('✅ تم نسخ الرابط', 'success');
@@ -1702,10 +1696,12 @@ function showMostDiscountsDetail(employeeName) {
       }
       var pct = (d.discountPercentage != null && d.discountPercentage !== '') ? Number(d.discountPercentage) : 0;
       var reason = (d.discountType || '—');
+      var appliedByText = (d.appliedBy && d.appliedBy.trim()) ? d.appliedBy : 'الأدمن';
       return '<div class="p-3 rounded-lg border border-white/10 bg-white/5">' +
         '<div class="font-bold text-red-400">سبب الخصم: ' + reason + '</div>' +
         '<div class="text-gray-300 mt-1">التاريخ: ' + eventDate + '</div>' +
         '<div class="text-gray-300">النسبة: ' + (isNaN(pct) ? '—' : pct + '%') + '</div>' +
+        '<div class="text-gray-400 mt-1 text-xs">مطبق من: ' + appliedByText + '</div>' +
         '</div>';
     }).join('');
   }
@@ -1975,6 +1971,10 @@ function addDiscount() {
     return;
   }
   
+  // من يطبق الخصم (حسب الدور)
+  var role = (typeof localStorage !== 'undefined' && localStorage.getItem('adora_current_role')) || 'admin';
+  var appliedBy = role === 'supervisor' ? 'المشرف' : (role === 'manager' ? 'المدير' : 'الأدمن');
+  
   // Create discount object
   const discount = {
     id: Date.now().toString() + Math.random().toString(36).substr(2, 9),
@@ -1982,7 +1982,8 @@ function addDiscount() {
     discountType: discountType,
     discountPercentage: discountPercentage,
     eventDate: eventDate, // تاريخ الحدث
-    appliedAt: new Date().toISOString() // تاريخ إضافة الخصم
+    appliedAt: new Date().toISOString(), // تاريخ إضافة الخصم
+    appliedBy: appliedBy // مطبق من: الأدمن / المدير / المشرف
   };
   
   // Add to discounts array
@@ -2344,6 +2345,47 @@ function loadCurrentPeriodStats() {
     return;
   }
   
+  // بناء فائزي الفروع (مطابق لـ app.js) لاستخدام حافز التميز 50 وحافز الالتزام 50 ثم الخصم مرة واحدة — ليتطابق الصافي مع الجدول الإداري
+  const branches = [...new Set(currentDb.map(e => e.branch).filter(Boolean))];
+  const branchWinners = {};
+  branches.forEach(b => {
+    branchWinners[b] = { net: { val: -1, ids: [] }, eval: { val: -1, ids: [] }, book: { val: -1, ids: [] }, attendance: { val: -1, ids: [] } };
+  });
+  currentDb.forEach(emp => {
+    const rate = emp.count > 100 ? 3 : (emp.count > 50 ? 2 : 1);
+    const evBooking = emp.evaluationsBooking || 0;
+    const evGoogle = emp.evaluationsGoogle || 0;
+    const gross = (emp.count * rate) + (evBooking * 20) + (evGoogle * 10);
+    const fund = gross * 0.15;
+    const net = gross - fund;
+    const bw = branchWinners[emp.branch];
+    if (!bw) return;
+    if (net > bw.net.val) { bw.net.val = net; bw.net.ids = [emp.id]; }
+    else if (net === bw.net.val) bw.net.ids.push(emp.id);
+    if (evBooking > bw.eval.val) { bw.eval.val = evBooking; bw.eval.ids = [emp.id]; }
+    else if (evBooking === bw.eval.val) bw.eval.ids.push(emp.id);
+    if (emp.count > bw.book.val) { bw.book.val = emp.count; bw.book.ids = [emp.id]; }
+    else if (emp.count === bw.book.val) bw.book.ids.push(emp.id);
+    const empNameCount = currentDb.filter(e => e.name === emp.name).length;
+    let empAttendanceDays = emp.attendance26Days === true ? 26 : 0;
+    if (empNameCount > 1) empAttendanceDays = emp.totalAttendanceDays || (emp.attendance26Days === true ? 26 : 0);
+    if (empAttendanceDays >= 26) {
+      let isHighestDays = true;
+      currentDb.filter(e => e.branch === emp.branch).forEach(other => {
+        if (other.name === emp.name) return;
+        const otherNameCount = currentDb.filter(e => e.name === other.name).length;
+        let otherDays = other.attendance26Days === true ? 26 : 0;
+        if (otherNameCount > 1) otherDays = other.totalAttendanceDays || (other.attendance26Days === true ? 26 : 0);
+        if (otherDays > empAttendanceDays) isHighestDays = false;
+      });
+      if (isHighestDays) {
+        if (bw.attendance.val === -1) { bw.attendance.val = empAttendanceDays; bw.attendance.ids = [emp.id]; }
+        else if (empAttendanceDays > bw.attendance.val) { bw.attendance.val = empAttendanceDays; bw.attendance.ids = [emp.id]; }
+        else if (empAttendanceDays === bw.attendance.val) bw.attendance.ids.push(emp.id);
+      }
+    }
+  });
+
   // Get unique employees (aggregate duplicates like "الكل" view)
   const uniqueEmployees = new Map();
   currentDb.forEach(emp => {
@@ -2354,13 +2396,15 @@ function loadCurrentPeriodStats() {
     uniqueEmployees.get(key).push(emp);
   });
   
-  // Per-employee aggregates for "أوائل" cards
+  // Per-employee aggregates for "أوائل" cards — صافي مطابق للجدول الإداري: مجموع صافي الفروع (بدون خصم) + حافز التميز 50 + حافز الالتزام 50 - getTotalDiscountForEmployee مرة واحدة
   const employeeAggregates = [];
   uniqueEmployees.forEach((employees, name) => {
     let totalCount = 0;
     let totalEvalBooking = 0;
     let totalEvalGoogle = 0;
-    let totalNet = 0;
+    let totalNetFromBranches = 0;
+    let hasExcellence = false;
+    let hasCommitment = false;
     let hasAttendance26 = false;
     
     employees.forEach(emp => {
@@ -2374,16 +2418,20 @@ function loadCurrentPeriodStats() {
       const evGoogle = emp.evaluationsGoogle || 0;
       const gross = (emp.count * rate) + (evBooking * 20) + (evGoogle * 10);
       const fund = gross * 0.15;
-      let net = gross - fund;
+      let branchNet = gross - fund;
       const attendance26Days = emp.attendance26Days === true;
-      const attendanceBonus = attendance26Days ? net * 0.25 : 0;
-      net = net + attendanceBonus;
-      if (typeof getDiscountForEmployeeInBranch === 'function') {
-        const discount = getDiscountForEmployeeInBranch(emp.name, net);
-        net = Math.max(0, net - discount);
-      }
-      totalNet += net;
+      branchNet = branchNet + (attendance26Days ? branchNet * 0.25 : 0);
+      totalNetFromBranches += branchNet;
+      
+      const bw = branchWinners[emp.branch];
+      if (bw && bw.book.ids.includes(emp.id) && bw.eval.ids.includes(emp.id) && bw.book.val > 0) hasExcellence = true;
+      if (bw && attendance26Days && bw.attendance.ids.includes(emp.id) && ((bw.eval.ids.includes(emp.id) && bw.eval.val > 0) || (bw.book.ids.includes(emp.id) && bw.book.val > 0))) hasCommitment = true;
     });
+    
+    let totalNet = totalNetFromBranches + (hasExcellence ? 50 : 0) + (hasCommitment ? 50 : 0);
+    if (typeof getTotalDiscountForEmployee === 'function') {
+      totalNet = Math.max(0, totalNet - getTotalDiscountForEmployee(name));
+    }
     
     employeeAggregates.push({
       name,
@@ -2394,14 +2442,43 @@ function loadCurrentPeriodStats() {
       hasAttendance26
     });
   });
-  
-  // أوائل: أكثر حجوزات، أكثر تقييم بوكينج، أكثر خرائط، أكثر التزاماً 26 يوم، أكثر صافي
-  const topBookings = employeeAggregates.length ? employeeAggregates.reduce((a, b) => (b.totalCount > a.totalCount ? b : a)) : null;
-  const topEvalBooking = employeeAggregates.length ? employeeAggregates.reduce((a, b) => (b.totalEvalBooking > a.totalEvalBooking ? b : a)) : null;
-  const topEvalGoogle = employeeAggregates.length ? employeeAggregates.reduce((a, b) => (b.totalEvalGoogle > a.totalEvalGoogle ? b : a)) : null;
+
+  // حساب نقاط التقييم لكل موظف (نفس معادلة الجدول) لاستخدامها في كسر التعادل واختيار "أكثرهم التزاماً"
+  const minCount = employeeAggregates.length ? Math.min(...employeeAggregates.map(e => e.totalCount)) : 0;
+  const maxCount = employeeAggregates.length ? Math.max(...employeeAggregates.map(e => e.totalCount)) : 0;
+  const totalsEval = employeeAggregates.map(e => e.totalEvalBooking + e.totalEvalGoogle);
+  const minEval = totalsEval.length ? Math.min(...totalsEval) : 0;
+  const maxEval = totalsEval.length ? Math.max(...totalsEval) : 0;
+  const rangeCount = maxCount - minCount;
+  const rangeEval = maxEval - minEval;
+  employeeAggregates.forEach(agg => {
+    const totalEval = agg.totalEvalBooking + agg.totalEvalGoogle;
+    const pctCount = rangeCount <= 0 ? 0.5 : (agg.totalCount - minCount) / rangeCount;
+    const pctEval = rangeEval <= 0 ? 0.5 : (totalEval - minEval) / rangeEval;
+    const combined = (pctCount + pctEval) / 2;
+    const boost = agg.hasAttendance26 ? 0.15 : 0;
+    let score = Math.min(1, combined + boost);
+    if (typeof getTotalDiscountForEmployee === 'function' && getTotalDiscountForEmployee(agg.name) > 0) {
+      score = Math.max(0, score - 0.25);
+    }
+    let rating = Math.round(score * 100);
+    if (!agg.hasAttendance26 && rating > 84) rating = 84;
+    agg.rating = rating;
+  });
+
+  // أوائل: أكثر حجوزات، أكثر تقييم بوكينج، أكثر خرائط، أكثر التزاماً 26 يوم (الأعلى تقييماً)، أكثر صافي — عند التساوي يُختار الأعلى تقييماً
+  const byBookings = (a, b) => (b.totalCount !== a.totalCount ? b.totalCount - a.totalCount : (b.rating || 0) - (a.rating || 0));
+  const byEvalBooking = (a, b) => (b.totalEvalBooking !== a.totalEvalBooking ? b.totalEvalBooking - a.totalEvalBooking : (b.rating || 0) - (a.rating || 0));
+  const byEvalGoogle = (a, b) => (b.totalEvalGoogle !== a.totalEvalGoogle ? b.totalEvalGoogle - a.totalEvalGoogle : (b.rating || 0) - (a.rating || 0));
+  const byRating = (a, b) => ((b.rating || 0) !== (a.rating || 0) ? (b.rating || 0) - (a.rating || 0) : (b.totalNet || 0) - (a.totalNet || 0));
+  const byNet = (a, b) => (b.totalNet !== a.totalNet ? b.totalNet - a.totalNet : (b.rating || 0) - (a.rating || 0));
+
+  const topBookings = employeeAggregates.length ? employeeAggregates.slice().sort(byBookings)[0] : null;
+  const topEvalBooking = employeeAggregates.length ? employeeAggregates.slice().sort(byEvalBooking)[0] : null;
+  const topEvalGoogle = employeeAggregates.length ? employeeAggregates.slice().sort(byEvalGoogle)[0] : null;
   const with26 = employeeAggregates.filter(e => e.hasAttendance26);
-  const topAttendance26 = with26.length ? with26.reduce((a, b) => (b.totalNet > a.totalNet ? b : a)) : null;
-  const topNet = employeeAggregates.length ? employeeAggregates.reduce((a, b) => (b.totalNet > a.totalNet ? b : a)) : null;
+  const topAttendance26 = with26.length ? with26.slice().sort(byRating)[0] : null;
+  const topNet = employeeAggregates.length ? employeeAggregates.slice().sort(byNet)[0] : null;
   
   // أكثر الموظفين خصومات (من window.discounts)
   let topDiscountsName = null;
@@ -2537,44 +2614,118 @@ function populateEmployeePerformanceTable() {
     }
     uniqueEmployees.get(key).push(emp);
   });
-  
-  // حساب مستوى الحجوزات، التقييمات، الحضور واستخراج أسباب التقييم وعدد النجوم (1–5)
-  function getRatingDetails(emp) {
-    const count = emp.count || 0;
-    const totalEval = (emp.evalBooking || 0) + (emp.evalGoogle || 0);
-    const has26 = !!emp.hasAttendance26;
-    let bookingsLabel = 'عدد حجوزاته قليل';
-    if (count >= 100) bookingsLabel = 'عدد حجوزاته عالي';
-    else if (count >= 50) bookingsLabel = 'عدد حجوزاته جيد';
-    else if (count >= 20) bookingsLabel = 'عدد حجوزاته متوسط';
-    let evalLabel = 'تقييماته قليلة';
-    if (totalEval >= 10) evalLabel = 'تقييماته جيدة';
-    else if (totalEval >= 3) evalLabel = 'تقييماته متوسطة';
-    const attLabel = has26 ? 'ملتزم في الحضور (26 يوم وأكثر)' : 'حضوره أقل من 26 يوم';
-    let stars = 1;
-    let level = 'سيئ';
-    if (count >= 50 && totalEval >= 5 && has26) {
-      stars = count >= 100 && totalEval >= 10 ? 5 : 4;
-      level = stars === 5 ? 'ممتاز' : 'جيد جداً';
-    } else if (count >= 20 || totalEval >= 3 || has26) {
-      stars = 3;
-      level = 'جيد';
-    } else if (count >= 10 || totalEval >= 1) {
-      stars = 2;
-      level = 'متوسط';
+
+  // بناء فائزي الفروع (مطابق للجدول الإداري) لحساب الصافي بنفس المعادلة: مجموع صافي الفروع + 50 تميز + 50 التزام - خصم واحد
+  const branches = [...new Set(currentDb.map(e => e.branch).filter(Boolean))];
+  const branchWinners = {};
+  branches.forEach(b => {
+    branchWinners[b] = { net: { val: -1, ids: [] }, eval: { val: -1, ids: [] }, book: { val: -1, ids: [] }, attendance: { val: -1, ids: [] } };
+  });
+  currentDb.forEach(emp => {
+    const rate = emp.count > 100 ? 3 : (emp.count > 50 ? 2 : 1);
+    const evBooking = emp.evaluationsBooking || 0;
+    const evGoogle = emp.evaluationsGoogle || 0;
+    const gross = (emp.count * rate) + (evBooking * 20) + (evGoogle * 10);
+    const fund = gross * 0.15;
+    const net = gross - fund;
+    const bw = branchWinners[emp.branch];
+    if (!bw) return;
+    if (net > bw.net.val) { bw.net.val = net; bw.net.ids = [emp.id]; }
+    else if (net === bw.net.val) bw.net.ids.push(emp.id);
+    if (evBooking > bw.eval.val) { bw.eval.val = evBooking; bw.eval.ids = [emp.id]; }
+    else if (evBooking === bw.eval.val) bw.eval.ids.push(emp.id);
+    if (emp.count > bw.book.val) { bw.book.val = emp.count; bw.book.ids = [emp.id]; }
+    else if (emp.count === bw.book.val) bw.book.ids.push(emp.id);
+    const empNameCount = currentDb.filter(e => e.name === emp.name).length;
+    let empAttendanceDays = emp.attendance26Days === true ? 26 : 0;
+    if (empNameCount > 1) empAttendanceDays = emp.totalAttendanceDays || (emp.attendance26Days === true ? 26 : 0);
+    if (empAttendanceDays >= 26) {
+      let isHighestDays = true;
+      currentDb.filter(e => e.branch === emp.branch).forEach(other => {
+        if (other.name === emp.name) return;
+        const otherNameCount = currentDb.filter(e => e.name === other.name).length;
+        let otherDays = other.attendance26Days === true ? 26 : 0;
+        if (otherNameCount > 1) otherDays = other.totalAttendanceDays || (other.attendance26Days === true ? 26 : 0);
+        if (otherDays > empAttendanceDays) isHighestDays = false;
+      });
+      if (isHighestDays) {
+        if (bw.attendance.val === -1) { bw.attendance.val = empAttendanceDays; bw.attendance.ids = [emp.id]; }
+        else if (empAttendanceDays > bw.attendance.val) { bw.attendance.val = empAttendanceDays; bw.attendance.ids = [emp.id]; }
+        else if (empAttendanceDays === bw.attendance.val) bw.attendance.ids.push(emp.id);
+      }
     }
-    const reasons = `${bookingsLabel}، ${evalLabel}، ${attLabel} → ${level}`;
-    return { stars, level, reasons, ratingColor: stars >= 4 ? 'text-green-400' : stars >= 3 ? 'text-yellow-400' : 'text-red-400' };
+  });
+  
+  // تقييم ديناميكي مع أسباب بأرقام حقيقية (فرق عن الأفضل، بوكينج/جوجل)
+  function getRatingDetailsDynamic(emp, minCount, maxCount, minEval, maxEval, maxEvalBooking, maxEvalGoogle) {
+    const count = emp.count || 0;
+    const evalBooking = emp.evalBooking || 0;
+    const evalGoogle = emp.evalGoogle || 0;
+    const totalEval = (emp.totalEval != null ? emp.totalEval : evalBooking + evalGoogle);
+    const has26 = !!emp.hasAttendance26;
+    const rangeCount = maxCount - minCount;
+    const rangeEval = maxEval - minEval;
+    const pctCount = rangeCount <= 0 ? 0.5 : (count - minCount) / rangeCount;
+    const pctEval = rangeEval <= 0 ? 0.5 : (totalEval - minEval) / rangeEval;
+    const diffCount = maxCount - count;
+    const diffEvalBooking = (maxEvalBooking != null ? maxEvalBooking : 0) - evalBooking;
+    const diffEvalGoogle = (maxEvalGoogle != null ? maxEvalGoogle : 0) - evalGoogle;
+
+    let bookingsPart = count + ' حجز';
+    if (diffCount === 0) bookingsPart += '، الأفضل';
+    else bookingsPart += '، أقل من أفضل موظف بفرق ' + diffCount + ' حجز';
+
+    let evalPart = 'إجمالي التقييمات ' + evalBooking + ' بوكينج و ' + evalGoogle + ' جوجل. ';
+    if (diffEvalBooking <= 0 && diffEvalGoogle <= 0) evalPart += 'أفضل تقييمات بوكينج وجوجل.';
+    else if (diffEvalBooking <= 0) evalPart += 'أفضل تقييم بوكينج، لكن جوجل أقل من الأفضل بـ ' + diffEvalGoogle + '.';
+    else if (diffEvalGoogle <= 0) evalPart += 'أفضل تقييم جوجل، لكن بوكينج أقل من الأفضل بـ ' + diffEvalBooking + '.';
+    else evalPart += 'بوكينج أقل من الأفضل بـ ' + diffEvalBooking + '، وجوجل أقل بـ ' + diffEvalGoogle + '.';
+
+    const attLabel = has26 ? 'حضور 26 يوم وأكثر.' : 'حضور أقل من 26 يوم.';
+    const attLabelHtml = has26
+      ? '<span class="text-green-400 font-medium">حضور 26 يوم وأكثر.</span>'
+      : '<span class="text-red-400 font-medium">حضور أقل من 26 يوم.</span>';
+    const combined = (pctCount + pctEval) / 2;
+    const boost = has26 ? 0.15 : 0;
+    let score = Math.min(1, combined + boost);
+    const pointsBeforeDiscount = Math.round(score * 100);
+    let discountDeduction = 0;
+    if (typeof getTotalDiscountForEmployee === 'function' && getTotalDiscountForEmployee(emp.name) > 0) {
+      score = Math.max(0, score - 0.25);
+      const pointsAfterDiscount = Math.round(score * 100);
+      discountDeduction = Math.max(0, pointsBeforeDiscount - pointsAfterDiscount);
+    }
+    let points = Math.round(score * 100);
+    if (!has26 && points > 84) points = 84;
+    let level = 'سيء';
+    if (points >= 90) level = 'ممتاز';
+    else if (points >= 80) level = 'جيد';
+    else if (points >= 60) level = 'متوسط';
+    else if (points >= 40) level = 'ضعيف';
+    let reasons = bookingsPart + ' — ' + evalPart + ' — ' + attLabel;
+    if (discountDeduction > 0) {
+      reasons += ' — نقص ' + discountDeduction + ' نقطة بسبب الخصم الإداري.';
+    }
+    reasons += ' → التقييم: ' + level + ' (' + points + ' نقطة)';
+    let reasonsHtml = bookingsPart + ' — ' + evalPart + ' — ' + attLabelHtml;
+    if (discountDeduction > 0) {
+      reasonsHtml += ' — <span class="text-red-400 font-medium">نقص ' + discountDeduction + ' نقطة بسبب الخصم الإداري.</span>';
+    }
+    reasonsHtml += ' → التقييم: ' + level + ' (' + points + ' نقطة)';
+    const ratingColor = points >= 80 ? 'text-green-400' : points >= 60 ? 'text-yellow-400' : points >= 40 ? 'text-orange-400' : 'text-red-400';
+    return { points, level, reasons, reasonsHtml, ratingColor };
   }
 
-  // Calculate aggregated stats for each employee
+  // Calculate aggregated stats for each employee — صافي مطابق للجدول الإداري: مجموع صافي الفروع (بدون خصم) + 50 تميز + 50 التزام - getTotalDiscountForEmployee مرة واحدة
   uniqueEmployees.forEach((employees, name) => {
     const isDuplicate = nameCounts[name] > 1;
     
     let totalCount = 0;
     let totalEvalBooking = 0;
     let totalEvalGoogle = 0;
-    let totalNet = 0;
+    let totalNetFromBranches = 0;
+    let hasExcellence = false;
+    let hasCommitment = false;
     let hasAttendance26 = false;
     let branches = [];
     
@@ -2589,29 +2740,24 @@ function populateEmployeePerformanceTable() {
       const evGoogle = emp.evaluationsGoogle || 0;
       const gross = (emp.count * rate) + (evBooking * 20) + (evGoogle * 10);
       const fund = gross * 0.15;
-      let net = gross - fund;
+      let branchNet = gross - fund;
       const attendance26Days = emp.attendance26Days === true;
-      const attendanceBonus = attendance26Days ? net * 0.25 : 0;
-      net = net + attendanceBonus;
-      if (typeof getDiscountForEmployeeInBranch === 'function') {
-        const discount = getDiscountForEmployeeInBranch(emp.name, net);
-        net = Math.max(0, net - discount);
-      }
-      totalNet += net;
-      if (!branches.includes(emp.branch)) {
-        branches.push(emp.branch);
-      }
+      branchNet = branchNet + (attendance26Days ? branchNet * 0.25 : 0);
+      totalNetFromBranches += branchNet;
+      
+      const bw = branchWinners[emp.branch];
+      if (bw && bw.book.ids.includes(emp.id) && bw.eval.ids.includes(emp.id) && bw.book.val > 0) hasExcellence = true;
+      if (bw && attendance26Days && bw.attendance.ids.includes(emp.id) && ((bw.eval.ids.includes(emp.id) && bw.eval.val > 0) || (bw.book.ids.includes(emp.id) && bw.book.val > 0))) hasCommitment = true;
+      if (!branches.includes(emp.branch)) branches.push(emp.branch);
     });
+    
+    let totalNet = totalNetFromBranches + (hasExcellence ? 50 : 0) + (hasCommitment ? 50 : 0);
+    if (typeof getTotalDiscountForEmployee === 'function') {
+      totalNet = Math.max(0, totalNet - getTotalDiscountForEmployee(name));
+    }
     
     const totalEval = totalEvalBooking + totalEvalGoogle;
     const performanceScore = totalCount + (totalEvalBooking * 2) + totalEvalGoogle + (totalNet / 100);
-    const { stars, level, reasons, ratingColor } = getRatingDetails({
-      count: totalCount,
-      evalBooking: totalEvalBooking,
-      evalGoogle: totalEvalGoogle,
-      hasAttendance26
-    });
-    
     const firstEmpId = employees[0] && employees[0].id ? employees[0].id : '';
     employeesData.push({
       name: name,
@@ -2624,30 +2770,52 @@ function populateEmployeePerformanceTable() {
       performanceScore: performanceScore,
       isDuplicate: isDuplicate,
       hasAttendance26,
-      stars,
-      level,
-      reasons,
-      ratingColor,
+      points: 0,
+      level: '-',
+      reasons: '-',
+      ratingColor: 'text-gray-400',
       reportEmpId: firstEmpId
     });
   });
   
-  // Sort by performance score (descending)
-  employeesData.sort((a, b) => b.performanceScore - a.performanceScore);
+  // ديناميكي: حساب min/max للحجوزات والتقييمات ثم تحديث التقييم لكل موظف (نقاط 0–100)
+  const minCount = employeesData.length ? Math.min(...employeesData.map(e => e.count)) : 0;
+  const maxCount = employeesData.length ? Math.max(...employeesData.map(e => e.count)) : 0;
+  const minEval = employeesData.length ? Math.min(...employeesData.map(e => e.totalEval)) : 0;
+  const maxEval = employeesData.length ? Math.max(...employeesData.map(e => e.totalEval)) : 0;
+  const maxEvalBooking = employeesData.length ? Math.max(...employeesData.map(e => e.evalBooking || 0)) : 0;
+  const maxEvalGoogle = employeesData.length ? Math.max(...employeesData.map(e => e.evalGoogle || 0)) : 0;
+  employeesData.forEach(emp => {
+    const d = getRatingDetailsDynamic(emp, minCount, maxCount, minEval, maxEval, maxEvalBooking, maxEvalGoogle);
+    emp.points = d.points;
+    emp.level = d.level;
+    emp.reasons = d.reasons;
+    emp.reasonsHtml = d.reasonsHtml != null ? d.reasonsHtml : d.reasons;
+    emp.ratingColor = d.ratingColor;
+  });
+
+  // ترتيب من الأعلى نقاطاً إلى الأسوأ
+  employeesData.sort((a, b) => b.points - a.points);
   
   // Generate table rows: صف بيانات + صف أسباب التقييم تحت كل موظف
   let html = '';
-  const starChar = '⭐';
   function escForOnclick(s) { return String(s || '').replace(/\\/g, '\\\\').replace(/'/g, "\\'"); }
   employeesData.forEach((emp, index) => {
-    const starsHtml = starChar.repeat(emp.stars);
+    const barLeftPct = Math.min(100, Math.max(0, emp.points));
     const nameEsc = escForOnclick(emp.name);
     const idEsc = escForOnclick(emp.reportEmpId);
     const onclickReport = `openEmployeeReportFromStats('${nameEsc}','${idEsc}',${!!emp.isDuplicate})`;
     html += `
       <tr class="border-b border-white/10 hover:bg-white/5">
         <td class="p-3 text-center font-bold text-turquoise">${index + 1}</td>
-        <td class="p-3 text-right font-bold text-white"><span onclick="${onclickReport}" class="cursor-pointer hover:text-turquoise transition-colors" title="اضغط لعرض التقرير">${emp.name}${emp.isDuplicate ? ' <span class="text-xs text-gray-400">(متكرر)</span>' : ''}</span></td>
+        <td class="p-3 text-right font-bold text-white">
+          <span onclick="${onclickReport}" class="cursor-pointer hover:text-turquoise transition-colors" title="اضغط لعرض التقرير">${emp.name}${emp.isDuplicate ? ' <span class="text-xs text-gray-400">(متكرر)</span>' : ''}</span>
+          <div class="mt-1.5 w-full rounded-full overflow-hidden relative" style="height: 6px;">
+            <div style="position: absolute; inset: 0; background: #4b5563;"></div>
+            <div style="position: absolute; left: 0; top: 0; width: ${barLeftPct}%; height: 100%; background: linear-gradient(90deg, #ef4444 0%, #f97316 25%, #eab308 50%, #84cc16 75%, #22c55e 100%);"></div>
+            <span style="position: absolute; left: ${barLeftPct}%; top: 0; transform: translateX(-50%); width: 4px; height: 100%; background: #fff; border-radius: 2px; box-shadow: 0 0 2px rgba(0,0,0,0.5);"></span>
+          </div>
+        </td>
         <td class="p-3 text-center text-gray-300 text-xs">${emp.branches}</td>
         <td class="p-3 text-center font-bold text-white">${emp.count}</td>
         <td class="p-3 text-center text-gray-300">
@@ -2656,13 +2824,15 @@ function populateEmployeePerformanceTable() {
         </td>
         <td class="p-3 text-center font-bold text-green-400">${emp.net.toFixed(2)} ريال</td>
         <td class="p-3 text-center">
-          <span class="font-bold ${emp.ratingColor}" title="${emp.level}">${starsHtml}</span>
-          <div class="text-xs text-gray-400">${emp.level}</div>
+          <div class="flex flex-col items-center gap-0.5">
+            <span class="font-bold ${emp.ratingColor} tabular-nums" title="${emp.level}">${emp.points} نقطة</span>
+            <div class="text-xs font-semibold ${emp.ratingColor}">${emp.level}</div>
+          </div>
         </td>
       </tr>
-      <tr class="border-b border-white/5 bg-white/5">
-        <td colspan="7" class="p-3 text-right text-sm text-gray-400">
-          <span class="text-turquoise font-medium">أسباب التقييم:</span> ${emp.reasons}
+      <tr class="border-b border-white/5 reasons-row bg-turquoise/10 border-r-4 border-turquoise/50">
+        <td colspan="7" class="p-3 text-right text-sm text-gray-300">
+          <span class="font-medium opacity-90">أسباب التقييم:</span> ${emp.reasonsHtml}
         </td>
       </tr>
     `;
@@ -2749,13 +2919,19 @@ async function loadArchivedStatsPeriodsList() {
         const periodText = period.periodText || `فترة ${periodId}`;
         const closedAt = period.closedAt ? new Date(period.closedAt).toLocaleDateString('ar-SA') : '-';
         
-        // Create period card
+        // Create period card (مع أيقونة عين لفتح الفترة كعرض فقط في الأعلى)
+        const periodIdEsc = String(periodId).replace(/\\/g, '\\\\').replace(/'/g, "\\'");
         const periodCard = document.createElement('div');
         periodCard.className = 'glass p-6 rounded-xl border border-turquoise/30 mb-6';
         periodCard.innerHTML = `
-          <div class="flex items-center justify-between mb-4">
+          <div class="flex items-center justify-between gap-3 mb-4 flex-wrap">
             <h4 class="text-lg font-bold text-turquoise">${periodText}</h4>
-            <span class="text-sm text-gray-400">تاريخ الإغلاق: ${closedAt}</span>
+            <div class="flex items-center gap-2">
+              <span class="text-sm text-gray-400">تاريخ الإغلاق: ${closedAt}</span>
+              <button type="button" onclick="openArchivedPeriodForView('${periodIdEsc}')" class="inline-flex items-center justify-center w-10 h-10 rounded-lg bg-turquoise/20 border border-turquoise/40 text-turquoise hover:bg-turquoise/30 hover:border-turquoise/60 transition-colors" title="عرض جدول التقييم لهذه الفترة (عرض فقط)">
+                <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>
+              </button>
+            </div>
           </div>
           <div id="archivedPeriodStats_${periodId}" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 mb-4">
             <div class="glass p-4 rounded-xl border border-turquoise/30">
@@ -2775,6 +2951,81 @@ async function loadArchivedStatsPeriodsList() {
   } catch (error) {
     console.error('❌ Error loading archived periods:', error);
   }
+}
+
+/** فتح فترة أرشفة كعرض فقط في مكان "الفترة الحالية" (جدول التقييم والإحصائيات). أي شخص يضغط على أيقونة العين يرى الفترة كما لو كانت الحالية للعرض فقط. */
+async function openArchivedPeriodForView(periodId) {
+  const banner = document.getElementById('archivedViewOnlyBanner');
+  const periodTextEl = document.getElementById('archivedViewOnlyPeriodText');
+  const closedAtEl = document.getElementById('archivedViewOnlyClosedAt');
+  if (!banner || !periodTextEl || !closedAtEl) return;
+
+  let periodData = null;
+  try {
+    if (storage && typeof storage.ref === 'function') {
+      try {
+        const periodRef = storage.ref(`periods/${periodId}.json`);
+        const url = await periodRef.getDownloadURL();
+        const response = await fetch(url);
+        if (response.ok) periodData = await response.json();
+      } catch (e) { /* fallback */ }
+    }
+    if (!periodData) {
+      const saved = localStorage.getItem('adora_archived_periods');
+      if (saved) {
+        const periods = JSON.parse(saved);
+        periodData = periods.find(p => (p.id || p.periodId) === periodId);
+      }
+    }
+  } catch (e) {
+    console.error('❌ Error loading archived period for view:', e);
+    return;
+  }
+
+  if (!periodData || !periodData.data || !Array.isArray(periodData.data.db)) {
+    return;
+  }
+
+  window._adoraPreviousDb = (typeof window !== 'undefined' && window.db && Array.isArray(window.db)) ? window.db : null;
+  try {
+    const fromStorage = localStorage.getItem('adora_rewards_db');
+    if (fromStorage) window._adoraPreviousDb = JSON.parse(fromStorage);
+  } catch (e) { /* ignore */ }
+
+  window.db = periodData.data.db;
+  if (typeof loadCurrentPeriodStats === 'function') loadCurrentPeriodStats();
+  if (typeof populateEmployeePerformanceTable === 'function') populateEmployeePerformanceTable();
+
+  const periodText = periodData.periodText || `فترة ${periodId}`;
+  const closedAt = periodData.closedAt ? new Date(periodData.closedAt).toLocaleDateString('ar-SA') : '—';
+  periodTextEl.textContent = periodText;
+  closedAtEl.textContent = 'تاريخ الإغلاق: ' + closedAt;
+  banner.classList.remove('hidden');
+
+  const statisticsContent = document.getElementById('statisticsReportsContent');
+  if (statisticsContent) statisticsContent.scrollIntoView({ behavior: 'smooth', block: 'start' });
+}
+
+/** إغلاق عرض فترة أرشفة والعودة لإظهار الفترة الحالية. */
+function closeArchivedPeriodView() {
+  const banner = document.getElementById('archivedViewOnlyBanner');
+  if (banner) banner.classList.add('hidden');
+
+  if (window._adoraPreviousDb && Array.isArray(window._adoraPreviousDb)) {
+    window.db = window._adoraPreviousDb;
+  } else {
+    try {
+      const saved = localStorage.getItem('adora_rewards_db');
+      if (saved) window.db = JSON.parse(saved);
+      else window.db = [];
+    } catch (e) {
+      window.db = [];
+    }
+  }
+  window._adoraPreviousDb = undefined;
+
+  if (typeof loadCurrentPeriodStats === 'function') loadCurrentPeriodStats();
+  if (typeof populateEmployeePerformanceTable === 'function') populateEmployeePerformanceTable();
 }
 
 // Load archived period stats for display (without select dropdown)
@@ -2991,8 +3242,9 @@ function populateArchivedEmployeePerformanceTableForPeriod(employees, periodId) 
 }
 
 async function loadArchivedPeriodStats(periodId) {
+  var archivedStatsContentEl = document.getElementById('archivedPeriodStatsContent');
   if (!periodId) {
-    document.getElementById('archivedPeriodStatsContent').classList.add('hidden');
+    if (archivedStatsContentEl) archivedStatsContentEl.classList.add('hidden');
     return;
   }
   
@@ -3064,7 +3316,7 @@ async function loadArchivedPeriodStats(periodId) {
     populateArchivedEmployeePerformanceTable(archivedData);
     
     // Show content
-    document.getElementById('archivedPeriodStatsContent').classList.remove('hidden');
+    if (archivedStatsContentEl) archivedStatsContentEl.classList.remove('hidden');
     
     if (typeof showToast === 'function') {
       showToast('✅ تم تحميل إحصائيات الفترة بنجاح', 'success');

@@ -1,5 +1,5 @@
 // إصدار جديد بعد كل نشر = يلغي الكاش القديم ويفرض تحميل ملفات التطبيق من الشبكة
-const CACHE_NAME = 'elite-rewards-v3';
+const CACHE_NAME = 'elite-rewards-v4';
 const urlsToCache = [
   '/',
   '/index.html',
@@ -21,6 +21,14 @@ function isAppRequest(url) {
   } catch (_) { return false; }
 }
 
+// طلبات Firebase Storage: نمررها للشبكة دون اعتراض (تجنب CORS عند fetch من SW)
+function isFirebaseStorageRequest(url) {
+  try {
+    const u = new URL(url);
+    return u.hostname === 'firebasestorage.googleapis.com';
+  } catch (_) { return false; }
+}
+
 // Install: تخزين أولي للاستخدام عند انقطاع النت
 self.addEventListener('install', (event) => {
   event.waitUntil(
@@ -35,6 +43,10 @@ self.addEventListener('install', (event) => {
 self.addEventListener('fetch', (event) => {
   const req = event.request;
   if (req.method !== 'GET') {
+    event.respondWith(fetch(req));
+    return;
+  }
+  if (isFirebaseStorageRequest(req.url)) {
     event.respondWith(fetch(req));
     return;
   }
