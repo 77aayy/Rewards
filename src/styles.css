@@ -902,10 +902,13 @@ body.role-supervisor #targetTable th.col-net,
 body.role-supervisor #targetTable td.col-net {
   display: none !important;
 }
+body.role-supervisor #targetTable th.checkbox-col,
+body.role-supervisor #targetTable td.checkbox-col,
 body.role-supervisor #targetTable .checkbox-col {
-  width: 48px;
-  min-width: 48px;
-  max-width: 48px;
+  display: none !important;
+}
+body.role-supervisor #bonusesCombinedRow {
+  display: none !important;
 }
 body.role-supervisor #targetTable .col-m {
   width: 52px;
@@ -921,8 +924,72 @@ body.role-supervisor #targetTable .col-eval-google {
   width: 22%;
   min-width: 90px;
 }
+body.role-supervisor #mainTable tr.badges-row {
+  display: none !important;
+}
 body.role-supervisor #mainTable tr.badges-row > td {
   box-sizing: border-box;
+}
+
+/* منع تراكب البانر الثابت على المحتوى — لجميع صفحات الإداريين (المشرف، HR، الحسابات، المدير العام) */
+body:has(#roleWelcomeBanner) .max-w-full.mx-auto {
+  padding-top: 5.25rem;
+}
+/* fallback للمتصفحات التي لا تدعم :has() */
+body.role-supervisor .max-w-full.mx-auto,
+body.role-hr .max-w-full.mx-auto,
+body.role-accounting .max-w-full.mx-auto,
+body.role-manager .max-w-full.mx-auto {
+  padding-top: 5.25rem;
+}
+
+/* محاذاة أعمدة صفحة HR (التش ار) — table-layout ثابت ومحاذاة عمود الموظف مع الترويسة */
+body.role-hr #targetTable {
+  table-layout: fixed;
+  width: 100%;
+}
+body.role-hr #targetTable th.col-name,
+body.role-hr #targetTable tbody td.col-name {
+  vertical-align: middle;
+  text-align: right;
+  min-width: 140px;
+  width: 20%;
+}
+body.role-hr #targetTable tbody td.col-name > div {
+  text-align: right;
+  direction: rtl;
+}
+body.role-hr #targetTable .col-attendance {
+  min-width: 160px;
+  width: 16%;
+  text-align: center;
+}
+body.role-hr #targetTable .col-count {
+  width: 7%;
+  min-width: 80px;
+}
+body.role-hr #targetTable .col-eval-booking,
+body.role-hr #targetTable .col-eval-google {
+  width: 11%;
+  min-width: 70px;
+}
+body.role-hr #targetTable .col-net {
+  width: 20%;
+  min-width: 120px;
+}
+body.role-hr #mainTable tr.badges-row {
+  display: none !important;
+}
+body.role-hr #mainTable tr.badges-row > td {
+  box-sizing: border-box;
+}
+body.role-hr #targetTable th.checkbox-col,
+body.role-hr #targetTable td.checkbox-col,
+body.role-hr #targetTable .checkbox-col {
+  display: none !important;
+}
+body.role-hr #bonusesCombinedRow {
+  display: none !important;
 }
 
 /* Filter Pills - Mobile First */
@@ -1095,7 +1162,7 @@ flex-wrap: wrap;
 tfoot tr#bonusesCombinedRow td {
 vertical-align: top !important;
 }
-tfoot tr#bonusesCombinedRow td[colspan="8"] {
+tfoot tr#bonusesCombinedRow td[colspan="9"] {
 width: auto !important;
 max-width: none !important;
 }

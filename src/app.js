@@ -2719,14 +2719,11 @@ excellenceText.innerHTML = employeesHtml;
 } else excellenceText.innerHTML = '';
 }
 if (excellenceValue) excellenceValue.innerText = displayExcellenceEmployees.length > 0 ? `+${displayExcellenceBonus.toFixed(2)}` : '';
-// إظهار صف الحوافز الموحد وإجمالي الحوافز
+// إظهار صف الحوافز الموحد (بدون عمود إجمالي الحوافز — القيمة مضافة للصافي تلقائياً)
 const bonusesCombinedRow = document.getElementById('bonusesCombinedRow');
-const bonusesCombinedValueEl = document.getElementById('bonusesCombinedValue');
 const hasCommitment = (currentFilter === 'الكل' ? commitmentEmployees : commitmentEmployees.filter(e => e.branch === currentFilter)).length > 0;
 const hasExcellence = displayExcellenceEmployees.length > 0;
-const totalBonusSum = (hasCommitment ? (currentFilter === 'الكل' ? commitmentEmployees.length : commitmentEmployees.filter(e => e.branch === currentFilter).length) * 50 : 0) + displayExcellenceBonus;
 if (bonusesCombinedRow) bonusesCombinedRow.style.display = (hasCommitment || hasExcellence) ? 'table-row' : 'none';
-if (bonusesCombinedValueEl) bonusesCombinedValueEl.innerText = '+' + totalBonusSum.toFixed(2);
 // Update excellence bonus stat card
 const topExcellenceName = document.getElementById('topExcellenceName');
 const topExcellenceValue = document.getElementById('topExcellenceValue');
@@ -5424,10 +5421,45 @@ function showAdminSubmittedScreen() {
 }
 
 function submitAdminAndLock() {
-  if (typeof showToast === 'function') {
-    showToast('تم الإرسال بنجاح', 'success');
+  var banner = document.getElementById('roleWelcomeBanner');
+  var sendBtn = banner ? banner.querySelector('button[onclick*="submitAdminAndLock"]') : null;
+  if (sendBtn) sendBtn.disabled = true;
+
+  var progressWrap = document.getElementById('submitProgressWrap');
+  var progressBar = document.getElementById('submitProgressBar');
+  if (!progressWrap && banner) {
+    progressWrap = document.createElement('div');
+    progressWrap.id = 'submitProgressWrap';
+    progressWrap.className = 'mt-2 w-full max-w-[200px]';
+    progressWrap.style.cssText = 'display: none;';
+    progressWrap.innerHTML = '<div class="mt-1.5 w-full rounded-full overflow-hidden relative" style="height: 6px;"><div style="position: absolute; inset: 0; background: #4b5563;"></div><div id="submitProgressBar" style="position: absolute; left: 0; top: 0; width: 0%; height: 100%; background: linear-gradient(90deg, #ef4444 0%, #f97316 25%, #eab308 50%, #84cc16 75%, #22c55e 100%); transition: width 0.25s ease;"></div></div>';
+    var btnContainer = (sendBtn && sendBtn.parentElement) || banner.querySelector('.flex-shrink-0');
+    if (btnContainer) btnContainer.appendChild(progressWrap);
   }
-  showAdminSubmittedScreen();
+  if (progressWrap) {
+    progressWrap.style.display = 'block';
+    progressBar = document.getElementById('submitProgressBar');
+  }
+  function setProgress(pct) {
+    if (progressBar) progressBar.style.width = (pct || 0) + '%';
+  }
+  setProgress(0);
+  setTimeout(function () { setProgress(25); }, 150);
+  var syncPromise = typeof doSyncLivePeriodNow === 'function' ? doSyncLivePeriodNow() : Promise.resolve();
+  syncPromise.then(function () {
+    setProgress(100);
+    if (typeof showToast === 'function') showToast('تم الإرسال بنجاح', 'success');
+    setTimeout(function () {
+      if (progressWrap) progressWrap.style.display = 'none';
+      if (sendBtn) sendBtn.disabled = false;
+      showAdminSubmittedScreen();
+    }, 400);
+  }).catch(function () {
+    setProgress(0);
+    if (progressWrap) progressWrap.style.display = 'none';
+    if (sendBtn) sendBtn.disabled = false;
+    if (typeof showToast === 'function') showToast('حدث خطأ أثناء المزامنة', 'error');
+  });
 }
 
 function showAdminNoReturnScreen() {
@@ -6799,7 +6831,7 @@ function showRoleWelcomeMessage(role) {
         '<div class="min-w-0">' +
           '<div class="flex items-center gap-2 flex-wrap">' +
             '<span class="font-bold text-base sm:text-lg tracking-tight text-white">مرحباً، ' + (displayName || roleName) + '</span>' +
-            '<span class="inline-flex items-center px-2.5 py-0.5 rounded-lg text-xs font-bold flex-shrink-0" style="background: rgba(20, 184, 166, 0.2); color: #5eead4;">' + roleName + '</span>' +
+            (displayName !== roleName ? '<span class="inline-flex items-center px-2.5 py-0.5 rounded-lg text-xs font-bold flex-shrink-0" style="background: rgba(20, 184, 166, 0.2); color: #5eead4;">' + roleName + '</span>' : '') +
           '</div>' +
           '<p class="text-sm text-white/85 mt-0.5" style="margin:0;line-height:1.4;">' + instruction + '</p>' +
         '</div>' +
@@ -7142,13 +7174,15 @@ function applyLivePeriod(data) {
   }
 }
 
-/** يرفع آخر وضع الفترة الحية إلى Firebase (مع debounce 400ms). */
+/** يرفع آخر وضع الفترة الحية إلى Firebase (مع debounce 400ms). المشرف وHR: مزامنة في الخلفية بدون إظهار overlay. */
 function syncLivePeriodToFirebase() {
   clearTimeout(syncLivePeriodTimer);
   syncLivePeriodTimer = setTimeout(async () => {
+    var role = (typeof localStorage !== 'undefined' && localStorage.getItem('adora_current_role')) || '';
+    var hideSyncUI = (role === 'supervisor' || role === 'hr');
     const st = typeof storage !== 'undefined' ? storage : (typeof window !== 'undefined' ? window.storage : null);
     if (!st || typeof st.ref !== 'function') return;
-    if (typeof showLoadingOverlay === 'function') showLoadingOverlay('جاري المزامنة...');
+    if (!hideSyncUI && typeof showLoadingOverlay === 'function') showLoadingOverlay('جاري المزامنة...');
     try {
       const savedDb = localStorage.getItem('adora_rewards_db');
       if (!savedDb) return;
@@ -7171,9 +7205,40 @@ function syncLivePeriodToFirebase() {
     } catch (e) {
       // صامت عند الفشل لئلا نزعج المستخدم
     } finally {
-      if (typeof hideLoadingOverlay === 'function') hideLoadingOverlay();
+      if (!hideSyncUI && typeof hideLoadingOverlay === 'function') hideLoadingOverlay();
     }
   }, 400);
+}
+
+/** مزامنة فورية (بدون debounce) — تُستدعى عند الضغط على إرسال في المشرف/HR. تُرجع Promise. */
+function doSyncLivePeriodNow() {
+  return new Promise(async function (resolve, reject) {
+    var st = typeof storage !== 'undefined' ? storage : (typeof window !== 'undefined' ? window.storage : null);
+    if (!st || typeof st.ref !== 'function') { resolve(); return; }
+    try {
+      var savedDb = localStorage.getItem('adora_rewards_db');
+      if (!savedDb) { resolve(); return; }
+      var parsed = JSON.parse(savedDb);
+      if (!Array.isArray(parsed) || parsed.length === 0) { resolve(); return; }
+      var payload = {
+        db: parsed,
+        branches: JSON.parse(localStorage.getItem('adora_rewards_branches') || '[]'),
+        reportStartDate: localStorage.getItem('adora_rewards_startDate') || null,
+        periodText: localStorage.getItem('adora_rewards_periodText') || null,
+        evalRate: parseInt(localStorage.getItem('adora_rewards_evalRate'), 10) || 20,
+        discounts: (function () { try { return JSON.parse(localStorage.getItem('adora_rewards_discounts') || '[]'); } catch (_) { return []; } })(),
+        discountTypes: (function () { try { return JSON.parse(localStorage.getItem('adora_rewards_discountTypes') || '[]'); } catch (_) { return []; } })(),
+        employeeCodes: (function () { try { return JSON.parse(localStorage.getItem('adora_rewards_employeeCodes') || '{}'); } catch (_) { return {}; } })(),
+        lastModified: Date.now()
+      };
+      var blob = new Blob([JSON.stringify(payload)], { type: 'application/json' });
+      await st.ref(LIVE_PERIOD_PATH).put(blob);
+      if (payload.lastModified && typeof lastAppliedLiveModified !== 'undefined') lastAppliedLiveModified = payload.lastModified;
+      resolve();
+    } catch (e) {
+      reject(e);
+    }
+  });
 }
 
 /** جلب دوري (كل 15 ثانية) لآخر وضع الفترة من Firebase وتحديث الواجهة إن وُجدت نسخة أحدث — بديل بسيط عن real-time listener لأن المشروع يستخدم Storage وليس Firestore. */
@@ -7186,9 +7251,10 @@ function startLivePeriodPolling() {
   function poll() {
     if (typeof isEmployeeMode === 'function' && isEmployeeMode()) return;
     (async function () {
+      var role = (typeof localStorage !== 'undefined' && localStorage.getItem('adora_current_role')) || '';
       var indicator = document.getElementById('liveSyncIndicator');
       try {
-        if (indicator) indicator.style.display = 'flex';
+        if (indicator && role !== 'supervisor' && role !== 'hr') indicator.style.display = 'flex';
         const data = await (typeof fetchLivePeriodFromFirebase === 'function' ? fetchLivePeriodFromFirebase() : null);
         if (!data || !Array.isArray(data.db) || data.db.length === 0) return;
         const remoteModified = Number(data.lastModified) || 0;

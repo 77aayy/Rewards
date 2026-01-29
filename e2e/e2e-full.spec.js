@@ -1,16 +1,30 @@
 /**
  * E2E Full Checklist - TEST_CHECKLIST_E2E.md
  * Base URL: https://rewards-63e43.web.app
+ * ملف الإكسيل الاختباري: UserStatisticsReport_Ar.xlsx في جذر المشروع
  * Run: npx playwright test e2e-full.spec.js --project=chromium
  */
+const path = require('path');
 const { test, expect } = require('@playwright/test');
 
 const BASE_URL = process.env.E2E_BASE_URL || 'https://rewards-63e43.web.app';
 const ADMIN_URL = `${BASE_URL}/?admin=ayman5255`;
+const EXCEL_PATH = path.resolve(__dirname, '..', 'UserStatisticsReport_Ar.xlsx');
 
 test.describe('E2E Full Checklist', () => {
   test.beforeEach(async ({ page }) => {
     await page.goto(ADMIN_URL, { waitUntil: 'networkidle', timeout: 15000 });
+  });
+
+  test('ب. رفع ملف الإكسيل الاختباري', async ({ page }) => {
+    await page.goto(BASE_URL, { waitUntil: 'networkidle', timeout: 15000 });
+    await expect(page.locator('#uploadBox')).toBeVisible({ timeout: 5000 });
+    const fileInput = page.locator('#fileInput');
+    await fileInput.setInputFiles(EXCEL_PATH);
+    await page.waitForTimeout(2000);
+    await expect(page.locator('#dashboard')).toBeVisible({ timeout: 15000 });
+    await expect(page.locator('#mainTable')).toBeVisible({ timeout: 5000 });
+    await expect(page.locator('#headerPeriodRange')).not.toHaveText('-');
   });
 
   test('أ. خروج ثم دخول - لوحة وبيانات تظهر بعد إعادة الدخول', async ({ page }) => {
