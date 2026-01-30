@@ -327,9 +327,9 @@ async function doAppInit() {
       }
     } catch (e) {}
   }
-  loadDataFromStorage();
+  // Firebase-First: جلب الفترة من Firebase أولاً (للجميع: أدمن، مشرف، HR، إلخ) ثم استخدام localStorage كـ cache احتياطي
   var isAdminLinkOpen = urlRole && urlToken && urlPeriod && !isAdminMode() && ['supervisor', 'hr', 'accounting', 'manager'].indexOf(urlRole) >= 0;
-  if (isAdminLinkOpen && db.length === 0) {
+  if (isAdminLinkOpen) {
     // فتح رابط إداري على جهاز جديد: إظهار لوحة التحكم فوراً ثم جلب الفترة من Firebase (مع إعادة محاولة ورسالة خطأ عند الفشل)
     var uploadBoxEl = document.getElementById('uploadBox');
     var dashboardEl = document.getElementById('dashboard');
@@ -366,14 +366,34 @@ async function doAppInit() {
           await new Promise(function (r) { setTimeout(r, 150); });
         }
         var live = null;
-        var maxAttempts = 3;
-        for (var attempt = 0; attempt < maxAttempts; attempt++) {
-          if (typeof fetchLivePeriodFromFirebase === 'function') live = await fetchLivePeriodFromFirebase();
-          if (live && Array.isArray(live.db) && live.db.length > 0) break;
-          if (attempt < maxAttempts - 1) await new Promise(function (r) { setTimeout(r, 1000); });
+        // أولاً: جلب periods/periodId.json (الملف الذي يُكتب عند فتح «إدارة الإداريين») — أنسب لفتح الرابط لأول مرة على جهاز الموظف
+        if (urlPeriod && typeof fetchPeriodFromFirebase === 'function') {
+          live = await fetchPeriodFromFirebase(urlPeriod);
+          if (!live && (Date.now() - waitStart) < maxWaitMs - 500) await new Promise(function (r) { setTimeout(r, 800); });
+          if (!live) live = await fetchPeriodFromFirebase(urlPeriod);
+        }
+        // ثانياً: إن لم يُحمّل، جرب live.json (قد يكون محدّثاً من جهاز آخر)
+        if (!live || !Array.isArray(live.db) || live.db.length === 0) {
+          var maxAttempts = 3;
+          for (var attempt = 0; attempt < maxAttempts; attempt++) {
+            if (typeof fetchLivePeriodFromFirebase === 'function') live = await fetchLivePeriodFromFirebase();
+            if (live && Array.isArray(live.db) && live.db.length > 0) break;
+            if (attempt < maxAttempts - 1) await new Promise(function (r) { setTimeout(r, 1000); });
+          }
+        }
+        // احتياطي أخير: إعادة محاولة periods/periodId.json
+        if ((!live || !Array.isArray(live.db) || live.db.length === 0) && urlPeriod && typeof fetchPeriodFromFirebase === 'function') {
+          live = await fetchPeriodFromFirebase(urlPeriod);
         }
         if (!isEmployeeMode() && live && Array.isArray(live.db) && live.db.length > 0 && typeof applyLivePeriod === 'function') {
           applyLivePeriod(live);
+          loadDataFromStorage();
+          if (el && el.parentNode) el.parentNode.removeChild(el);
+          if (typeof updateFilters === 'function') updateFilters();
+          if (typeof updatePrintButtonText === 'function') updatePrintButtonText();
+          if (typeof renderUI === 'function') renderUI('الكل');
+        } else if (db.length > 0) {
+          // احتياطي: لو Firebase فشل لكن عندنا بيانات محلية (cache) — نستخدمها
           loadDataFromStorage();
           if (el && el.parentNode) el.parentNode.removeChild(el);
           if (typeof updateFilters === 'function') updateFilters();
@@ -412,11 +432,62 @@ async function doAppInit() {
     if (!isEmployeeMode() && typeof syncLivePeriodToFirebase === 'function') syncLivePeriodToFirebase();
     return;
   }
+  // Firebase-First للجميع: جلب الفترة من Firebase أولاً (أدمن، مشرف، HR، حسابات، مدير) ثم استخدام localStorage كـ cache احتياطي
   try {
-    var live = await (typeof fetchLivePeriodFromFirebase === 'function' ? fetchLivePeriodFromFirebase() : Promise.resolve(null));
-    if (!isEmployeeMode() && live && Array.isArray(live.db) && live.db.length > 0 && typeof applyLivePeriod === 'function') applyLivePeriod(live);
-  } catch (_) {}
-  loadDataFromStorage();
+    if (typeof initializeFirebase === 'function') initializeFirebase();
+    var waitStart = Date.now();
+    var maxWaitMs = 10000;
+    while (!(typeof window !== 'undefined' && window.storage) && (Date.now() - waitStart) < maxWaitMs) {
+      await new Promise(function (r) { setTimeout(r, 150); });
+    }
+    var live = null;
+    // محاولة جلب من live.json أولاً (آخر نسخة محدثة)
+    if (typeof fetchLivePeriodFromFirebase === 'function') live = await fetchLivePeriodFromFirebase();
+    // إن لم يُحمّل: جرب periods/periodId.json (حسب الشهر الحالي أو من localStorage)
+    if (!live || !Array.isArray(live.db) || live.db.length === 0) {
+      var periodId = null;
+      try {
+        var startDate = localStorage.getItem('adora_rewards_startDate');
+        if (startDate && /^\d{4}-\d{2}-\d{2}/.test(startDate)) periodId = startDate.substring(0, 7).replace('-', '_');
+      } catch (_) {}
+      if (!periodId) periodId = new Date().getFullYear() + '_' + String(new Date().getMonth() + 1).padStart(2, '0');
+      if (typeof fetchPeriodFromFirebase === 'function') live = await fetchPeriodFromFirebase(periodId);
+    }
+    // إذا جلبنا بيانات من Firebase: نطبقها ونعرض اللوحة
+    if (!isEmployeeMode() && live && Array.isArray(live.db) && live.db.length > 0 && typeof applyLivePeriod === 'function') {
+      applyLivePeriod(live);
+      loadDataFromStorage();
+      // إذا كنا في وضع الأدمن: إظهار اللوحة
+      if (isAdminMode()) {
+        var uploadBoxEl = document.getElementById('uploadBox');
+        var dashboardEl = document.getElementById('dashboard');
+        var actionBtnsEl = document.getElementById('actionBtns');
+        if (uploadBoxEl) uploadBoxEl.classList.add('hidden');
+        if (dashboardEl) dashboardEl.classList.remove('hidden');
+        if (actionBtnsEl) actionBtnsEl.style.display = 'flex';
+        if (typeof updateFilters === 'function') updateFilters();
+        if (typeof updatePrintButtonText === 'function') updatePrintButtonText();
+        if (typeof renderUI === 'function') renderUI('الكل');
+      }
+    } else {
+      // احتياطي: لو Firebase فشل، نحاول localStorage (cache)
+      loadDataFromStorage();
+      if (isAdminMode() && db.length > 0) {
+        var uploadBoxEl = document.getElementById('uploadBox');
+        var dashboardEl = document.getElementById('dashboard');
+        var actionBtnsEl = document.getElementById('actionBtns');
+        if (uploadBoxEl) uploadBoxEl.classList.add('hidden');
+        if (dashboardEl) dashboardEl.classList.remove('hidden');
+        if (actionBtnsEl) actionBtnsEl.style.display = 'flex';
+        if (typeof updateFilters === 'function') updateFilters();
+        if (typeof updatePrintButtonText === 'function') updatePrintButtonText();
+        if (typeof renderUI === 'function') renderUI('الكل');
+      }
+    }
+  } catch (_) {
+    // في حالة خطأ: نحاول localStorage
+    loadDataFromStorage();
+  }
   if (!isEmployeeMode() && typeof syncLivePeriodToFirebase === 'function') syncLivePeriodToFirebase();
   if (!isEmployeeMode() && typeof startLivePeriodPolling === 'function') startLivePeriodPolling();
   if (isAdminMode()) return;
@@ -563,7 +634,7 @@ document.getElementById('fileInput').addEventListener('change', (e) => {
 const file = e.target.files[0];
 if (!file) return;
 const reader = new FileReader();
-reader.onload = (evt) => {
+reader.onload = async (evt) => {
 if (typeof showLoadingOverlay === 'function') showLoadingOverlay('جاري تحميل الملف...');
 try {
 const wb = XLSX.read(new Uint8Array(evt.target.result), { type: 'array' });
@@ -947,7 +1018,7 @@ localStorage.setItem('adora_rewards_periodText', periodText);
 // -----------------------------
 // 2. Parse as RAW for reliable Data Processing (numbers as numbers)
 const rowsRaw = XLSX.utils.sheet_to_json(sheet, { header: 1, raw: true });
-processData(rowsRaw);
+await processData(rowsRaw);
 if (db.length > 0) {
   showToast('✅ تم تحميل البيانات بنجاح');
 } else {
@@ -963,18 +1034,47 @@ if (typeof hideLoadingOverlay === 'function') hideLoadingOverlay();
 reader.readAsArrayBuffer(file);
 });
 // === Data Processing ===
-// عند رفع ملف جديد: نسترجع بيانات الإداريين (تقييمات، التزام، أيام) والخصومات المرتبطة بأسماء الموظفين من adora_rewards_db و adora_rewards_discounts — ما دامت الفترة لم تُغلق (نفس الجلسة/الفترة).
-function processData(rows) {
-// Load old data from localStorage BEFORE clearing db — استرجاع البيانات القديمة المرتبطة بأسماء الموظفين
-const oldDb = [];
+// Firebase-First: عند رفع ملف جديد، نجلب الفترة الحالية من Firebase دائماً (حتى لو localStorage فيه بيانات) ثم ندمج: نحدث count فقط من الإكسيل، وباقي البيانات (تقييمات، حضور، خصومات) تبقى من Firebase.
+async function processData(rows) {
+// Firebase-First: جلب البيانات الحالية من Firebase دائماً
+let oldDb = [];
+if (typeof reportStartDate === 'string' && reportStartDate && /^\d{4}-\d{2}-\d{2}/.test(reportStartDate)) {
+try {
+console.log('🔄 جاري جلب الفترة الحالية من Firebase للدمج مع الإكسيل...');
+if (typeof initializeFirebase === 'function') initializeFirebase();
+var waitStart = Date.now();
+while (!(typeof window !== 'undefined' && window.storage) && (Date.now() - waitStart) < 5000) {
+await new Promise(function (r) { setTimeout(r, 150); });
+}
+var periodId = reportStartDate.substring(0, 7).replace('-', '_');
+var data = null;
+// محاولة 1: periods/periodId.json (نسخة ثابتة للفترة)
+if (typeof fetchPeriodFromFirebase === 'function') data = await fetchPeriodFromFirebase(periodId);
+// محاولة 2: live.json (آخر نسخة محدثة)
+if (!data || !Array.isArray(data.db) || data.db.length === 0) {
+if (typeof fetchLivePeriodFromFirebase === 'function') data = await fetchLivePeriodFromFirebase();
+}
+if (data && Array.isArray(data.db) && data.db.length > 0) {
+oldDb = data.db;
+console.log('✅ تم جلب البيانات الحالية من Firebase:', oldDb.length, 'موظف (سيتم دمج: تحديث count فقط، الباقي يبقى)');
+}
+} catch (e) {
+console.warn('⚠️ فشل جلب البيانات من Firebase:', e.message || e);
+}
+}
+
+// احتياطي: لو Firebase فشل أو لا توجد فترة، نحاول localStorage كـ cache
+if (oldDb.length === 0) {
 try {
 const savedDb = localStorage.getItem('adora_rewards_db');
 if (savedDb) {
-oldDb.push(...JSON.parse(savedDb));
-console.log('✅ Loaded old data:', oldDb.length, 'employees (merge: evaluations, attendance, discounts by name)');
+oldDb = JSON.parse(savedDb);
+if (!Array.isArray(oldDb)) oldDb = [];
+else console.log('⚠️ استخدام البيانات من localStorage (cache) — Firebase لم يُحمّل:', oldDb.length, 'employees');
 }
 } catch (error) {
-console.error('❌ Error loading old data:', error);
+console.error('❌ Error loading from localStorage:', error);
+}
 }
 
 // Create a map of old employees by name+branch for quick lookup
@@ -5519,7 +5619,18 @@ function submitAdminAndLock() {
   }
   setProgress(0);
   setTimeout(function () { setProgress(25); }, 150);
-  var syncPromise = typeof doSyncLivePeriodNow === 'function' ? doSyncLivePeriodNow() : Promise.resolve();
+  // تفريغ الحقل النشط (blur) لضمان حفظ آخر قيمة في localStorage قبل الرفع، ثم تأخير بسيط لتنفيذ معالج الحفظ
+  try {
+    var ae = document.activeElement;
+    if (ae && ae.classList && (ae.classList.contains('eval-input') || ae.classList.contains('attendance-toggle') || ae.classList.contains('attendance-days-input')))
+      ae.blur();
+  } catch (_) {}
+  var syncPromise = new Promise(function (resolve) {
+    setTimeout(function () {
+      var p = typeof doSyncLivePeriodNow === 'function' ? doSyncLivePeriodNow() : Promise.resolve();
+      p.then(resolve).catch(resolve);
+    }, 200);
+  });
   syncPromise.then(function () {
     setProgress(100);
     if (typeof showToast === 'function') showToast('تم الإرسال بنجاح', 'success');
@@ -7229,6 +7340,29 @@ async function fetchLivePeriodFromFirebase() {
   }
 }
 
+/** يجلب بيانات فترة محددة من Firebase (periods/{periodId}.json) — احتياطي عند فتح رابط إداري عندما live.json فارغ أو غير موجود. */
+async function fetchPeriodFromFirebase(periodId) {
+  if (!periodId || typeof periodId !== 'string') return null;
+  const st = typeof storage !== 'undefined' ? storage : (typeof window !== 'undefined' ? window.storage : null);
+  if (!st || typeof st.ref !== 'function') return null;
+  try {
+    const path = 'periods/' + periodId + '.json';
+    const ref = st.ref(path);
+    const blob = await ref.getBlob();
+    const text = typeof blob.text === 'function' ? await blob.text() : await new Promise((res, rej) => {
+      const r = new FileReader();
+      r.onload = () => res(r.result);
+      r.onerror = rej;
+      r.readAsText(blob);
+    });
+    const data = JSON.parse(text);
+    if (!data || !Array.isArray(data.db) || data.db.length === 0) return null;
+    return data;
+  } catch (e) {
+    return null;
+  }
+}
+
 /** آخر وقت تطبيق معروف من Firebase (لتجنّب استبدال بيانات أحدث بقديمة). */
 let lastAppliedLiveModified = 0;
 
@@ -7251,7 +7385,7 @@ function applyLivePeriod(data) {
   }
 }
 
-/** يرفع آخر وضع الفترة الحية إلى Firebase (مع debounce 400ms). المشرف وHR: مزامنة في الخلفية بدون إظهار overlay. */
+/** يرفع آخر وضع الفترة الحية إلى Firebase (مع debounce 150ms — سريع للكتابة الفورية). المشرف وHR: مزامنة في الخلفية بدون إظهار overlay. */
 function syncLivePeriodToFirebase() {
   clearTimeout(syncLivePeriodTimer);
   syncLivePeriodTimer = setTimeout(async () => {
@@ -7279,12 +7413,18 @@ function syncLivePeriodToFirebase() {
       const blob = new Blob([JSON.stringify(payload)], { type: 'application/json' });
       await st.ref(LIVE_PERIOD_PATH).put(blob);
       if (payload.lastModified) lastAppliedLiveModified = payload.lastModified;
+      // كتابة نسخة حسب periodId (periods/2026_01.json) حتى يعمل رابط الإداري من أي جهاز
+      var startDate = payload.reportStartDate || localStorage.getItem('adora_rewards_startDate');
+      if (startDate && /^\d{4}-\d{2}-\d{2}/.test(String(startDate))) {
+        var periodId = String(startDate).substring(0, 7).replace('-', '_');
+        try { await st.ref('periods/' + periodId + '.json').put(blob); } catch (_) {}
+      }
     } catch (e) {
       // صامت عند الفشل لئلا نزعج المستخدم
     } finally {
       if (!hideSyncUI && typeof hideLoadingOverlay === 'function') hideLoadingOverlay();
     }
-  }, 400);
+  }, 150);
 }
 
 /** مزامنة فورية (بدون debounce) — تُستدعى عند الضغط على إرسال في المشرف/HR. تُرجع Promise. */
@@ -7311,6 +7451,11 @@ function doSyncLivePeriodNow() {
       var blob = new Blob([JSON.stringify(payload)], { type: 'application/json' });
       await st.ref(LIVE_PERIOD_PATH).put(blob);
       if (payload.lastModified && typeof lastAppliedLiveModified !== 'undefined') lastAppliedLiveModified = payload.lastModified;
+      var startDate = payload.reportStartDate || (typeof localStorage !== 'undefined' ? localStorage.getItem('adora_rewards_startDate') : null);
+      if (startDate && /^\d{4}-\d{2}-\d{2}/.test(String(startDate))) {
+        var periodId = String(startDate).substring(0, 7).replace('-', '_');
+        try { await st.ref('periods/' + periodId + '.json').put(blob); } catch (_) {}
+      }
       resolve();
     } catch (e) {
       reject(e);
@@ -7318,9 +7463,9 @@ function doSyncLivePeriodNow() {
   });
 }
 
-/** جلب دوري لآخر وضع الفترة من Firebase وتحديث الواجهة — الأدمن كل 3 ثوانٍ (تحديث فوري بعد إرسال المشرف/HR)، وباقي الأدوار كل 15 ثانية. */
+/** جلب دوري لآخر وضع الفترة من Firebase وتحديث الواجهة — الأدمن كل 2 ثوانٍ (تحديث فوري بعد إرسال المشرف/HR)، وباقي الأدوار كل 15 ثانية. */
 const LIVE_POLL_INTERVAL_MS = 15000;
-const ADMIN_POLL_INTERVAL_MS = 3000;
+const ADMIN_POLL_INTERVAL_MS = 2000;
 let livePollTimerId = null;
 
 function startLivePeriodPolling() {
@@ -7383,6 +7528,7 @@ if (typeof window !== 'undefined') {
   window.syncLivePeriodToFirebase = syncLivePeriodToFirebase;
   window.doSyncLivePeriodNow = doSyncLivePeriodNow;
   window.fetchLivePeriodFromFirebase = fetchLivePeriodFromFirebase;
+  window.fetchPeriodFromFirebase = fetchPeriodFromFirebase;
   window.applyLivePeriod = applyLivePeriod;
   window.startLivePeriodPolling = startLivePeriodPolling;
   window.stopLivePeriodPolling = stopLivePeriodPolling;
