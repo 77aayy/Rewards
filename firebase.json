@@ -4,11 +4,25 @@
   },
   "hosting": {
     "site": "rewards-63e43",
-    "public": ".",
+    "public": "public",
     "ignore": [
       "firebase.json",
       "**/.*",
-      "**/node_modules/**"
+      "**/node_modules/**",
+      "Downloads/**",
+      "e2e/**",
+      ".github/**",
+      "scripts/**",
+      "**/*.md",
+      "package.json",
+      "package-lock.json",
+      "playwright.config.js",
+      "tailwind.config.js",
+      "UserStatisticsReport_Ar.xlsx",
+      "Procfile",
+      "apphosting.yaml",
+      ".cursorrules",
+      ".cursorignore"
     ],
     "rewrites": [
       {

@@ -8,7 +8,10 @@
     "start": "npx serve -s dist -l 8080",
     "storage-cors": "node scripts/set-storage-cors.js",
     "test:e2e": "playwright test e2e/e2e-full.spec.js --project=chromium",
-    "deploy": "firebase use rewards-63e43 && firebase deploy --only hosting",
+    "test:e2e:online": "playwright test e2e/e2e-full.spec.js --project=chromium",
+    "test:e2e:online:report": "node scripts/run-e2e-online.js",
+    "predeploy": "node scripts/prepare-deploy.js",
+    "deploy": "npm run predeploy && firebase use rewards-63e43 && firebase deploy --only hosting",
     "deploy:full": "firebase use rewards-63e43 && firebase deploy --only hosting,storage",
     "deploy:test": "npm run deploy && npm run test:e2e"
   },

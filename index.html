@@ -66,53 +66,53 @@
                     </p>
                 </div>
             </div>
-            <div class="flex flex-wrap gap-2 sm:gap-3 w-full sm:w-auto justify-end" id="actionBtns" style="display: none;">
-                <button id="adminManageBtn" onclick="showAdminManagementModal()"
-                    class="btn-modern px-4 sm:px-5 md:px-6 py-2 sm:py-2.5 md:py-3 bg-gradient-to-r from-purple-500/80 to-purple-600/80 text-white rounded-xl text-xs sm:text-sm font-bold border border-purple-400/50 flex items-center gap-2 hover:shadow-lg hover:from-purple-500 hover:to-purple-600 transition-all backdrop-blur-sm" style="font-size: clamp(0.75rem, 2vw, 0.875rem);">
-                    <span class="action-btn-icon" aria-hidden="true"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M22 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg></span>
-                    <span class="hidden sm:inline">إدارة الإداريين</span>
-                    <span class="sm:hidden">إداريين</span>
-                </button>
-                <button onclick="returnToUpload()"
-                    class="btn-modern px-4 sm:px-5 md:px-6 py-2 sm:py-2.5 md:py-3 bg-gradient-to-r from-red-500/80 to-red-600/80 text-white rounded-xl text-xs sm:text-sm font-bold border border-red-400/50 flex items-center gap-2 hover:shadow-lg hover:from-red-500 hover:to-red-600 transition-all backdrop-blur-sm" style="font-size: clamp(0.75rem, 2vw, 0.875rem);">
-                    <span class="action-btn-icon" aria-hidden="true"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" y1="12" x2="9" y2="12"/></svg></span>
+            <div class="flex flex-wrap gap-2 sm:gap-3 w-full sm:w-auto justify-end items-center" id="actionBtns" style="display: none;">
+                <!-- ترتيب من اليمين لليسار (RTL): خروج أقصى اليمين ثم إغلاق الفترة ثم الباقي -->
+                <button type="button" id="btnReturnToUpload" onclick="returnToUpload()"
+                    class="action-header-btn inline-flex items-center gap-2 px-3 sm:px-4 py-2.5 rounded-xl text-xs sm:text-sm font-medium text-white bg-red-600/95 border border-red-400/40 shadow-lg shadow-red-500/20 hover:bg-red-500 hover:border-red-300 transition-all duration-200 focus:outline-none focus:ring-2 focus:ring-red-400/50 focus:ring-offset-2 focus:ring-offset-[#0f1729]"
+                    data-testid="btn-return-to-upload" aria-label="خروج إلى صفحة الرفع">
+                    <svg class="w-4 h-4 shrink-0" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" y1="12" x2="9" y2="12"/></svg>
                     <span>خروج</span>
                 </button>
-                <button id="printSelectedBtn" onclick="smartPrint(true)"
-                    class="hidden btn-modern px-4 sm:px-5 md:px-6 py-2 sm:py-2.5 md:py-3 bg-gradient-to-r from-orange-500/90 to-orange-600/90 text-white rounded-xl text-xs sm:text-sm font-bold shadow-lg flex items-center gap-2 hover:shadow-xl hover:from-orange-500 hover:to-orange-600 transition-all backdrop-blur-sm" style="font-size: clamp(0.75rem, 2vw, 0.875rem);">
-                    <span class="action-btn-icon" aria-hidden="true"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><circle cx="12" cy="12" r="6"/><circle cx="12" cy="12" r="2"/></svg></span>
-                    <span class="hidden sm:inline">طباعة المحدد</span>
-                    <span class="sm:hidden">محدد</span>
+                <button type="button" onclick="showClosePeriodModal()"
+                    class="action-header-btn inline-flex items-center gap-2 px-3 sm:px-4 py-2.5 rounded-xl text-xs sm:text-sm font-medium text-white bg-red-600/90 border border-red-400/40 shadow-lg shadow-red-500/15 hover:bg-red-500 hover:border-red-300 transition-all duration-200 focus:outline-none focus:ring-2 focus:ring-red-400/50 focus:ring-offset-2 focus:ring-offset-[#0f1729]">
+                    <svg class="w-4 h-4 shrink-0" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="11" width="18" height="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>
+                    <span class="hidden sm:inline">إغلاق الفترة</span><span class="sm:hidden">إغلاق</span>
                 </button>
-                <button id="printAllBtn" onclick="smartPrint(false)"
-                    class="btn-modern px-4 sm:px-5 md:px-6 py-2 sm:py-2.5 md:py-3 bg-gradient-to-r from-turquoise/80 to-teal-500/80 text-white rounded-xl text-xs sm:text-sm font-bold border border-turquoise/30 flex items-center gap-2 hover:shadow-lg hover:from-turquoise hover:to-teal-500 transition-all backdrop-blur-sm" style="font-size: clamp(0.75rem, 2vw, 0.875rem);">
-                    <span class="action-btn-icon" aria-hidden="true"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 6 2 18 2 18 9"/><path d="M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2"/><rect x="6" y="14" width="12" height="8"/></svg></span>
-                    <span id="printAllBtnLabel" class="hidden sm:inline">طباعة الكل</span>
-                    <span id="printAllBtnLabelMobile" class="sm:hidden">الكل</span>
+                <button type="button" onclick="showDiscountsModal()"
+                    class="action-header-btn inline-flex items-center gap-2 px-3 sm:px-4 py-2.5 rounded-xl text-xs sm:text-sm font-medium text-gray-200 bg-white/[0.07] border border-white/20 hover:bg-[#14b8a6]/20 hover:border-[#14b8a6]/50 hover:text-white focus:outline-none focus:ring-2 focus:ring-[#14b8a6]/50 focus:ring-offset-2 focus:ring-offset-[#0f1729] transition-all duration-200">
+                    <svg class="w-4 h-4 shrink-0" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="19" y1="5" x2="5" y2="19"/><circle cx="6.5" cy="6.5" r="2.5"/><circle cx="17.5" cy="17.5" r="2.5"/></svg>
+                    <span class="hidden sm:inline">الخصم الإداري</span><span class="sm:hidden">خصم إداري</span>
                 </button>
-                <button onclick="showConditionsModal()"
-                    class="btn-modern px-4 sm:px-5 md:px-6 py-2 sm:py-2.5 md:py-3 bg-white/10 text-gray-200 rounded-xl text-xs sm:text-sm font-bold border border-white/20 flex items-center gap-2 hover:bg-white/15 hover:border-turquoise/40 transition-all backdrop-blur-sm" style="font-size: clamp(0.75rem, 2vw, 0.875rem);">
-                    <span class="action-btn-icon" aria-hidden="true"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/><line x1="10" y1="9" x2="8" y2="9"/></svg></span>
-                    <span class="hidden sm:inline">شروط المكافآت</span>
-                    <span class="sm:hidden">شروط</span>
+                <button type="button" onclick="showReportsPage()"
+                    class="action-header-btn inline-flex items-center gap-2 px-3 sm:px-4 py-2.5 rounded-xl text-xs sm:text-sm font-medium text-gray-200 bg-white/[0.07] border border-white/20 hover:bg-[#14b8a6]/20 hover:border-[#14b8a6]/50 hover:text-white focus:outline-none focus:ring-2 focus:ring-[#14b8a6]/50 focus:ring-offset-2 focus:ring-offset-[#0f1729] transition-all duration-200">
+                    <svg class="w-4 h-4 shrink-0" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="20" x2="18" y2="10"/><line x1="12" y1="20" x2="12" y2="4"/><line x1="6" y1="20" x2="6" y2="14"/></svg>
+                    <span class="hidden sm:inline">التقارير</span><span class="sm:hidden">تقارير</span>
                 </button>
-                <button onclick="showReportsPage()"
-                    class="btn-modern px-4 sm:px-5 md:px-6 py-2 sm:py-2.5 md:py-3 bg-white/10 text-gray-200 rounded-xl text-xs sm:text-sm font-bold border border-white/20 flex items-center gap-2 hover:bg-white/15 hover:border-turquoise/40 transition-all backdrop-blur-sm" style="font-size: clamp(0.75rem, 2vw, 0.875rem);">
-                    <span class="action-btn-icon" aria-hidden="true"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="20" x2="18" y2="10"/><line x1="12" y1="20" x2="12" y2="4"/><line x1="6" y1="20" x2="6" y2="14"/></svg></span>
-                    <span class="hidden sm:inline">التقارير</span>
-                    <span class="sm:hidden">تقارير</span>
+                <button type="button" onclick="showConditionsModal()"
+                    class="action-header-btn inline-flex items-center gap-2 px-3 sm:px-4 py-2.5 rounded-xl text-xs sm:text-sm font-medium text-gray-200 bg-white/[0.07] border border-white/20 hover:bg-[#14b8a6]/20 hover:border-[#14b8a6]/50 hover:text-white focus:outline-none focus:ring-2 focus:ring-[#14b8a6]/50 focus:ring-offset-2 focus:ring-offset-[#0f1729] transition-all duration-200">
+                    <svg class="w-4 h-4 shrink-0" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/><line x1="10" y1="9" x2="8" y2="9"/></svg>
+                    <span class="hidden sm:inline">شروط المكافآت</span><span class="sm:hidden">شروط</span>
                 </button>
-                <button onclick="showDiscountsModal()"
-                    class="btn-modern px-4 sm:px-5 md:px-6 py-2 sm:py-2.5 md:py-3 bg-white/10 text-gray-200 rounded-xl text-xs sm:text-sm font-bold border border-white/20 flex items-center gap-2 hover:bg-white/15 hover:border-turquoise/40 transition-all backdrop-blur-sm" style="font-size: clamp(0.75rem, 2vw, 0.875rem);">
-                    <span class="action-btn-icon" aria-hidden="true"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="19" y1="5" x2="5" y2="19"/><circle cx="6.5" cy="6.5" r="2.5"/><circle cx="17.5" cy="17.5" r="2.5"/></svg></span>
-                    <span class="hidden sm:inline">الخصومات</span>
-                    <span class="sm:hidden">خصومات</span>
+                <button id="printAllBtn" onclick="smartPrint(false)" type="button"
+                    class="action-header-btn inline-flex items-center gap-2 px-3 sm:px-4 py-2.5 rounded-xl text-xs sm:text-sm font-medium text-white bg-[#14b8a6]/95 border border-[#14b8a6]/50 shadow-lg shadow-[#14b8a6]/25 hover:bg-[#14b8a6] hover:border-[#14b8a6] transition-all duration-200 focus:outline-none focus:ring-2 focus:ring-[#14b8a6]/50 focus:ring-offset-2 focus:ring-offset-[#0f1729]">
+                    <svg class="w-4 h-4 shrink-0" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 6 2 18 2 18 9"/><path d="M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2"/><rect x="6" y="14" width="12" height="8"/></svg>
+                    <span id="printAllBtnLabel" class="hidden sm:inline">طباعة الكل</span><span id="printAllBtnLabelMobile" class="sm:hidden">الكل</span>
                 </button>
-                <button onclick="showClosePeriodModal()"
-                    class="btn-modern px-4 sm:px-5 md:px-6 py-2 sm:py-2.5 md:py-3 bg-gradient-to-r from-red-500/80 to-red-600/80 text-white rounded-xl text-xs sm:text-sm font-bold border border-red-400/50 flex items-center gap-2 hover:shadow-lg hover:from-red-500 hover:to-red-600 transition-all backdrop-blur-sm" style="font-size: clamp(0.75rem, 2vw, 0.875rem);">
-                    <span class="action-btn-icon" aria-hidden="true"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="11" width="18" height="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg></span>
-                    <span class="hidden sm:inline">إغلاق الفترة</span>
-                    <span class="sm:hidden">إغلاق</span>
+                <button id="printSelectedBtn" onclick="smartPrint(true)" type="button"
+                    class="hidden action-header-btn inline-flex items-center gap-2 px-3 sm:px-4 py-2.5 rounded-xl text-xs sm:text-sm font-medium text-white bg-amber-600/95 border border-amber-400/40 shadow-lg shadow-amber-500/20 hover:bg-amber-500 hover:border-amber-300 transition-all duration-200 focus:outline-none focus:ring-2 focus:ring-amber-400/50 focus:ring-offset-2 focus:ring-offset-[#0f1729]">
+                    <svg class="w-4 h-4 shrink-0" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><circle cx="12" cy="12" r="6"/><circle cx="12" cy="12" r="2"/></svg>
+                    <span class="hidden sm:inline">طباعة المحدد</span><span class="sm:hidden">محدد</span>
+                </button>
+                <button id="refreshLiveBtn" onclick="refreshLivePeriodFromFirebase()" type="button"
+                    class="action-header-btn inline-flex items-center gap-2 px-3 sm:px-4 py-2.5 rounded-xl text-xs sm:text-sm font-medium text-gray-200 bg-white/[0.07] border border-white/20 hover:bg-[#14b8a6]/20 hover:border-[#14b8a6]/50 hover:text-white focus:outline-none focus:ring-2 focus:ring-[#14b8a6]/50 focus:ring-offset-2 focus:ring-offset-[#0f1729] transition-all duration-200 disabled:opacity-50 disabled:pointer-events-none" title="جلب آخر التقييمات والحضور من المشرف/HR">
+                    <svg class="w-4 h-4 shrink-0" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12a9 9 0 0 0-9-9 9.75 9.75 0 0 0-6.74 2.74L3 8"/><path d="M3 3v5h5"/><path d="M3 12a9 9 0 0 0 9 9 9.75 9.75 0 0 0 6.74-2.74L21 16"/><path d="M16 21h5v-5"/></svg>
+                    <span class="hidden sm:inline">تحميل التحديثات</span><span class="sm:hidden">تحديث</span>
+                </button>
+                <button id="adminManageBtn" onclick="showAdminManagementModal()" type="button"
+                    class="action-header-btn inline-flex items-center gap-2 px-3 sm:px-4 py-2.5 rounded-xl text-xs sm:text-sm font-medium text-white bg-violet-600/95 border border-violet-400/40 shadow-lg shadow-violet-500/20 hover:bg-violet-500 hover:border-violet-300 hover:shadow-violet-500/30 focus:outline-none focus:ring-2 focus:ring-violet-400/50 focus:ring-offset-2 focus:ring-offset-[#0f1729] transition-all duration-200">
+                    <svg class="w-4 h-4 shrink-0" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M22 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>
+                    <span class="hidden sm:inline">إدارة الإداريين</span><span class="sm:hidden">إداريين</span>
                 </button>
             </div>
         </header>
@@ -247,17 +247,22 @@
                                     الصافي المستحق
                                 </th>
                             </tr>
+                            <tr id="negativeRatingsHeaderRow" class="text-xs border-b border-white/10 no-print">
+                                <td colspan="6" class="p-2 text-center text-gray-400">تقييمات سلبية (أقل من تقييم الفندق)</td>
+                                <td colspan="2" id="negativeRatingsCell" class="p-2 text-center align-middle"></td>
+                                <td class="p-2"></td>
+                            </tr>
                         </thead>
                         <tbody id="mainTable" class="divide-y divide-white/10"></tbody>
                         <tfoot class="bg-gradient-to-r from-white/[0.08] to-white/[0.05] font-black border-t-2 border-white/20">
-                            <!-- صف الحوافز: حافز التزام | حافز تفوق جنباً إلى جنب (بدون خلايا فارغة) -->
+                            <!-- صف الحوافز: حافز الجمع بين الحضور والتميز | حافز الأفضل تقييماً + الأكثر حجوزات -->
                             <tr id="bonusesCombinedRow" class="footer-row text-white border-b border-white/10" style="display: none !important;">
                                 <td colspan="9" class="p-3 sm:p-4 text-right align-top">
                                     <div class="flex flex-col sm:flex-row gap-4 sm:gap-6 flex-wrap" style="direction: rtl;">
                                         <div id="commitmentBonusBlock" class="flex-1 min-w-0 rounded-xl bg-white/5 border border-turquoise/30 p-3">
-                                            <div class="text-turquoise font-bold text-sm sm:text-base mb-2">حافز التزام</div>
+                                            <div class="text-turquoise font-bold text-sm sm:text-base mb-2">حافز الجمع بين الحضور والأكثر تميز (الأكثر حجوزات أو الأفضل تقييم)</div>
                                             <div id="commitmentBonusText" class="flex flex-wrap gap-2 text-xs sm:text-sm" style="direction: rtl; white-space: normal;"></div>
-                                            <div id="commitmentBonusValue" class="text-turquoise font-bold mt-2 number-display text-sm">+0.00</div>
+                                            <div id="commitmentBonusValue" class="text-turquoise font-bold mt-2 number-display text-sm hidden">+0.00</div>
                                         </div>
                                         <div id="excellenceBonusBlock" class="flex-1 min-w-0 rounded-xl bg-white/5 border border-turquoise/30 p-3">
                                             <div class="text-turquoise font-bold text-sm sm:text-base mb-2">حافز تفوق</div>
@@ -384,11 +389,30 @@
                                 <ul style="list-style: none; padding: 0; margin: 0; text-align: right; direction: rtl;">
                                     <li style="font-size: 11px; font-weight: 600; color: #000; margin: 8px 0; padding-right: 20px; position: relative;">
                                         <span style="position: absolute; right: 0; top: 0; font-weight: 900;">•</span>
-                                        <span style="display: block; padding-right: 15px;">50 ريال حافز تفوق (الأعلى تقييماً والأكثر حجوزات في نفس الفرع)</span>
+                                        <span style="display: block; padding-right: 15px;">50 ريال حافز الأفضل تقييماً + الأكثر حجوزات (في نفس الفرع)</span>
                                     </li>
                                     <li style="font-size: 11px; font-weight: 600; color: #000; margin: 8px 0; padding-right: 20px; position: relative;">
                                         <span style="position: absolute; right: 0; top: 0; font-weight: 900;">•</span>
-                                        <span style="display: block; padding-right: 15px;">50 ريال حافز التزام مضافه الى الـ 25% كباقي الموظفين الذين تموا 26 يوم دوام (الموظف الذي جمع الأكثر التزاماً + الأعلى تقييماً أو الأكثر حجوزات في نفس الفرع)</span>
+                                        <span style="display: block; padding-right: 15px;">50 ريال حافز الجمع بين الحضور والأكثر تميز (الأكثر حجوزات أو الأفضل تقييم) مضافاً إلى الـ 25% لمن أتم 26 يوم دوام</span>
+                                    </li>
+                                </ul>
+                            </div>
+
+                            <!-- قسم خصومات التقصير -->
+                            <div style="margin-bottom: 18px; padding: 12px 15px; border-radius: 8px; background-color: rgba(239, 68, 68, 0.08); border: 2px solid rgba(239, 68, 68, 0.4); border-right: 5px solid rgba(239, 68, 68, 0.6);">
+                                <h4 style="font-size: 13px; font-weight: 800; color: #000; margin: 0 0 10px 0; text-align: right; direction: rtl;">💰 خصومات التقصير</h4>
+                                <ul style="list-style: none; padding: 0; margin: 0; text-align: right; direction: rtl;">
+                                    <li style="font-size: 11px; font-weight: 600; color: #000; margin: 8px 0; padding-right: 20px; position: relative;">
+                                        <span style="position: absolute; right: 0; top: 0; font-weight: 900;">💎</span>
+                                        <span style="display: block; padding-right: 15px;">الحفاظ علي معايير الجودة والأداء 💎</span>
+                                    </li>
+                                    <li style="font-size: 11px; font-weight: 600; color: #000; margin: 8px 0; padding-right: 20px; position: relative;">
+                                        <span style="position: absolute; right: 0; top: 0; font-weight: 900;">•</span>
+                                        <span style="display: block; padding-right: 15px;"><strong>خصم على فريق العمل كامل في حال وصول تقييم أقل من تقييم الفندق.</strong> التقييم الحالي: تقييم الكورنيش 8.7، تقييم الأندلس 8.2 — جوجل الكورنيش 4.3، جوجل الأندلس 4.3. بقيمة 10 ريال على كل تقييم سلبي، ويُخصم 10 نقاط من تقييم كل موظف.</span>
+                                    </li>
+                                    <li style="font-size: 11px; font-weight: 600; color: #000; margin: 8px 0; padding-right: 20px; position: relative;">
+                                        <span style="position: absolute; right: 0; top: 0; font-weight: 900;">•</span>
+                                        <span style="display: block; padding-right: 15px;">تطبق إدارة التشغيل خصومات تتراوح بين 15% إلى 50% من صافي المستحق في حالات تقصير الموظفين وعدم اتباع التعليمات.</span>
                                     </li>
                                 </ul>
                             </div>
@@ -408,6 +432,11 @@
                         <span>تقارير الموظفين</span>
                     </h2>
                     <div class="flex items-center gap-4">
+                        <button onclick="printAllEmployeeReports()" class="btn-modern px-4 sm:px-5 md:px-6 py-2 sm:py-2.5 md:py-3 bg-gradient-to-r from-emerald-500/80 to-green-500/80 text-white rounded-lg sm:rounded-xl text-xs sm:text-sm font-bold border border-emerald-400/30 flex items-center gap-2 hover:shadow-lg hover:from-emerald-500 hover:to-green-500 transition-all backdrop-blur-sm" style="font-size: clamp(0.75rem, 2vw, 0.875rem);">
+                            <span class="text-base sm:text-lg">🖨️</span>
+                            <span class="hidden sm:inline">طباعة كل التقارير</span>
+                            <span class="sm:hidden">كل التقارير</span>
+                        </button>
                         <button onclick="showEmployeeCodesModal()" class="btn-modern px-4 sm:px-5 md:px-6 py-2 sm:py-2.5 md:py-3 bg-gradient-to-r from-turquoise/80 to-teal-500/80 text-white rounded-lg sm:rounded-xl text-xs sm:text-sm font-bold border border-turquoise/30 flex items-center gap-2 hover:shadow-lg hover:from-turquoise hover:to-teal-500 transition-all backdrop-blur-sm" style="font-size: clamp(0.75rem, 2vw, 0.875rem);">
                             <span class="text-base sm:text-lg">🔑</span>
                             <span class="hidden sm:inline">الأكواد</span>
@@ -456,7 +485,7 @@
                 </div>
                 
                 <!-- Employees Grid -->
-                <div id="reportsEmployeesGrid" class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3 sm:gap-4 max-h-[70vh] overflow-y-auto">
+                <div id="reportsEmployeesGrid" class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-2 sm:gap-3 max-h-[70vh] overflow-y-auto">
                     <!-- Employees cards will be populated here -->
                 </div>
                 </div>
@@ -511,11 +540,14 @@
                         <div id="currentPeriodStats" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6 gap-4 mb-6">
                             <!-- Stats cards will be populated here -->
                         </div>
-                        <div class="glass p-4 rounded-xl border border-turquoise/30 mt-6 relative overflow-visible">
+                        <div class="glass p-4 rounded-xl border border-turquoise/30 mt-6 relative overflow-visible" id="currentPeriodStatsTableWrap">
                             <h4 class="text-lg font-bold text-white mb-4 flex items-center gap-2 flex-wrap">
                                 <span>جدول تقييم الموظفين</span>
-                                <button type="button" id="ratingExplanationBtn" onclick="showRatingExplanationModal()" class="rating-explanation-btn inline-flex items-center justify-center w-10 h-10 rounded-full bg-turquoise/25 border-2 border-turquoise/60 text-turquoise hover:bg-turquoise/40 hover:border-turquoise hover:scale-110 transition-all duration-300 shadow-[0_0_20px_rgba(64,224,208,0.4)]" title="كيفية حساب التقييم">
+                                <button type="button" id="ratingExplanationBtn" onclick="showRatingExplanationModal()" class="no-print rating-explanation-btn inline-flex items-center justify-center w-10 h-10 rounded-full bg-turquoise/25 border-2 border-turquoise/60 text-turquoise hover:bg-turquoise/40 hover:border-turquoise hover:scale-110 transition-all duration-300 shadow-[0_0_20px_rgba(64,224,208,0.4)]" title="كيفية حساب التقييم">
                                     <span class="text-base font-black" aria-hidden="true">ⓘ</span>
+                                </button>
+                                <button type="button" onclick="printCurrentPeriodStats()" class="no-print inline-flex items-center justify-center w-10 h-10 rounded-lg bg-turquoise/20 border border-turquoise/40 text-turquoise hover:bg-turquoise/30 hover:border-turquoise/60 transition-colors" title="طباعة إحصائيات الفترة الحالية">
+                                    <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 6 2 18 2 18 9"/><path d="M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2"/><rect x="6" y="14" width="12" height="8"/></svg>
                                 </button>
                             </h4>
                             <div class="overflow-x-auto">
@@ -656,11 +688,11 @@
                     <ul class="space-y-3 text-sm text-gray-300">
                         <li class="flex items-start gap-3">
                             <span class="text-turquoise font-bold mt-0.5">•</span>
-                            <span>50 ريال حافز تفوق (الأعلى تقييماً والأكثر حجوزات في نفس الفرع)</span>
+                            <span>50 ريال حافز الأفضل تقييماً + الأكثر حجوزات (في نفس الفرع)</span>
                         </li>
                         <li class="flex items-start gap-3">
                             <span class="text-turquoise font-bold mt-0.5">•</span>
-                            <span>50 ريال حافز التزام مضافه الى الـ 25% كباقي الموظفين الذين تموا 26 يوم دوام (الموظف الذي جمع الأكثر التزاماً + الأعلى تقييماً أو الأكثر حجوزات في نفس الفرع)</span>
+                            <span>50 ريال حافز الجمع بين الحضور والأكثر تميز (الأكثر حجوزات أو الأفضل تقييم) مضافاً إلى الـ 25% لمن أتم 26 يوم دوام</span>
                         </li>
                     </ul>
                 </div>
@@ -675,6 +707,10 @@
                         <li class="flex items-start gap-3">
                             <span class="text-turquoise font-bold mt-0.5">💎</span>
                             <span>الحفاظ علي معايير الجودة والأداء 💎</span>
+                        </li>
+                        <li class="flex items-start gap-3">
+                            <span class="text-red-400 font-bold mt-0.5">•</span>
+                            <span><strong>خصم على فريق العمل كامل في حال وصول تقييم أقل من تقييم الفندق.</strong> التقييم الحالي: تقييم الكورنيش 8.7، تقييم الأندلس 8.2 — جوجل الكورنيش 4.3، جوجل الأندلس 4.3. بقيمة 10 ريال على كل تقييم سلبي، ويُخصم 10 نقاط من تقييم كل موظف.</span>
                         </li>
                         <li class="flex items-start gap-3">
                             <span class="text-red-400 font-bold mt-0.5">•</span>
@@ -1143,8 +1179,8 @@
     <!-- البنود الـ 55 للتعليمات/أنواع الخصم (قبل أي سكربت يحتاجها) -->
     <script src="/src/discount-clauses-55.js"></script>
     <!-- JavaScript: app-extensions أولاً لأن app.js يتحقق من الرابط (role/token/period) ويحتاج loadAdminTokens و validateAdminAccess -->
-    <script src="/src/app-extensions.js?v=firebase-first"></script>
-    <script src="/src/app.js?v=firebase-first"></script>
+    <script src="/src/app-extensions.js?v=firebase-fix2"></script>
+    <script src="/src/app.js?v=firebase-fix2"></script>
 </body>
 
 </html>

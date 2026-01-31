@@ -1165,7 +1165,7 @@ flex-direction: row;
 flex-wrap: wrap;
 }
 }
-/* صف الحوافز الموحد: حافز التزام | حافز تفوق جنباً إلى جنب */
+/* صف الحوافز: حافز الجمع بين الحضور والتميز | حافز الأفضل تقييماً + الأكثر حجوزات */
 tfoot tr#bonusesCombinedRow td {
 vertical-align: top !important;
 }
@@ -2152,8 +2152,16 @@ header img:hover {
   white-space: nowrap;
 }
 
-/* مؤشر تحميل رابط الإداري (جدول) */
+/* مؤشر تحميل رابط الإداري (جدول) — شريط تقدم تدريجي */
 .admin-link-load-spinner {
   animation: spin 0.8s linear infinite;
   border-style: solid;
+}
+.admin-link-progress-fill {
+  animation: adminLinkProgress 1.8s ease-in-out infinite;
+}
+@keyframes adminLinkProgress {
+  0% { width: 0%; }
+  50% { width: 85%; }
+  100% { width: 0%; }
 }

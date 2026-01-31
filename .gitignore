@@ -30,6 +30,7 @@ node_modules/
 # Build files (if using build tools)
 dist/
 build/
+public/
 
 # Playwright / E2E
 test-results/

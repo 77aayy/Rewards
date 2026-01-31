@@ -9,6 +9,7 @@ function generateAdminToken() {
 
 // Get current period ID (based on header period range أو من الرابط عند الدخول برابط إداري أو startDate بعد استعادة فترة مغلقة)
 // يُرجع دائماً بصيغة YYYY_MM (شرطة سفلية) لأن Firebase يُخزّن الملفات بهذا الشكل (periods/2026_01.json)
+// مُعرّض على window لاستخدامه من app.js عند كتابة periods/{periodId}.json
 function getCurrentPeriodId() {
   if (typeof window !== 'undefined' && window.location && window.location.search) {
     const p = new URLSearchParams(window.location.search).get('period');
@@ -28,6 +29,7 @@ function getCurrentPeriodId() {
   var raw = periodText.replace(/\s+/g, '-').replace(/[^a-zA-Z0-9-]/g, '');
   return raw ? raw.replace(/-/g, '_') : (new Date().getFullYear() + '_' + String(new Date().getMonth() + 1).padStart(2, '0'));
 }
+if (typeof window !== 'undefined') window.getCurrentPeriodId = getCurrentPeriodId;
 
 // Safe parse of archived periods from localStorage (returns array)
 function getArchivedPeriodsSafe() {
@@ -503,8 +505,9 @@ async function confirmClosePeriod() {
         startDate: reportStartDate,
         periodText: periodText,
         employeeCodes: employeeCodesMap,
-        discounts: discounts || [], // Include discounts in archived period
-        discountTypes: discountTypes || [] // Include discount types in archived period
+        discounts: discounts || [],
+        discountTypes: discountTypes || [],
+        negativeRatingsCount: (typeof window !== 'undefined' && window.branchNegativeRatingsCount) ? window.branchNegativeRatingsCount : {}
       }
     };
     
@@ -1019,17 +1022,25 @@ async function loadArchivedPeriodsList() {
           if (result && result.items && result.items.length > 0) {
             for (const itemRef of result.items) {
               try {
+                var periodIdFromFile = (itemRef.name && itemRef.name.endsWith('.json'))
+                  ? itemRef.name.slice(0, -5)
+                  : (itemRef.name || '');
                 const url = await itemRef.getDownloadURL();
                 const response = await fetch(url);
                 if (response.ok) {
                   const data = await response.json();
-                  periods.push(data);
+                  // نفس توحيد الصيغة المستخدم في الإحصائيات: دعم ملف إغلاق الفترة أو ملف المزامنة
+                  var periodId = data.periodId || data.id || periodIdFromFile;
+                  periods.push({
+                    periodId: periodId,
+                    periodText: data.periodText || data.data?.periodText || ('فترة ' + periodId),
+                    closedAt: data.closedAt || data.data?.endDate || null
+                  });
                 } else {
-                  console.warn(`⚠️ Failed to fetch period: ${response.status}`);
+                  console.warn('⚠️ Failed to fetch period: ' + response.status);
                 }
               } catch (itemError) {
                 console.warn('⚠️ Error fetching period item:', itemError.message);
-                // Continue with other items
               }
             }
           }
@@ -1051,11 +1062,19 @@ async function loadArchivedPeriodsList() {
     if (periods.length === 0) {
       const saved = localStorage.getItem('adora_archived_periods');
       if (saved) {
-        periods = JSON.parse(saved);
+        try {
+          var raw = JSON.parse(saved);
+          periods = (Array.isArray(raw) ? raw : []).map(function (p) {
+            var id = p.periodId || p.id;
+            return { periodId: id, periodText: p.periodText || ('فترة ' + id), closedAt: p.closedAt || null };
+          });
+        } catch (e) {
+          periods = [];
+        }
       }
     }
     
-    periods.sort((a, b) => new Date(b.closedAt) - new Date(a.closedAt));
+    periods.sort((a, b) => new Date(b.closedAt || 0) - new Date(a.closedAt || 0));
     
     periods.forEach(period => {
       const option = document.createElement('option');
@@ -1140,6 +1159,12 @@ async function loadArchivedPeriod(periodId) {
     if (periodData.data.discountTypes) {
       discountTypes = periodData.data.discountTypes;
       saveDiscountTypes();
+    }
+    if (periodData.data.negativeRatingsCount && typeof periodData.data.negativeRatingsCount === 'object') {
+      try {
+        if (typeof window !== 'undefined') window.branchNegativeRatingsCount = periodData.data.negativeRatingsCount;
+        localStorage.setItem('adora_rewards_negativeRatingsCount', JSON.stringify(periodData.data.negativeRatingsCount));
+      } catch (_) {}
     }
     
     populateArchivedReportsGrid();
@@ -1658,65 +1683,86 @@ function getDiscountForEmployeeInBranch(employeeName, branchNet) {
   return discountAmount;
 }
 
-// Get total discount amount for employee (sum of discounts from all branches)
-// This is used in "الكل" view to show total discount
+// خصم تقييم الفندق: 10 ريال × عدد التقييمات السلبية (أقل من تقييم الفرع). للمتكرر: مرة واحدة من الفرع الأكثر تقييمات سلبية.
+function getHotelRatingDeductionForEmployee(employeeName) {
+  const counts = (typeof window !== 'undefined' && window.branchNegativeRatingsCount) ? window.branchNegativeRatingsCount : {};
+  if (typeof db === 'undefined' || !db.length) return 0;
+  const allEmpBranches = db.filter(e => e.name === employeeName);
+  if (allEmpBranches.length === 0) return 0;
+  if (allEmpBranches.length === 1) {
+    const branch = allEmpBranches[0].branch;
+    const n = parseInt(counts[branch], 10) || 0;
+    return n * 10;
+  }
+  // متكرر: الفرع الأكثر تقييمات سلبية فقط
+  let maxCount = 0;
+  allEmpBranches.forEach(emp => {
+    const n = parseInt(counts[emp.branch], 10) || 0;
+    if (n > maxCount) maxCount = n;
+  });
+  return maxCount * 10;
+}
+
+// Get total discount amount for employee (sum of discounts from all branches + خصم تقييم الفندق)
 function getTotalDiscountForEmployee(employeeName, netBeforeDiscounts = null) {
   // Ensure discounts is loaded
   if (typeof window === 'undefined' || !window.discounts) {
     loadDiscounts();
   }
   const currentDiscounts = (typeof window !== 'undefined' && window.discounts) ? window.discounts : [];
-  if (!currentDiscounts || currentDiscounts.length === 0) return 0;
-  
-  // Get all discounts for this employee
-  const employeeDiscounts = currentDiscounts.filter(d => d.employeeName === employeeName);
-  if (employeeDiscounts.length === 0) return 0;
-  
-  // Get all branches where this employee exists
-  const allEmpBranches = db.filter(e => e.name === employeeName);
-  if (allEmpBranches.length === 0) return 0;
-  
-  // Calculate discount for each branch separately, then sum them
   let totalDiscount = 0;
-  allEmpBranches.forEach(emp => {
-    // Calculate net for this branch (before discounts)
-    const rate = emp.count > 100 ? 3 : (emp.count > 50 ? 2 : 1);
-    const evBooking = emp.evaluationsBooking || 0;
-    const evGoogle = emp.evaluationsGoogle || 0;
-    const gross = (emp.count * rate) + (evBooking * 20) + (evGoogle * 10);
-    const fund = gross * 0.15;
-    let branchNet = gross - fund;
-    
-    // Add attendance bonus if applicable
-    const attendance26Days = emp.attendance26Days === true;
-    const attendanceBonus = attendance26Days ? branchNet * 0.25 : 0;
-    branchNet = branchNet + attendanceBonus;
-    
-    // Calculate excellence and commitment bonuses for this branch
-    // (simplified - we'll use the bonuses from calcStats if available)
-    // For now, just use branchNet as base
-    
-    // Apply discount to this branch's net
-    const branchDiscount = employeeDiscounts.reduce((sum, discount) => {
-      return sum + (branchNet * (discount.discountPercentage / 100));
-    }, 0);
-    
-    totalDiscount += branchDiscount;
-  });
   
+  if (currentDiscounts && currentDiscounts.length > 0) {
+    const employeeDiscounts = currentDiscounts.filter(d => d.employeeName === employeeName);
+    if (employeeDiscounts.length > 0) {
+      const allEmpBranches = db.filter(e => e.name === employeeName);
+      if (allEmpBranches.length > 0) {
+        allEmpBranches.forEach(emp => {
+          const rate = emp.count > 100 ? 3 : (emp.count > 50 ? 2 : 1);
+          const evBooking = emp.evaluationsBooking || 0;
+          const evGoogle = emp.evaluationsGoogle || 0;
+          const gross = (emp.count * rate) + (evBooking * 20) + (evGoogle * 10);
+          const fund = gross * 0.15;
+          let branchNet = gross - fund;
+          const attendance26Days = emp.attendance26Days === true;
+          const attendanceBonus = attendance26Days ? branchNet * 0.25 : 0;
+          branchNet = branchNet + attendanceBonus;
+          const branchDiscount = employeeDiscounts.reduce((sum, discount) => {
+            return sum + (branchNet * (discount.discountPercentage / 100));
+          }, 0);
+          totalDiscount += branchDiscount;
+        });
+      }
+    }
+  }
+  
+  totalDiscount += getHotelRatingDeductionForEmployee(employeeName);
   return totalDiscount;
 }
+if (typeof window !== 'undefined') {
+  window.getTotalDiscountForEmployee = getTotalDiscountForEmployee;
+  window.getHotelRatingDeductionForEmployee = getHotelRatingDeductionForEmployee;
+}
 
-// Get discount details for employee (for display)
+// Get discount details for employee (for display) — يتضمن خصم تقييم الفندق إن وُجد
 function getDiscountDetailsForEmployee(employeeName) {
-  // Ensure discounts is loaded
   if (typeof window === 'undefined' || !window.discounts) {
     loadDiscounts();
   }
   const currentDiscounts = (typeof window !== 'undefined' && window.discounts) ? window.discounts : [];
-  if (!currentDiscounts || currentDiscounts.length === 0) return [];
-  
-  return currentDiscounts.filter(d => d.employeeName === employeeName);
+  const list = currentDiscounts && currentDiscounts.length > 0
+    ? currentDiscounts.filter(d => d.employeeName === employeeName)
+    : [];
+  const hotelAmount = typeof getHotelRatingDeductionForEmployee === 'function' ? getHotelRatingDeductionForEmployee(employeeName) : 0;
+  if (hotelAmount > 0) {
+    list.push({
+      discountType: 'خصم تقييم الفندق (تقييمات أقل من المستهدف)',
+      discountPercentage: null,
+      amount: hotelAmount,
+      isHotelRating: true
+    });
+  }
+  return list;
 }
 
 /** فتح نافذة أسباب الخصومات وتواريخها وقيمها لموظف (من كارت أكثر الموظفين خصومات) */
@@ -2506,9 +2552,11 @@ function loadCurrentPeriodStats() {
     const combined = (pctCount + pctEval) / 2;
     const boost = agg.hasAttendance26 ? 0.15 : 0;
     let score = Math.min(1, combined + boost);
-    if (typeof getTotalDiscountForEmployee === 'function' && getTotalDiscountForEmployee(agg.name) > 0) {
-      score = Math.max(0, score - 0.25);
-    }
+    let discountPoints = 0;
+    if (typeof getTotalDiscountForEmployee === 'function' && getTotalDiscountForEmployee(agg.name) > 0) discountPoints += 0.25;
+    if (typeof getHotelRatingDeductionForEmployee === 'function' && getHotelRatingDeductionForEmployee(agg.name) > 0) discountPoints += 0.10;
+    discountPoints = Math.min(0.10, discountPoints);
+    score = Math.max(0, score - discountPoints);
     let rating = Math.round(score * 100);
     if (!agg.hasAttendance26 && rating > 84) rating = 84;
     agg.rating = rating;
@@ -2739,9 +2787,9 @@ function populateEmployeePerformanceTable() {
     const pointsBeforeDiscount = Math.round(score * 100);
     let discountDeduction = 0;
     if (typeof getTotalDiscountForEmployee === 'function' && getTotalDiscountForEmployee(emp.name) > 0) {
-      score = Math.max(0, score - 0.25);
+      score = Math.max(0, score - 0.10);
       const pointsAfterDiscount = Math.round(score * 100);
-      discountDeduction = Math.max(0, pointsBeforeDiscount - pointsAfterDiscount);
+      discountDeduction = Math.min(10, Math.max(0, pointsBeforeDiscount - pointsAfterDiscount));
     }
     let points = Math.round(score * 100);
     if (!has26 && points > 84) points = 84;
@@ -2915,11 +2963,24 @@ async function loadArchivedStatsPeriodsList() {
           if (result && result.items && result.items.length > 0) {
             for (const itemRef of result.items) {
               try {
+                var periodIdFromFile = (itemRef.name && itemRef.name.endsWith('.json'))
+                  ? itemRef.name.slice(0, -5)
+                  : (itemRef.name || '');
                 const url = await itemRef.getDownloadURL();
                 const response = await fetch(url);
                 if (response.ok) {
                   const data = await response.json();
-                  periods.push(data);
+                  // توحيد الصيغة: قد يكون الملف من "إغلاق الفترة" { periodId, periodText, closedAt, data: { db } } أو من المزامنة { db, periodText, ... }
+                  var normalized = {
+                    id: data.periodId || data.id || periodIdFromFile,
+                    periodId: data.periodId || data.id || periodIdFromFile,
+                    periodText: data.periodText || data.data?.periodText || ('من ' + (data.data?.startDate || data.reportStartDate || '').substring(0, 10) + ' إلى ' + (data.data?.endDate || '').substring(0, 10)) || ('فترة ' + periodIdFromFile),
+                    closedAt: data.closedAt || data.data?.endDate || null
+                  };
+                  normalized.data = data.data && Array.isArray(data.data.db)
+                    ? data.data
+                    : (Array.isArray(data.db) ? { db: data.db } : null);
+                  if (normalized.data && normalized.data.db) periods.push(normalized);
                 }
               } catch (itemError) {
                 console.warn('⚠️ Error fetching period item:', itemError.message);
@@ -2936,11 +2997,26 @@ async function loadArchivedStatsPeriodsList() {
     if (periods.length === 0) {
       const saved = localStorage.getItem('adora_archived_periods');
       if (saved) {
-        periods = JSON.parse(saved);
+        try {
+          periods = JSON.parse(saved);
+          // توحيد الحقول للمصادر من localStorage (قد يكون periodId فقط)
+          periods = periods.map(function (p) {
+            var id = p.periodId || p.id;
+            return {
+              id: id,
+              periodId: id,
+              periodText: p.periodText || ('فترة ' + id),
+              closedAt: p.closedAt || null,
+              data: p.data || (Array.isArray(p.db) ? { db: p.db } : null)
+            };
+          }).filter(function (p) { return p.data && Array.isArray(p.data.db); });
+        } catch (e) {
+          periods = [];
+        }
       }
     }
     
-    periods.sort((a, b) => new Date(b.closedAt || b.closedAt) - new Date(a.closedAt || a.closedAt));
+    periods.sort((a, b) => new Date(b.closedAt || 0) - new Date(a.closedAt || 0));
     
     // Update dropdown if exists
     if (select) {
@@ -2967,8 +3043,9 @@ async function loadArchivedStatsPeriodsList() {
         const periodText = period.periodText || `فترة ${periodId}`;
         const closedAt = period.closedAt ? new Date(period.closedAt).toLocaleDateString('ar-SA') : '-';
         
-        // Create period card (مع أيقونة عين لفتح الفترة كعرض فقط في الأعلى)
-        const periodIdEsc = String(periodId).replace(/\\/g, '\\\\').replace(/'/g, "\\'");
+        // Create period card (عين = فتح/طي المحتوى، طباعة، عرض في الأعلى)
+        const periodIdEsc = String(periodId).replace(/\\/g, '\\\\').replace(/'/g, "\\'").replace(/"/g, '&quot;');
+        const periodIdSafe = String(periodId).replace(/[^a-zA-Z0-9\-_.]/g, '_');
         const periodCard = document.createElement('div');
         periodCard.className = 'glass p-6 rounded-xl border border-turquoise/30 mb-6';
         periodCard.innerHTML = `
@@ -2976,24 +3053,32 @@ async function loadArchivedStatsPeriodsList() {
             <h4 class="text-lg font-bold text-turquoise">${periodText}</h4>
             <div class="flex items-center gap-2">
               <span class="text-sm text-gray-400">تاريخ الإغلاق: ${closedAt}</span>
-              <button type="button" onclick="openArchivedPeriodForView('${periodIdEsc}')" class="inline-flex items-center justify-center w-10 h-10 rounded-lg bg-turquoise/20 border border-turquoise/40 text-turquoise hover:bg-turquoise/30 hover:border-turquoise/60 transition-colors" title="عرض جدول التقييم لهذه الفترة (عرض فقط)">
+              <button type="button" onclick="toggleArchivedPeriodCard('${periodIdSafe}')" class="inline-flex items-center justify-center w-10 h-10 rounded-lg bg-turquoise/20 border border-turquoise/40 text-turquoise hover:bg-turquoise/30 hover:border-turquoise/60 transition-colors" title="فتح/طي محتوى الفترة">
                 <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>
+              </button>
+              <button type="button" onclick="printArchivedPeriodReport('${periodIdSafe}')" class="inline-flex items-center justify-center w-10 h-10 rounded-lg bg-turquoise/20 border border-turquoise/40 text-turquoise hover:bg-turquoise/30 hover:border-turquoise/60 transition-colors" title="طباعة إحصائيات هذه الفترة">
+                <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 6 2 18 2 18 9"/><path d="M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2"/><rect x="6" y="14" width="12" height="8"/></svg>
+              </button>
+              <button type="button" onclick="openArchivedPeriodForView('${periodIdEsc}')" class="inline-flex items-center justify-center px-3 py-2 rounded-lg text-xs font-bold bg-amber-500/20 border border-amber-500/40 text-amber-300 hover:bg-amber-500/30 transition-colors" title="عرض هذه الفترة في الأعلى (عرض فقط)">
+                عرض في الأعلى
               </button>
             </div>
           </div>
-          <div id="archivedPeriodStats_${periodId}" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 mb-4">
-            <div class="glass p-4 rounded-xl border border-turquoise/30">
-              <div class="text-sm text-gray-400 mb-1">جاري التحميل...</div>
+          <div id="archivedPeriodBody_${periodIdSafe}" class="archived-period-body hidden">
+            <div id="archivedPeriodStats_${periodIdSafe}" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 mb-4">
+              <div class="glass p-4 rounded-xl border border-turquoise/30">
+                <div class="text-sm text-gray-400 mb-1">جاري التحميل...</div>
+              </div>
             </div>
-          </div>
-          <div id="archivedPeriodTable_${periodId}">
-            <!-- Table will be loaded here -->
+            <div id="archivedPeriodTable_${periodIdSafe}">
+              <!-- Table will be loaded here -->
+            </div>
           </div>
         `;
         archivedPeriodsContainer.appendChild(periodCard);
         
-        // Load stats for this period
-        loadArchivedPeriodStatsForDisplay(periodId, period);
+        // Load stats for this period (يستخدم periodIdSafe للـ DOM و period للبيانات)
+        loadArchivedPeriodStatsForDisplay(periodIdSafe, period);
       }
     }
   } catch (error) {
@@ -3001,8 +3086,10 @@ async function loadArchivedStatsPeriodsList() {
   }
 }
 
-/** فتح فترة أرشفة كعرض فقط في مكان "الفترة الحالية" (جدول التقييم والإحصائيات). أي شخص يضغط على أيقونة العين يرى الفترة كما لو كانت الحالية للعرض فقط. */
+/** فتح فترة أرشفة كعرض فقط في مكان "الفترة الحالية" (جدول التقييم والإحصائيات). */
 async function openArchivedPeriodForView(periodId) {
+  if (typeof periodId !== 'string') return;
+  const id = String(periodId).replace(/&quot;/g, '"');
   const banner = document.getElementById('archivedViewOnlyBanner');
   const periodTextEl = document.getElementById('archivedViewOnlyPeriodText');
   const closedAtEl = document.getElementById('archivedViewOnlyClosedAt');
@@ -3012,7 +3099,7 @@ async function openArchivedPeriodForView(periodId) {
   try {
     if (storage && typeof storage.ref === 'function') {
       try {
-        const periodRef = storage.ref(`periods/${periodId}.json`);
+        const periodRef = storage.ref(`periods/${id}.json`);
         const url = await periodRef.getDownloadURL();
         const response = await fetch(url);
         if (response.ok) periodData = await response.json();
@@ -3022,7 +3109,7 @@ async function openArchivedPeriodForView(periodId) {
       const saved = localStorage.getItem('adora_archived_periods');
       if (saved) {
         const periods = JSON.parse(saved);
-        periodData = periods.find(p => (p.id || p.periodId) === periodId);
+        periodData = periods.find(p => (p.id || p.periodId) === id);
       }
     }
   } catch (e) {
@@ -3044,7 +3131,7 @@ async function openArchivedPeriodForView(periodId) {
   if (typeof loadCurrentPeriodStats === 'function') loadCurrentPeriodStats();
   if (typeof populateEmployeePerformanceTable === 'function') populateEmployeePerformanceTable();
 
-  const periodText = periodData.periodText || `فترة ${periodId}`;
+  const periodText = periodData.periodText || `فترة ${id}`;
   const closedAt = periodData.closedAt ? new Date(periodData.closedAt).toLocaleDateString('ar-SA') : '—';
   periodTextEl.textContent = periodText;
   closedAtEl.textContent = 'تاريخ الإغلاق: ' + closedAt;
@@ -3052,6 +3139,55 @@ async function openArchivedPeriodForView(periodId) {
 
   const statisticsContent = document.getElementById('statisticsReportsContent');
   if (statisticsContent) statisticsContent.scrollIntoView({ behavior: 'smooth', block: 'start' });
+}
+
+/** فتح/طي محتوى بطاقة فترة مؤرشفة (العين). */
+function toggleArchivedPeriodCard(periodIdSafe) {
+  if (typeof periodIdSafe !== 'string') return;
+  const body = document.getElementById('archivedPeriodBody_' + periodIdSafe);
+  if (!body) return;
+  body.classList.toggle('hidden');
+}
+
+/** طباعة إحصائيات فترة مؤرشفة (جدول + أسباب التقييم). */
+function printArchivedPeriodReport(periodIdSafe) {
+  if (typeof periodIdSafe !== 'string') return;
+  const bodyEl = document.getElementById('archivedPeriodBody_' + periodIdSafe);
+  if (!bodyEl) return;
+  const tableEl = bodyEl.querySelector('table');
+  const hasTableRows = tableEl && tableEl.querySelector('tbody tr');
+  const stillLoading = bodyEl.textContent.indexOf('جاري التحميل') >= 0;
+  if (!hasTableRows || stillLoading) {
+    if (typeof showToast === 'function') showToast('البيانات قيد التحميل، انتظر لحظة ثم أعد الطباعة', 'warning');
+    return;
+  }
+  const periodCard = bodyEl.closest('.glass');
+  const periodTextEl = periodCard ? periodCard.querySelector('h4') : null;
+  const closedAtSpan = periodCard ? periodCard.querySelector('.text-sm.text-gray-400') : null;
+  const escapePrint = function (s) { return String(s == null ? '' : s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;'); };
+  const periodText = escapePrint(periodTextEl ? periodTextEl.textContent : ('فترة ' + periodIdSafe));
+  const closedAt = escapePrint(closedAtSpan ? closedAtSpan.textContent.replace(/^تاريخ الإغلاق:\s*/, '') : '');
+  const html = '<!DOCTYPE html><html dir="rtl" lang="ar"><head><meta charset="utf-8"><title>' + periodText + '</title><style>body{font-family:system-ui,sans-serif;padding:16px;color:#111;background:#fff;} table{width:100%;border-collapse:collapse;} th,td{padding:8px;text-align:right;border:1px solid #ddd;} th{background:#0d9488;color:#fff;} .reasons-row{background:#ccfbf1;} .reasons-row td{font-size:12px;color:#374151;}</style></head><body><h2>' + periodText + '</h2><p class="text-sm" style="color:#6b7280;">تاريخ الإغلاق: ' + closedAt + '</p>' + bodyEl.innerHTML + '</body></html>';
+  const w = window.open('', '_blank');
+  if (!w) { if (typeof showToast === 'function') showToast('السماح بالنوافذ المنبثقة لاستخدام الطباعة', 'warning'); return; }
+  w.document.write(html);
+  w.document.close();
+  w.onload = function () { w.focus(); w.print(); w.onafterprint = function () { w.close(); }; };
+}
+
+/** طباعة إحصائيات الفترة الحالية فقط (جدول تقييم الموظفين + أسباب التقييم). */
+function printCurrentPeriodStats() {
+  const block = document.querySelector('#statisticsReportsContent > .mb-8');
+  if (!block) return;
+  const titleRaw = (document.getElementById('statisticsSectionTitle') && document.getElementById('statisticsSectionTitle').textContent) || 'إحصائيات الفترة الحالية';
+  const escapePrint = function (s) { return String(s == null ? '' : s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;'); };
+  const title = escapePrint(titleRaw);
+  const html = '<!DOCTYPE html><html dir="rtl" lang="ar"><head><meta charset="utf-8"><title>' + title + '</title><style>body{font-family:system-ui,sans-serif;padding:16px;color:#111;background:#fff;} table{width:100%;border-collapse:collapse;} th,td{padding:8px;text-align:right;border:1px solid #ddd;} th{background:#0d9488;color:#fff;} .reasons-row{background:#ccfbf1;} .reasons-row td{font-size:12px;color:#374151;} .glass{background:rgba(255,255,255,0.05);border:1px solid rgba(20,184,166,0.3);border-radius:12px;padding:16px;} .no-print{display:none !important;}</style></head><body><h2>' + title + '</h2>' + block.innerHTML + '</body></html>';
+  const w = window.open('', '_blank');
+  if (!w) { if (typeof showToast === 'function') showToast('السماح بالنوافذ المنبثقة لاستخدام الطباعة', 'warning'); return; }
+  w.document.write(html);
+  w.document.close();
+  w.onload = function () { w.focus(); w.print(); w.onafterprint = function () { w.close(); }; };
 }
 
 /** إغلاق عرض فترة أرشفة والعودة لإظهار الفترة الحالية. */
@@ -3106,7 +3242,11 @@ async function loadArchivedPeriodStatsForDisplay(periodId, periodData = null) {
       }
     }
     
-    if (!periodDataToUse || !periodDataToUse.data) {
+    // دعم صيغتين: إما data.data.db (فترة مغلقة) أو data.db (ملف مزامنة)
+    var archivedData = (periodDataToUse.data && periodDataToUse.data.db)
+      ? periodDataToUse.data.db
+      : (Array.isArray(periodDataToUse.db) ? periodDataToUse.db : null);
+    if (!archivedData || archivedData.length === 0) {
       const container = document.getElementById(`archivedPeriodStats_${periodId}`);
       if (container) {
         container.innerHTML = '<div class="col-span-4 text-center text-gray-400">لا توجد بيانات</div>';
@@ -3115,7 +3255,6 @@ async function loadArchivedPeriodStatsForDisplay(periodId, periodData = null) {
     }
     
     // Display statistics
-    const archivedData = periodDataToUse.data.db || [];
     const stats = calculatePeriodStats(archivedData);
     
     // Update stats cards
@@ -3141,10 +3280,13 @@ async function loadArchivedPeriodStatsForDisplay(periodId, periodData = null) {
       `;
     }
     
-    // Populate employee performance table for this period
+    // Populate employee performance table for this period (مع خصم تقييم الفندق إن وُجد في بيانات الفترة)
+    const negativeRatingsCount = (periodDataToUse.data && periodDataToUse.data.negativeRatingsCount && typeof periodDataToUse.data.negativeRatingsCount === 'object')
+      ? periodDataToUse.data.negativeRatingsCount
+      : null;
     const tableContainer = document.getElementById(`archivedPeriodTable_${periodId}`);
     if (tableContainer) {
-      populateArchivedEmployeePerformanceTableForPeriod(archivedData, periodId);
+      populateArchivedEmployeePerformanceTableForPeriod(archivedData, periodId, negativeRatingsCount);
     }
   } catch (error) {
     console.error(`❌ Error loading archived period stats for ${periodId}:`, error);
@@ -3155,77 +3297,207 @@ async function loadArchivedPeriodStatsForDisplay(periodId, periodData = null) {
   }
 }
 
-// Populate archived employee performance table for a specific period
-function populateArchivedEmployeePerformanceTableForPeriod(employees, periodId) {
+// خصم تقييم الفندق لفترة أرشفة (نفس منطق getHotelRatingDeductionForEmployee لكن من بيانات الفترة)
+function getHotelRatingDeductionForArchived(employeeName, employees, counts) {
+  if (!counts || typeof counts !== 'object' || !employees || !employees.length) return 0;
+  const allEmpBranches = employees.filter(e => e.name === employeeName);
+  if (allEmpBranches.length === 0) return 0;
+  if (allEmpBranches.length === 1) {
+    const n = parseInt(counts[allEmpBranches[0].branch], 10) || 0;
+    return n * 10;
+  }
+  let maxCount = 0;
+  allEmpBranches.forEach(emp => {
+    const n = parseInt(counts[emp.branch], 10) || 0;
+    if (n > maxCount) maxCount = n;
+  });
+  return maxCount * 10;
+}
+
+// تقييم ديناميكي لأرشيف (مع خصم تقييم الفندق إن وُجد: discountDeduction 0–10)
+function getRatingDetailsDynamicArchived(emp, minCount, maxCount, minEval, maxEval, maxEvalBooking, maxEvalGoogle, discountDeduction) {
+  const count = emp.count || 0;
+  const evalBooking = emp.evalBooking || 0;
+  const evalGoogle = emp.evalGoogle || 0;
+  const totalEval = (emp.totalEval != null ? emp.totalEval : evalBooking + evalGoogle);
+  const has26 = !!emp.hasAttendance26;
+  const rangeCount = maxCount - minCount;
+  const rangeEval = maxEval - minEval;
+  const pctCount = rangeCount <= 0 ? 0.5 : (count - minCount) / rangeCount;
+  const pctEval = rangeEval <= 0 ? 0.5 : (totalEval - minEval) / rangeEval;
+  const diffCount = maxCount - count;
+  const diffEvalBooking = (maxEvalBooking != null ? maxEvalBooking : 0) - evalBooking;
+  const diffEvalGoogle = (maxEvalGoogle != null ? maxEvalGoogle : 0) - evalGoogle;
+
+  let bookingsPart = count + ' حجز';
+  if (diffCount === 0) bookingsPart += '، الأفضل';
+  else bookingsPart += '، أقل من أفضل موظف بفرق ' + diffCount + ' حجز';
+
+  let evalPart = 'إجمالي التقييمات ' + evalBooking + ' بوكينج و ' + evalGoogle + ' جوجل. ';
+  if (diffEvalBooking <= 0 && diffEvalGoogle <= 0) evalPart += 'أفضل تقييمات بوكينج وجوجل.';
+  else if (diffEvalBooking <= 0) evalPart += 'أفضل تقييم بوكينج، لكن جوجل أقل من الأفضل بـ ' + diffEvalGoogle + '.';
+  else if (diffEvalGoogle <= 0) evalPart += 'أفضل تقييم جوجل، لكن بوكينج أقل من الأفضل بـ ' + diffEvalBooking + '.';
+  else evalPart += 'بوكينج أقل من الأفضل بـ ' + diffEvalBooking + '، وجوجل أقل بـ ' + diffEvalGoogle + '.';
+
+  const attLabel = has26 ? 'حضور 26 يوم وأكثر.' : 'حضور أقل من 26 يوم.';
+  const attLabelHtml = has26
+    ? '<span class="text-green-400 font-medium">حضور 26 يوم وأكثر.</span>'
+    : '<span class="text-red-400 font-medium">حضور أقل من 26 يوم.</span>';
+  const combined = (pctCount + pctEval) / 2;
+  const boost = has26 ? 0.15 : 0;
+  let score = Math.min(1, combined + boost);
+  let points = Math.round(score * 100);
+  if (!has26 && points > 84) points = 84;
+  const deduction = Math.min(10, Math.max(0, parseInt(discountDeduction, 10) || 0));
+  if (deduction > 0) points = Math.max(0, points - deduction);
+  let level = 'سيء';
+  if (points >= 90) level = 'ممتاز';
+  else if (points >= 80) level = 'جيد';
+  else if (points >= 60) level = 'متوسط';
+  else if (points >= 40) level = 'ضعيف';
+  let reasons = bookingsPart + ' — ' + evalPart + ' — ' + attLabel;
+  let reasonsHtml = bookingsPart + ' — ' + evalPart + ' — ' + attLabelHtml;
+  if (deduction > 0) {
+    reasons += ' — نقص ' + deduction + ' نقطة بسبب خصم تقييم الفندق.';
+    reasonsHtml += ' — <span class="text-red-400 font-medium">نقص ' + deduction + ' نقطة بسبب خصم تقييم الفندق.</span>';
+  }
+  reasons += ' → التقييم: ' + level + ' (' + points + ' نقطة)';
+  reasonsHtml += ' → التقييم: ' + level + ' (' + points + ' نقطة)';
+  const ratingColor = points >= 80 ? 'text-green-400' : points >= 60 ? 'text-yellow-400' : points >= 40 ? 'text-orange-400' : 'text-red-400';
+  return { points, level, reasons, reasonsHtml, ratingColor };
+}
+
+// Populate archived employee performance table for a specific period (with أسباب التقييم + خصم تقييم الفندق إن وُجد)
+function populateArchivedEmployeePerformanceTableForPeriod(employees, periodId, negativeRatingsCount) {
   const tableContainer = document.getElementById(`archivedPeriodTable_${periodId}`);
   if (!tableContainer) return;
-  
+
   if (!employees || employees.length === 0) {
     tableContainer.innerHTML = '<p class="text-gray-400 text-center py-4">لا توجد بيانات</p>';
     return;
   }
-  
-  // Similar logic to populateArchivedEmployeePerformanceTable but for specific period
-  const employeesData = [];
+
   const nameCounts = {};
-  
-  employees.forEach(emp => {
-    nameCounts[emp.name] = (nameCounts[emp.name] || 0) + 1;
+  employees.forEach(emp => { nameCounts[emp.name] = (nameCounts[emp.name] || 0) + 1; });
+  const counts = (negativeRatingsCount && typeof negativeRatingsCount === 'object') ? negativeRatingsCount : {};
+
+  const branches = [...new Set(employees.map(e => e.branch).filter(Boolean))];
+  const branchWinners = {};
+  branches.forEach(b => {
+    branchWinners[b] = { net: { val: -1, ids: [] }, eval: { val: -1, ids: [] }, book: { val: -1, ids: [] }, attendance: { val: -1, ids: [] } };
   });
-  
+  employees.forEach(emp => {
+    const rate = emp.count > 100 ? 3 : (emp.count > 50 ? 2 : 1);
+    const evBooking = emp.evaluationsBooking || 0;
+    const evGoogle = emp.evaluationsGoogle || 0;
+    const gross = (emp.count * rate) + (evBooking * 20) + (evGoogle * 10);
+    const fund = gross * 0.15;
+    let net = gross - fund;
+    const attendance26Days = emp.attendance26Days === true;
+    net = net + (attendance26Days ? net * 0.25 : 0);
+    const bw = branchWinners[emp.branch];
+    if (!bw) return;
+    if (net > bw.net.val) { bw.net.val = net; bw.net.ids = [emp.id]; }
+    else if (net === bw.net.val) bw.net.ids.push(emp.id);
+    if (evBooking > bw.eval.val) { bw.eval.val = evBooking; bw.eval.ids = [emp.id]; }
+    else if (evBooking === bw.eval.val) bw.eval.ids.push(emp.id);
+    if (emp.count > bw.book.val) { bw.book.val = emp.count; bw.book.ids = [emp.id]; }
+    else if (emp.count === bw.book.val) bw.book.ids.push(emp.id);
+    let empAttendanceDays = emp.attendance26Days === true ? 26 : 0;
+    if (nameCounts[emp.name] > 1) empAttendanceDays = emp.totalAttendanceDays || (emp.attendance26Days === true ? 26 : 0);
+    if (empAttendanceDays >= 26) {
+      let isHighestDays = true;
+      employees.filter(e => e.branch === emp.branch).forEach(other => {
+        if (other.name === emp.name) return;
+        const otherDays = other.attendance26Days === true ? 26 : (other.totalAttendanceDays || 0);
+        if (otherDays > empAttendanceDays) isHighestDays = false;
+      });
+      if (isHighestDays) {
+        if (bw.attendance.val === -1) { bw.attendance.val = empAttendanceDays; bw.attendance.ids = [emp.id]; }
+        else if (empAttendanceDays > bw.attendance.val) { bw.attendance.val = empAttendanceDays; bw.attendance.ids = [emp.id]; }
+        else if (empAttendanceDays === bw.attendance.val) bw.attendance.ids.push(emp.id);
+      }
+    }
+  });
+
   const uniqueEmployees = new Map();
   employees.forEach(emp => {
     const key = emp.name;
-    if (!uniqueEmployees.has(key)) {
-      uniqueEmployees.set(key, []);
-    }
+    if (!uniqueEmployees.has(key)) uniqueEmployees.set(key, []);
     uniqueEmployees.get(key).push(emp);
   });
-  
+
+  const employeesData = [];
   uniqueEmployees.forEach((empList, name) => {
     let totalCount = 0;
     let totalEvalBooking = 0;
     let totalEvalGoogle = 0;
-    let totalNet = 0;
-    let branches = [];
-    
+    let totalNetFromBranches = 0;
+    let hasExcellence = false;
+    let hasCommitment = false;
+    let hasAttendance26 = false;
+    const branchList = [];
+
     empList.forEach(emp => {
       totalCount += emp.count || 0;
       totalEvalBooking += emp.evaluationsBooking || 0;
       totalEvalGoogle += emp.evaluationsGoogle || 0;
-      
+      if (emp.attendance26Days === true) hasAttendance26 = true;
       const rate = emp.count > 100 ? 3 : (emp.count > 50 ? 2 : 1);
-      const gross = (emp.count * rate) + ((emp.evaluationsBooking || 0) * 20) + ((emp.evaluationsGoogle || 0) * 10);
+      const evBooking = emp.evaluationsBooking || 0;
+      const evGoogle = emp.evaluationsGoogle || 0;
+      const gross = (emp.count * rate) + (evBooking * 20) + (evGoogle * 10);
       const fund = gross * 0.15;
-      let net = gross - fund;
-      
-      if (emp.attendance26Days === true) {
-        net = net + (net * 0.25);
-      }
-      
-      totalNet += net;
-      if (!branches.includes(emp.branch)) {
-        branches.push(emp.branch);
-      }
+      let branchNet = gross - fund;
+      const attendance26Days = emp.attendance26Days === true;
+      branchNet = branchNet + (attendance26Days ? branchNet * 0.25 : 0);
+      totalNetFromBranches += branchNet;
+      const bw = branchWinners[emp.branch];
+      if (bw && bw.book.ids.includes(emp.id) && bw.eval.ids.includes(emp.id) && bw.book.val > 0) hasExcellence = true;
+      if (bw && attendance26Days && bw.attendance.ids.includes(emp.id) && ((bw.eval.ids.includes(emp.id) && bw.eval.val > 0) || (bw.book.ids.includes(emp.id) && bw.book.val > 0))) hasCommitment = true;
+      if (!branchList.includes(emp.branch)) branchList.push(emp.branch);
     });
-    
-    const performanceScore = totalCount + (totalEvalBooking * 2) + totalEvalGoogle + (totalNet / 100);
-    
+
+    let totalNet = totalNetFromBranches + (hasExcellence ? 50 : 0) + (hasCommitment ? 50 : 0);
+    const hotelDeductionRiyal = getHotelRatingDeductionForArchived(name, employees, counts);
+    totalNet = Math.max(0, totalNet - hotelDeductionRiyal);
+    const totalEval = totalEvalBooking + totalEvalGoogle;
     employeesData.push({
       name: name,
-      branches: branches.join(' - '),
+      branches: branchList.join(' - '),
       count: totalCount,
       evalBooking: totalEvalBooking,
       evalGoogle: totalEvalGoogle,
-      totalEval: totalEvalBooking + totalEvalGoogle,
+      totalEval: totalEval,
       net: totalNet,
-      performanceScore: performanceScore,
-      isDuplicate: nameCounts[name] > 1
+      hasAttendance26: hasAttendance26,
+      isDuplicate: nameCounts[name] > 1,
+      points: 0,
+      level: '-',
+      reasonsHtml: '-',
+      ratingColor: 'text-gray-400',
+      discountPoints: hotelDeductionRiyal > 0 ? 10 : 0
     });
   });
-  
-  employeesData.sort((a, b) => b.performanceScore - a.performanceScore);
-  
+
+  const minCount = employeesData.length ? Math.min(...employeesData.map(e => e.count)) : 0;
+  const maxCount = employeesData.length ? Math.max(...employeesData.map(e => e.count)) : 0;
+  const minEval = employeesData.length ? Math.min(...employeesData.map(e => e.totalEval)) : 0;
+  const maxEval = employeesData.length ? Math.max(...employeesData.map(e => e.totalEval)) : 0;
+  const maxEvalBooking = employeesData.length ? Math.max(...employeesData.map(e => e.evalBooking || 0)) : 0;
+  const maxEvalGoogle = employeesData.length ? Math.max(...employeesData.map(e => e.evalGoogle || 0)) : 0;
+
+  employeesData.forEach(emp => {
+    const discountPoints = (emp.discountPoints != null) ? emp.discountPoints : 0;
+    const d = getRatingDetailsDynamicArchived(emp, minCount, maxCount, minEval, maxEval, maxEvalBooking, maxEvalGoogle, discountPoints);
+    emp.points = d.points;
+    emp.level = d.level;
+    emp.reasonsHtml = d.reasonsHtml != null ? d.reasonsHtml : d.reasons;
+    emp.ratingColor = d.ratingColor;
+  });
+
+  employeesData.sort((a, b) => b.points - a.points);
+
   let html = `
     <div class="glass p-4 rounded-xl border border-turquoise/30 mt-4">
       <h5 class="text-base font-bold text-white mb-3">جدول تقييم الموظفين</h5>
@@ -3244,48 +3516,44 @@ function populateArchivedEmployeePerformanceTableForPeriod(employees, periodId) 
           </thead>
           <tbody>
   `;
-  
+
+  function escapeHtmlArchived(s) {
+    return String(s == null ? '' : s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+  }
   employeesData.forEach((emp, index) => {
-    let rating = 'جيد';
-    let ratingColor = 'text-green-400';
-    if (emp.performanceScore >= 200) {
-      rating = 'ممتاز';
-      ratingColor = 'text-green-500';
-    } else if (emp.performanceScore >= 100) {
-      rating = 'جيد جداً';
-      ratingColor = 'text-green-400';
-    } else if (emp.performanceScore >= 50) {
-      rating = 'جيد';
-      ratingColor = 'text-yellow-400';
-    } else {
-      rating = 'يحتاج تحسين';
-      ratingColor = 'text-red-400';
-    }
-    
+    const barLeftPct = Math.min(100, Math.max(0, emp.points));
+    const nameSafe = escapeHtmlArchived(emp.name);
+    const branchesSafe = escapeHtmlArchived(emp.branches);
     html += `
       <tr class="border-b border-white/10 hover:bg-white/5">
         <td class="p-2 text-center font-bold text-turquoise text-xs">${index + 1}</td>
-        <td class="p-2 text-right font-bold text-white text-xs">${emp.name}${emp.isDuplicate ? ' <span class="text-[10px] text-gray-400">(متكرر)</span>' : ''}</td>
-        <td class="p-2 text-center text-gray-300 text-[10px]">${emp.branches}</td>
+        <td class="p-2 text-right font-bold text-white text-xs">${nameSafe}${emp.isDuplicate ? ' <span class="text-[10px] text-gray-400">(متكرر)</span>' : ''}</td>
+        <td class="p-2 text-center text-gray-300 text-[10px]">${branchesSafe}</td>
         <td class="p-2 text-center font-bold text-white text-xs">${emp.count}</td>
         <td class="p-2 text-center text-gray-300 text-xs">
           <span class="text-blue-400">${emp.evalBooking}</span> / <span class="text-purple-400">${emp.evalGoogle}</span>
         </td>
         <td class="p-2 text-center font-bold text-green-400 text-xs">${emp.net.toFixed(2)} ريال</td>
         <td class="p-2 text-center">
-          <span class="font-bold ${ratingColor} text-xs">${rating}</span>
+          <span class="font-bold ${emp.ratingColor} text-xs">${emp.points} نقطة</span>
+          <div class="text-[10px] font-semibold ${emp.ratingColor}">${emp.level}</div>
+        </td>
+      </tr>
+      <tr class="border-b border-white/5 reasons-row bg-turquoise/10 border-r-4 border-turquoise/50">
+        <td colspan="7" class="p-2 text-right text-xs text-gray-300">
+          <span class="font-medium opacity-90">أسباب التقييم:</span> ${emp.reasonsHtml}
         </td>
       </tr>
     `;
   });
-  
+
   html += `
           </tbody>
         </table>
       </div>
     </div>
   `;
-  
+
   tableContainer.innerHTML = html;
 }
 

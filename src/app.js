@@ -55,6 +55,14 @@ let discounts = []; // Array of discount objects: { employeeName, discountType, 
 if (typeof window !== 'undefined') {
   window.discounts = discounts;
 }
+// عدد التقييمات السلبية (أقل من تقييم الفندق) لكل فرع — يُدخل المشرف، 10 ريال × العدد يُخصم من كل موظف، و10 نقاط من التقييم
+let branchNegativeRatingsCount = {}; // e.g. { 'الكورنيش': 0, 'الأندلس': 0 }
+if (typeof window !== 'undefined') {
+  window.branchNegativeRatingsCount = branchNegativeRatingsCount;
+}
+// تهريب للعرض الآمن (منع XSS وكسر الـ attributes)
+function escAttr(s) { return String(s == null ? '' : s).replace(/\\/g, '\\\\').replace(/'/g, "\\'").replace(/"/g, '&quot;'); }
+function escHtml(s) { return String(s == null ? '' : s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;'); }
 // يُعبّأ من loadDiscountTypes (البنود الـ 55 + ما يضيفه المدير)
 let discountTypes = [];
 
@@ -189,12 +197,22 @@ const savedBranches = localStorage.getItem('adora_rewards_branches');
 const savedEvalRate = localStorage.getItem('adora_rewards_evalRate');
 const savedStartDate = localStorage.getItem('adora_rewards_startDate');
 const savedPeriodText = localStorage.getItem('adora_rewards_periodText');
+const savedNegativeRatings = localStorage.getItem('adora_rewards_negativeRatingsCount');
 if (savedDb && savedBranches) {
 db = JSON.parse(savedDb);
 branches = new Set(JSON.parse(savedBranches));
+normalizeDuplicateAttendance(db);
+if (savedNegativeRatings) {
+  try {
+    branchNegativeRatingsCount = JSON.parse(savedNegativeRatings);
+    if (typeof branchNegativeRatingsCount !== 'object' || branchNegativeRatingsCount === null) branchNegativeRatingsCount = {};
+    if (typeof window !== 'undefined') window.branchNegativeRatingsCount = branchNegativeRatingsCount;
+  } catch (_) { branchNegativeRatingsCount = {}; }
+}
 // Update window.db after loading
 if (typeof window !== 'undefined') {
   window.db = db;
+  window.branchNegativeRatingsCount = branchNegativeRatingsCount;
   console.log('✅ window.db updated from localStorage, length:', db.length);
 }
 if (savedEvalRate) {
@@ -254,6 +272,9 @@ if (clearPeriodData) {
   localStorage.removeItem('adora_rewards_evalRate');
   localStorage.removeItem('adora_rewards_startDate');
   localStorage.removeItem('adora_rewards_periodText');
+  localStorage.removeItem('adora_rewards_negativeRatingsCount');
+  branchNegativeRatingsCount = {};
+  if (typeof window !== 'undefined') window.branchNegativeRatingsCount = branchNegativeRatingsCount;
 } else if (isAdmin) {
   // خروج الأدمن: مسح بيانات الفترة لظهور صفحة الرفع بعد التوجيه (بدون ?admin= يظهر «غير مصرح»)
   localStorage.removeItem('adora_rewards_db');
@@ -261,6 +282,11 @@ if (clearPeriodData) {
   localStorage.removeItem('adora_rewards_evalRate');
   localStorage.removeItem('adora_rewards_startDate');
   localStorage.removeItem('adora_rewards_periodText');
+  localStorage.removeItem('adora_rewards_negativeRatingsCount');
+  branchNegativeRatingsCount = {};
+  if (typeof window !== 'undefined') window.branchNegativeRatingsCount = branchNegativeRatingsCount;
+  // علم: بعد إعادة التوجيه لا نجلب من Firebase ونعرض صفحة الرفع (الاختبار 5 يفتح لاحقاً بدون هذا العلم فيجلب ويعرض اللوحة)
+  try { localStorage.setItem('adora_admin_just_logged_out', '1'); } catch (e) {}
 }
 // إزالة توكن هذه الجلسة من التخزين المحلي حتى لا يعيد الدخول تلقائياً عند فتح نفس الرابط
 if (r && p) {
@@ -354,7 +380,7 @@ async function doAppInit() {
       loadingWrap.id = 'adminLinkLoadingWrap';
       loadingWrap.setAttribute('aria-live', 'polite');
       loadingWrap.className = 'flex flex-col items-center justify-center gap-3 py-12 px-4 text-white/90';
-      loadingWrap.innerHTML = '<span class="admin-link-load-spinner inline-block w-8 h-8 border-2 border-[rgba(64,224,208,0.4)] rounded-full border-t-[#40E0D0]"></span><span class="font-bold">جاري تحميل بيانات الفترة من الخادم...</span>';
+      loadingWrap.innerHTML = '<div class="w-full max-w-[280px] rounded-full overflow-hidden relative" style="height:6px;"><div style="position:absolute;inset:0;background:#4b5563;"></div><div class="admin-link-progress-fill" style="position:absolute;left:0;top:0;height:100%;background:linear-gradient(90deg,#ef4444 0%,#f97316 25%,#eab308 50%,#84cc16 75%,#22c55e 100%);"></div></div><span class="text-sm font-bold text-white/80 mt-2 block">جاري تحميل بيانات الفترة من الخادم...</span>';
       var tbody = document.getElementById('mainTable');
       if (tbody && tbody.parentNode) tbody.parentNode.insertBefore(loadingWrap, tbody);
     }
@@ -363,30 +389,32 @@ async function doAppInit() {
       try {
         if (typeof initializeFirebase === 'function') initializeFirebase();
         var waitStart = Date.now();
-        var maxWaitMs = 12000;
+        var maxWaitMs = 15000;
         while (!(typeof window !== 'undefined' && window.storage) && (Date.now() - waitStart) < maxWaitMs) {
-          await new Promise(function (r) { setTimeout(r, 150); });
+          await new Promise(function (r) { setTimeout(r, 200); });
         }
+        if (typeof window !== 'undefined' && window.storage) { storage = window.storage; }
         var live = null;
-        // أولاً: جلب periods/periodId.json (الملف الذي يُكتب عند فتح «إدارة الإداريين») — أنسب لفتح الرابط لأول مرة على جهاز الموظف
+        // عند وجود period في الرابط: جرب periods/periodId.json أولاً (تخفيف ضغط 429 على live.json)
         if (urlPeriod && typeof fetchPeriodFromFirebase === 'function') {
-          for (var attemptPeriod = 0; attemptPeriod < 4 && !live; attemptPeriod++) {
+          for (var attemptPeriod = 0; attemptPeriod < 3 && (!live || !live.db || live.db.length === 0); attemptPeriod++) {
             live = await fetchPeriodFromFirebase(urlPeriod);
-            if (!live && attemptPeriod < 3) await new Promise(function (r) { setTimeout(r, 1200); });
-          }
-        }
-        // ثانياً: إن لم يُحمّل، جرب live.json (قد يكون محدّثاً من جهاز آخر)
-        if (!live || !Array.isArray(live.db) || live.db.length === 0) {
-          var maxAttempts = 4;
-          for (var attempt = 0; attempt < maxAttempts; attempt++) {
-            if (typeof fetchLivePeriodFromFirebase === 'function') live = await fetchLivePeriodFromFirebase();
             if (live && Array.isArray(live.db) && live.db.length > 0) break;
-            if (attempt < maxAttempts - 1) await new Promise(function (r) { setTimeout(r, 1200); });
+            if (attemptPeriod < 2) await new Promise(function (r) { setTimeout(r, 2500); });
           }
         }
-        // احتياطي أخير: إعادة محاولة periods/periodId.json
-        if ((!live || !Array.isArray(live.db) || live.db.length === 0) && urlPeriod && typeof fetchPeriodFromFirebase === 'function') {
-          live = await fetchPeriodFromFirebase(urlPeriod);
+        // إن لم يُحمّل: جلب live.json (عدد محاولات أقل + تأخير أطول لتجنّب 429)
+        var maxLiveAttempts = 4;
+        var retryDelayMs = 3500;
+        for (var attemptLive = 0; attemptLive < maxLiveAttempts && (!live || !live.db || live.db.length === 0); attemptLive++) {
+          if (typeof fetchLivePeriodFromFirebase === 'function') live = await fetchLivePeriodFromFirebase();
+          if (live && Array.isArray(live.db) && live.db.length > 0) break;
+          if (attemptLive < maxLiveAttempts - 1) await new Promise(function (r) { setTimeout(r, retryDelayMs); });
+        }
+        // احتياطي أخير: periodId ثم live (مرة واحدة)
+        if (!live || !Array.isArray(live.db) || live.db.length === 0) {
+          if (urlPeriod && typeof fetchPeriodFromFirebase === 'function') live = await fetchPeriodFromFirebase(urlPeriod);
+          if ((!live || !live.db || live.db.length === 0) && typeof fetchLivePeriodFromFirebase === 'function') live = await fetchLivePeriodFromFirebase();
         }
         if (!isEmployeeMode() && live && Array.isArray(live.db) && live.db.length > 0 && typeof applyLivePeriod === 'function') {
           applyLivePeriod(live);
@@ -430,9 +458,23 @@ async function doAppInit() {
         if (typeof updatePrintButtonText === 'function') updatePrintButtonText();
         if (typeof renderUI === 'function') renderUI('الكل');
       }
-      if (!isEmployeeMode() && typeof startLivePeriodPolling === 'function') startLivePeriodPolling();
+      if (!isEmployeeMode() && typeof startLivePeriodPolling === 'function' && !(typeof isAdminMode === 'function' && isAdminMode())) startLivePeriodPolling();
     })();
     if (!isEmployeeMode() && typeof syncLivePeriodToFirebase === 'function') syncLivePeriodToFirebase();
+    return;
+  }
+  // إذا أدمن بدون بيانات محلية: إما خرج للتو (نعرض الرفع) أو فتح جديد (نجلب من Firebase ونعرض اللوحة)
+  var savedDbForAdmin = typeof localStorage !== 'undefined' ? localStorage.getItem('adora_rewards_db') : null;
+  var adminJustLoggedOut = typeof localStorage !== 'undefined' ? localStorage.getItem('adora_admin_just_logged_out') : null;
+  if (typeof isAdminMode === 'function' && isAdminMode() && !urlRole && !urlToken && !urlPeriod && !savedDbForAdmin && adminJustLoggedOut === '1') {
+    try { localStorage.removeItem('adora_admin_just_logged_out'); } catch (e) {}
+    loadDataFromStorage();
+    var uploadBoxEl = document.getElementById('uploadBox');
+    var dashboardEl = document.getElementById('dashboard');
+    var actionBtnsEl = document.getElementById('actionBtns');
+    if (uploadBoxEl) uploadBoxEl.classList.remove('hidden');
+    if (dashboardEl) dashboardEl.classList.add('hidden');
+    if (actionBtnsEl) actionBtnsEl.style.display = 'none';
     return;
   }
   // Firebase-First للجميع: جلب الفترة من Firebase أولاً (أدمن، مشرف، HR، حسابات، مدير) — لا اعتماد على localStorage إلا كاحتياطي
@@ -495,7 +537,7 @@ async function doAppInit() {
     loadDataFromStorage();
   }
   if (!isEmployeeMode() && typeof syncLivePeriodToFirebase === 'function') syncLivePeriodToFirebase();
-  if (!isEmployeeMode() && typeof startLivePeriodPolling === 'function') startLivePeriodPolling();
+  if (!isEmployeeMode() && typeof startLivePeriodPolling === 'function' && !(typeof isAdminMode === 'function' && isAdminMode())) startLivePeriodPolling();
   if (isAdminMode()) {
     if (db.length > 0 && typeof doSyncLivePeriodNow === 'function') {
       doSyncLivePeriodNow().catch(function () {});
@@ -1211,6 +1253,7 @@ return !newEmployees.some(newEmp => `${newEmp.name}|${newEmp.branch}` === key);
 if (deletedEmployees.length > 0) {
 logVerbose('🗑️ Deleted employees (not in new file):', deletedEmployees.map(function(e) { return e.name + ' (' + e.branch + ')'; }).join(', '));
 }
+normalizeDuplicateAttendance(db);
 
 if (db.length > 0) {
 // Save to localStorage — adora_rewards_discounts لا تُمس؛ تبقى مرتبطة باسم الموظف حتى إغلاق الفترة
@@ -1252,9 +1295,23 @@ console.error('❌ localStorage is not available:', storageError);
 alert('⚠️ تحذير: لا يمكن حفظ البيانات. يرجى التحقق من إعدادات المتصفح (قد يكون في وضع التصفح الخاص أو محظور localStorage)');
 }
 }
-document.getElementById('uploadBox').classList.add('hidden');
-document.getElementById('dashboard').classList.remove('hidden');
-document.getElementById('actionBtns').style.display = 'flex';
+// إظهار اللوحة فقط عند وجود بيانات (لا نُخفِي الرفع بعد خروج الأدمن — adora_admin_just_logged_out أو عدم وجود adora_rewards_db)
+var hasStoredData = false;
+try {
+  var stored = localStorage.getItem('adora_rewards_db');
+  if (stored) {
+    var parsed = JSON.parse(stored);
+    hasStoredData = Array.isArray(parsed) && parsed.length > 0;
+  }
+} catch (_) {}
+if (!localStorage.getItem('adora_admin_just_logged_out') && hasStoredData) {
+  var u = document.getElementById('uploadBox');
+  var d = document.getElementById('dashboard');
+  var a = document.getElementById('actionBtns');
+  if (u) u.classList.add('hidden');
+  if (d) d.classList.remove('hidden');
+  if (a) a.style.display = 'flex';
+}
 updatePrintButtonText();
 // Format date as YYYY/MM/DD in Arabic numerals
 const now = new Date();
@@ -1305,25 +1362,28 @@ renderUI('الكل');
 // updateEvalRate function removed - rates are now fixed (20 for Booking, 10 for Google Maps)
 // This function is no longer needed as rates cannot be changed
 
-// مصدر واحد للإجماليات: دالة واحدة تُرجع كل القيم للكروت والتذييل (لا نسخ من DOM)
-function getFooterTotals() {
-  let filtered = [...db];
-  if (currentFilter !== 'الكل') filtered = filtered.filter(d => d.branch === currentFilter);
+// مصدر واحد لـ branchWinners و branchLosers — تُستدعى من getFooterTotals، renderUI، الطباعة، وحوافز الالتزام/التفوق
+function computeBranchWinnersAndLosers(dataDb, branchesSet) {
   const branchWinners = {};
-  [...branches].forEach(b => {
+  const branchLosers = {};
+  const arr = Array.isArray(branchesSet) ? branchesSet : [...(branchesSet || [])];
+  arr.forEach(b => {
     branchWinners[b] = { net: {val: -1, ids: []}, eval: {val: -1, ids: []}, evalBooking: {val: -1, ids: []}, evalGoogle: {val: -1, ids: []}, book: {val: -1, ids: []}, attendance: {val: -1, ids: []} };
+    branchLosers[b] = { net: {val: Infinity, ids: []}, eval: {val: Infinity, ids: []}, evalBooking: {val: Infinity, ids: []}, evalGoogle: {val: Infinity, ids: []}, book: {val: Infinity, ids: []} };
   });
-  db.forEach(emp => {
+  (dataDb || []).forEach(emp => {
     const rate = emp.count > 100 ? 3 : (emp.count > 50 ? 2 : 1);
     const evBooking = emp.evaluationsBooking || 0;
     const evGoogle = emp.evaluationsGoogle || 0;
+    const totalEval = evBooking + evGoogle;
     const gross = (emp.count * rate) + (evBooking * 20) + (evGoogle * 10);
     const fund = gross * 0.15;
     let net = gross - fund;
     const attendance26Days = emp.attendance26Days === true;
     net = net + (attendance26Days ? net * 0.25 : 0);
     const bw = branchWinners[emp.branch];
-    if (!bw) return;
+    const bl = branchLosers[emp.branch];
+    if (!bw || !bl) return;
     if (net > bw.net.val) { bw.net.val = net; bw.net.ids = [emp.id]; }
     else if (net === bw.net.val) { bw.net.ids.push(emp.id); }
     if (evBooking > bw.eval.val) { bw.eval.val = evBooking; bw.eval.ids = [emp.id]; }
@@ -1334,14 +1394,14 @@ function getFooterTotals() {
     else if (evGoogle === bw.evalGoogle.val) { bw.evalGoogle.ids.push(emp.id); }
     if (emp.count > bw.book.val) { bw.book.val = emp.count; bw.book.ids = [emp.id]; }
     else if (emp.count === bw.book.val) { bw.book.ids.push(emp.id); }
-    const empNameCount = db.filter(e => e.name === emp.name).length;
+    const empNameCount = (dataDb || []).filter(e => e.name === emp.name).length;
     let empAttendanceDays = attendance26Days ? 26 : 0;
     if (empNameCount > 1) empAttendanceDays = emp.totalAttendanceDays || (emp.attendance26Days === true ? 26 : 0);
     if (empAttendanceDays >= 26) {
       let isHighestDays = true;
-      db.filter(e => e.branch === emp.branch).forEach(otherEmp => {
+      (dataDb || []).filter(e => e.branch === emp.branch).forEach(otherEmp => {
         if (otherEmp.name === emp.name) return;
-        const otherNameCount = db.filter(e => e.name === otherEmp.name).length;
+        const otherNameCount = (dataDb || []).filter(e => e.name === otherEmp.name).length;
         let otherDays = otherEmp.attendance26Days === true ? 26 : 0;
         if (otherNameCount > 1) otherDays = otherEmp.totalAttendanceDays || (otherEmp.attendance26Days === true ? 26 : 0);
         if (otherDays > empAttendanceDays) isHighestDays = false;
@@ -1352,7 +1412,25 @@ function getFooterTotals() {
         else if (empAttendanceDays === bw.attendance.val) { bw.attendance.ids.push(emp.id); }
       }
     }
+    if (net > 0 && net < bl.net.val) { bl.net.val = net; bl.net.ids = [emp.id]; }
+    else if (net > 0 && net === bl.net.val) { bl.net.ids.push(emp.id); }
+    if (totalEval < bl.eval.val || (totalEval === 0 && bl.eval.val > 0)) { bl.eval.val = totalEval; bl.eval.ids = [emp.id]; }
+    else if (totalEval === bl.eval.val) { bl.eval.ids.push(emp.id); }
+    if (evBooking < bl.evalBooking.val || (evBooking === 0 && bl.evalBooking.val > 0)) { bl.evalBooking.val = evBooking; bl.evalBooking.ids = [emp.id]; }
+    else if (evBooking === bl.evalBooking.val) { bl.evalBooking.ids.push(emp.id); }
+    if (evGoogle < bl.evalGoogle.val || (evGoogle === 0 && bl.evalGoogle.val > 0)) { bl.evalGoogle.val = evGoogle; bl.evalGoogle.ids = [emp.id]; }
+    else if (evGoogle === bl.evalGoogle.val) { bl.evalGoogle.ids.push(emp.id); }
+    if (emp.count > 0 && emp.count < bl.book.val) { bl.book.val = emp.count; bl.book.ids = [emp.id]; }
+    else if (emp.count > 0 && emp.count === bl.book.val) { bl.book.ids.push(emp.id); }
   });
+  return { branchWinners, branchLosers };
+}
+
+// مصدر واحد للإجماليات: دالة واحدة تُرجع كل القيم للكروت والتذييل (لا نسخ من DOM)
+function getFooterTotals() {
+  let filtered = [...db];
+  if (currentFilter !== 'الكل') filtered = filtered.filter(d => d.branch === currentFilter);
+  const { branchWinners } = computeBranchWinnersAndLosers(db, branches);
   let totalFund = 0, totalNet = 0, totalEval = 0, totalNetNoEval = 0;
   let statEmployees = 0, statBookings = 0;
   if (currentFilter === 'الكل') {
@@ -1413,7 +1491,8 @@ function getFooterTotals() {
       const commitmentBonus = hasCommitmentBonus ? 50 : 0;
       let employeeFinalNet = net + excellenceBonus + commitmentBonus;
       if (typeof getDiscountForEmployeeInBranch === 'function') {
-        const employeeDiscount = getDiscountForEmployeeInBranch(emp.name, net);
+        let employeeDiscount = getDiscountForEmployeeInBranch(emp.name, net);
+        if (typeof getHotelRatingDeductionForEmployee === 'function') employeeDiscount += getHotelRatingDeductionForEmployee(emp.name);
         employeeFinalNet = Math.max(0, employeeFinalNet - employeeDiscount);
       }
       totalNet += employeeFinalNet;
@@ -1563,6 +1642,34 @@ updateBadges();
 // Don't move automatically on blur - let user control navigation with Tab/Enter/Arrows
 }
 }
+// تطبيع أيام الحضور للموظف المتكرر بعد التحميل: كائن واحد مشترك لكل الاسم حتى لا يبقى كل صف له كائن منفصل
+function normalizeDuplicateAttendance(dataDb) {
+  if (!Array.isArray(dataDb)) return;
+  const nameToRows = {};
+  dataDb.forEach((emp) => {
+    if (!nameToRows[emp.name]) nameToRows[emp.name] = [];
+    nameToRows[emp.name].push(emp);
+  });
+  Object.keys(nameToRows).forEach((name) => {
+    const rows = nameToRows[name];
+    if (rows.length <= 1) return;
+    const sharedMap = {};
+    rows.forEach((emp) => {
+      const b = emp.branch;
+      const val = (emp.attendanceDaysPerBranch && emp.attendanceDaysPerBranch[b] !== undefined)
+        ? emp.attendanceDaysPerBranch[b]
+        : (emp.totalAttendanceDays !== undefined ? emp.totalAttendanceDays : (emp.attendance26Days === true ? 26 : 0));
+      if (val !== undefined && val !== '') sharedMap[b] = typeof val === 'number' ? val : (parseInt(val, 10) || 0);
+    });
+    const totalDays = Object.values(sharedMap).reduce((s, d) => s + (parseInt(d, 10) || 0), 0);
+    rows.forEach((emp) => {
+      emp.attendanceDaysPerBranch = sharedMap;
+      emp.totalAttendanceDays = totalDays;
+      emp.attendance26Days = totalDays >= 26;
+    });
+  });
+}
+
 // Function to update attendance days for duplicate employees
 // Handle attendance days input for single branch (one number only - can be any number: 8, 22, 30, etc.)
 function handleAttendanceDaysInputSingle(inputElement, empName, branchName) {
@@ -1592,20 +1699,49 @@ updateAttendanceDaysForBranch(empName, branchName, 0, false);
 }
 }
 // Handle attendance days input on blur (when user finishes typing)
+// لا نستدعي renderUI هنا — نحدّث البيانات ثم نحدّث عرض الصف فقط لتجنّب فلاش وإعادة رسم الجدول (Tab/الماوس يعملان بسلاسة)
 function handleAttendanceDaysBlur(inputElement, empName, branchName) {
-// Get current value
-let value = inputElement.value;
-// Remove any characters that are not digits
-value = value.replace(/[^0-9]/g, '');
-// Update input value
-inputElement.value = value;
-// Update attendance days and render UI now that user finished typing
-if (value !== '') {
-const numValue = parseInt(value) || 0;
-updateAttendanceDaysForBranch(empName, branchName, numValue, true);
-} else {
-updateAttendanceDaysForBranch(empName, branchName, 0, true);
+  var value = inputElement.value;
+  value = (value || '').replace(/[^0-9]/g, '');
+  inputElement.value = value;
+  var numValue = value !== '' ? (parseInt(value, 10) || 0) : 0;
+  var oldVal = 0;
+  var first = typeof db !== 'undefined' && db && db.filter(function (e) { return e.name === empName; })[0];
+  if (first && first.attendanceDaysPerBranch && first.attendanceDaysPerBranch[branchName] !== undefined) {
+    oldVal = parseInt(first.attendanceDaysPerBranch[branchName], 10) || 0;
+  }
+  updateAttendanceDaysForBranch(empName, branchName, numValue, false);
+  patchAttendanceRowDisplay(inputElement, empName);
+  if (typeof logAdminAction === 'function') {
+    var role = typeof localStorage !== 'undefined' ? localStorage.getItem('adora_current_role') : null;
+    if (role) { logAdminAction(role, 'update_attendance_days', { employeeName: empName, branch: branchName, oldValue: oldVal, newValue: numValue }); }
+  }
 }
+
+// تحديث عرض خلية الحضور في الصف فقط (تم/لم يتم + الـ checkbox) بدون إعادة رسم الجدول
+function patchAttendanceRowDisplay(inputElement, empName) {
+  var row = inputElement && inputElement.closest ? inputElement.closest('tr') : null;
+  if (!row || typeof db === 'undefined') return;
+  var firstEmp = db.filter(function (e) { return e.name === empName; })[0];
+  if (!firstEmp) return;
+  var totalDays = 0;
+  if (firstEmp.attendanceDaysPerBranch && typeof firstEmp.attendanceDaysPerBranch === 'object') {
+    totalDays = Object.values(firstEmp.attendanceDaysPerBranch).reduce(function (sum, d) { return sum + (parseInt(d, 10) || 0); }, 0);
+  }
+  var done26 = totalDays >= 26;
+  var toggle = row.querySelector('.attendance-toggle');
+  var statusSpan = row.querySelector('.col-attendance .attendance-indicator span');
+  if (toggle) {
+    toggle.checked = !!done26;
+  }
+  if (statusSpan) {
+    statusSpan.textContent = done26 ? 'تم' : 'لم يتم';
+    statusSpan.className = (statusSpan.className || '').replace(/\btext-(green|red)-400\b/g, '').trim() + (done26 ? ' text-green-400' : ' text-red-400');
+  }
+  var totalDiv = row.querySelector('.col-attendance div.text-green-400.font-bold');
+  if (totalDiv && totalDiv.textContent && totalDiv.textContent.indexOf('المجموع:') !== -1) {
+    totalDiv.textContent = 'المجموع: ' + totalDays;
+  }
 }
 function updateAttendanceDaysForBranch(empName, branchName, days, shouldRender = true) {
 var currentRole = localStorage.getItem('adora_current_role');
@@ -1621,31 +1757,27 @@ if (typeof currentFilter !== 'undefined' && currentFilter === 'الكل') {
 // Ensure days is a valid positive number (accepts any number: odd, even, single-digit, multi-digit)
 days = Math.max(0, parseInt(days) || 0);
 // No restriction on odd/even numbers - accept 8, 22, 30, 15, etc.
-// Get all employees with this name
+// Get all employees with this name (موظف متكرر = نفس الاسم في أكثر من فرع)
 const employeesWithSameName = db.filter(emp => emp.name === empName);
-// Get old value for logging
-let oldValue = 0;
-if (employeesWithSameName.length > 0 && employeesWithSameName[0].attendanceDaysPerBranch) {
-  oldValue = employeesWithSameName[0].attendanceDaysPerBranch[branchName] || 0;
-}
-// Initialize attendanceDaysPerBranch if it doesn't exist
+// Build ONE shared map for all branches so كل الصفوف بنفس الاسم تشير لنفس الكائن
+let sharedMap = {};
 employeesWithSameName.forEach((emp) => {
-if (!emp.attendanceDaysPerBranch) {
-emp.attendanceDaysPerBranch = {};
-}
+  if (emp.attendanceDaysPerBranch && typeof emp.attendanceDaysPerBranch === 'object') {
+    Object.keys(emp.attendanceDaysPerBranch).forEach((b) => {
+      sharedMap[b] = emp.attendanceDaysPerBranch[b];
+    });
+  }
 });
-// Update the specific branch's days for all employees with this name
+// Get old value for logging
+const oldValue = sharedMap[branchName] !== undefined ? (parseInt(sharedMap[branchName], 10) || 0) : 0;
+// Update the specific branch in the shared map
+sharedMap[branchName] = days;
+const totalDays = Object.values(sharedMap).reduce((sum, d) => sum + (parseInt(d, 10) || 0), 0);
+// Assign the SAME reference to ALL rows with this name + sync totalAttendanceDays و attendance26Days
 employeesWithSameName.forEach((emp) => {
-// Update the specific branch
-emp.attendanceDaysPerBranch[branchName] = days;
-// Calculate total days from all branches
-const totalDays = Object.values(emp.attendanceDaysPerBranch).reduce((sum, d) => {
-return sum + (parseInt(d) || 0);
-}, 0);
-// Update totalAttendanceDays
-emp.totalAttendanceDays = totalDays;
-// Auto-update attendance26Days based on total days (26 or more = true, less = false)
-emp.attendance26Days = totalDays >= 26;
+  emp.attendanceDaysPerBranch = sharedMap;
+  emp.totalAttendanceDays = totalDays;
+  emp.attendance26Days = totalDays >= 26;
 });
 // Log admin action
 if (typeof logAdminAction === 'function' && currentRole && shouldRender) {
@@ -1856,68 +1988,7 @@ statusSpan.innerText = 'لم يتم';
 // Recalculate and update row
 const row = toggleEl.closest('tr');
 if (row) {
-// Recalculate branch winners to check for excellence bonus and commitment bonus
-const branchWinners = {}; 
-[...branches].forEach(b => {
-branchWinners[b] = { net: {val: -1, ids: []}, eval: {val: -1, ids: []}, book: {val: -1, ids: []}, attendance: {val: -1, ids: []} };
-});
-// Calculate branch winners (including attendance bonus/discount)
-db.forEach(emp => {
-const rate = emp.count > 100 ? 3 : (emp.count > 50 ? 2 : 1);
-const evBooking = emp.evaluationsBooking || 0;
-const evGoogle = emp.evaluationsGoogle || 0;
-const totalEval = evBooking + evGoogle;
-const gross = (emp.count * rate) + (evBooking * 20) + (evGoogle * 10);
-const fund = gross * 0.15;
-let net = gross - fund;
-// Apply attendance bonus/discount
-const empAttendance26Days = emp.attendance26Days === true; // Only true if user manually activated
-const empAttendanceBonus = empAttendance26Days ? net * 0.25 : 0;
-net = net + empAttendanceBonus; // No discount - only bonus if activated
-const bw = branchWinners[emp.branch];
-if (!bw) return;
-if (net > bw.net.val) { bw.net.val = net; bw.net.ids = [emp.id]; }
-else if (net === bw.net.val) { bw.net.ids.push(emp.id); }
-// "الأكثر تقييماً" = Booking فقط (NOT Google Maps)
-if (evBooking > bw.eval.val) { bw.eval.val = evBooking; bw.eval.ids = [emp.id]; }
-else if (evBooking === bw.eval.val) { bw.eval.ids.push(emp.id); }
-if (emp.count > bw.book.val) { bw.book.val = emp.count; bw.book.ids = [emp.id]; }
-else if (emp.count === bw.book.val) { bw.book.ids.push(emp.id); }
-// Track most committed (attendance26Days = true)
-// For duplicate employees: use totalAttendanceDays
-const empNameCount = db.filter(e => e.name === emp.name).length;
-let empAttendanceDays = empAttendance26Days ? 26 : 0;
-if (empNameCount > 1) {
-empAttendanceDays = emp.totalAttendanceDays || (empAttendance26Days ? 26 : 0);
-}
-if (empAttendanceDays >= 26) {
-// Compare with other employees in this branch
-let isHighestDays = true;
-const branchEmployees = db.filter(e => e.branch === emp.branch);
-branchEmployees.forEach(otherEmp => {
-if (otherEmp.name === emp.name) return;
-const otherNameCount = db.filter(e => e.name === otherEmp.name).length;
-let otherDays = otherEmp.attendance26Days === true ? 26 : 0;
-if (otherNameCount > 1) {
-otherDays = otherEmp.totalAttendanceDays || (otherEmp.attendance26Days === true ? 26 : 0);
-}
-if (otherDays > empAttendanceDays) {
-isHighestDays = false;
-}
-});
-if (isHighestDays) {
-if (bw.attendance.val === -1) {
-bw.attendance.val = empAttendanceDays;
-bw.attendance.ids = [emp.id];
-} else if (empAttendanceDays > bw.attendance.val) {
-bw.attendance.val = empAttendanceDays;
-bw.attendance.ids = [emp.id];
-} else if (empAttendanceDays === bw.attendance.val) {
-bw.attendance.ids.push(emp.id);
-}
-}
-}
-});
+const { branchWinners } = computeBranchWinnersAndLosers(db, branches);
 // Recalculate stats for this employee
 const rate = item.count > 100 ? 3 : (item.count > 50 ? 2 : 1);
 const evBooking = item.evaluationsBooking || 0;
@@ -1997,11 +2068,13 @@ data-filter="الكل">
 </button>
 `;
 branches.forEach(b => {
-html += `
-<button onclick="setFilter('${b}')" 
+  const bAttr = typeof escAttr === 'function' ? escAttr(b) : String(b).replace(/'/g, "\\'").replace(/"/g, '&quot;');
+  const bHtml = typeof escHtml === 'function' ? escHtml(b) : String(b).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+  html += `
+<button onclick="setFilter('${bAttr}')" 
 class="filter-pill px-8 py-3 rounded-xl text-sm font-bold text-white bg-white/5 border border-white/10 hover:bg-white/10 hover:border-turquoise/50 transition-all" 
-data-filter="${b}">
-${b}
+data-filter="${bHtml}">
+${bHtml}
 </button>
 `;
 });
@@ -2066,102 +2139,7 @@ btn.classList.add('hidden');
 function updateBadges() {
 // Check if any employee in ANY branch has evaluations > 0 (global check)
 const hasAnyEvaluations = db.some(emp => ((emp.evaluationsBooking || 0) + (emp.evaluationsGoogle || 0)) > 0);
-// Recalculate branch winners/losers
-const branchWinners = {}; 
-const branchLosers = {};
-[...branches].forEach(b => {
-branchWinners[b] = { net: {val: -1, ids: []}, eval: {val: -1, ids: []}, evalBooking: {val: -1, ids: []}, evalGoogle: {val: -1, ids: []}, book: {val: -1, ids: []}, attendance: {val: -1, ids: []} };
-branchLosers[b] = { net: {val: Infinity, ids: []}, eval: {val: Infinity, ids: []}, evalBooking: {val: Infinity, ids: []}, evalGoogle: {val: Infinity, ids: []}, book: {val: Infinity, ids: []} };
-});
-// Calculate branch winners/losers (CRITICAL: Include attendance bonus/discount for accurate net calculation)
-db.forEach(emp => {
-const rate = emp.count > 100 ? 3 : (emp.count > 50 ? 2 : 1);
-const evBooking = emp.evaluationsBooking || 0;
-const evGoogle = emp.evaluationsGoogle || 0;
-const totalEval = evBooking + evGoogle; // For financial calculations only
-const gross = (emp.count * rate) + (evBooking * 20) + (evGoogle * 10);
-const fund = gross * 0.15;
-let net = gross - fund;
-// Apply attendance bonus/discount for accurate net calculation
-const attendance26Days = emp.attendance26Days === true; // Only true if user manually activated
-const attendanceBonus = attendance26Days ? net * 0.25 : 0; // 25% bonus only if user activated "تم"
-net = net + attendanceBonus; // No discount - only bonus if activated
-const bw = branchWinners[emp.branch];
-const bl = branchLosers[emp.branch];
-if (!bw || !bl) return;
-if (net > bw.net.val) { bw.net.val = net; bw.net.ids = [emp.id]; }
-else if (net === bw.net.val) { bw.net.ids.push(emp.id); }
-// "الأكثر تقييماً" = Booking فقط (NOT Google Maps)
-if (evBooking > bw.eval.val) { bw.eval.val = evBooking; bw.eval.ids = [emp.id]; }
-else if (evBooking === bw.eval.val) { bw.eval.ids.push(emp.id); }
-// Separate tracking for Booking evaluations
-if (evBooking > bw.evalBooking.val) { bw.evalBooking.val = evBooking; bw.evalBooking.ids = [emp.id]; }
-else if (evBooking === bw.evalBooking.val) { bw.evalBooking.ids.push(emp.id); }
-// Separate tracking for Google Maps evaluations
-if (evGoogle > bw.evalGoogle.val) { bw.evalGoogle.val = evGoogle; bw.evalGoogle.ids = [emp.id]; }
-else if (evGoogle === bw.evalGoogle.val) { bw.evalGoogle.ids.push(emp.id); }
-if (emp.count > bw.book.val) { bw.book.val = emp.count; bw.book.ids = [emp.id]; }
-else if (emp.count === bw.book.val) { bw.book.ids.push(emp.id); }
-// Track most committed (attendance26Days = true)
-// For duplicate employees: use totalAttendanceDays
-const empNameCount = db.filter(e => e.name === emp.name).length;
-let empAttendanceDays = attendance26Days === true ? 26 : 0;
-if (empNameCount > 1) {
-empAttendanceDays = emp.totalAttendanceDays || (attendance26Days ? 26 : 0);
-}
-if (empAttendanceDays >= 26) {
-// Compare with other employees in this branch
-let isHighestDays = true;
-const branchEmployees = db.filter(e => e.branch === emp.branch);
-branchEmployees.forEach(otherEmp => {
-if (otherEmp.name === emp.name) return;
-const otherNameCount = db.filter(e => e.name === otherEmp.name).length;
-let otherDays = otherEmp.attendance26Days === true ? 26 : 0;
-if (otherNameCount > 1) {
-otherDays = otherEmp.totalAttendanceDays || (otherEmp.attendance26Days === true ? 26 : 0);
-}
-if (otherDays > empAttendanceDays) {
-isHighestDays = false;
-}
-});
-if (isHighestDays) {
-if (bw.attendance.val === -1) {
-bw.attendance.val = empAttendanceDays;
-bw.attendance.ids = [emp.id];
-} else if (empAttendanceDays > bw.attendance.val) {
-bw.attendance.val = empAttendanceDays;
-bw.attendance.ids = [emp.id];
-} else if (empAttendanceDays === bw.attendance.val) {
-bw.attendance.ids.push(emp.id);
-}
-}
-}
-if (net > 0 && net < bl.net.val) { bl.net.val = net; bl.net.ids = [emp.id]; }
-else if (net > 0 && net === bl.net.val) { bl.net.ids.push(emp.id); }
-// "الأقل تقييماً" = Booking فقط (NOT Google Maps)
-if (evBooking < bl.eval.val || (evBooking === 0 && bl.eval.val > 0)) { 
-bl.eval.val = evBooking; 
-bl.eval.ids = [emp.id]; 
-} else if (evBooking === bl.eval.val) { 
-bl.eval.ids.push(emp.id); 
-}
-// Separate tracking for Booking evaluations (losers)
-if (evBooking < bl.evalBooking.val || (evBooking === 0 && bl.evalBooking.val > 0)) { 
-bl.evalBooking.val = evBooking; 
-bl.evalBooking.ids = [emp.id]; 
-} else if (evBooking === bl.evalBooking.val) { 
-bl.evalBooking.ids.push(emp.id); 
-}
-// Separate tracking for Google Maps evaluations (losers)
-if (evGoogle < bl.evalGoogle.val || (evGoogle === 0 && bl.evalGoogle.val > 0)) { 
-bl.evalGoogle.val = evGoogle; 
-bl.evalGoogle.ids = [emp.id]; 
-} else if (evGoogle === bl.evalGoogle.val) { 
-bl.evalGoogle.ids.push(emp.id); 
-}
-if (emp.count > 0 && emp.count < bl.book.val) { bl.book.val = emp.count; bl.book.ids = [emp.id]; }
-else if (emp.count > 0 && emp.count === bl.book.val) { bl.book.ids.push(emp.id); }
-});
+const { branchWinners, branchLosers } = computeBranchWinnersAndLosers(db, branches);
 // Calculate view winners/losers
 // Use currentFilter from global scope (set by renderUI)
 let filtered = [...db];
@@ -2521,42 +2499,9 @@ const ev = evBooking; // Use Booking evaluations only for "الأكثر تقيي
 // For now, we'll include bonuses in the return but they'll be calculated in the main loop
 return { net, ev, count: emp.count, branch: emp.branch, name: emp.name, id: emp.id };
 };
-// 1. Calculate Branch Winners (All Branches) - CRITICAL: Include attendance bonus/discount
-const branchWinners = {}; 
-[...branches].forEach(b => {
-branchWinners[b] = { net: {val: -1, ids: []}, eval: {val: -1, ids: []}, evalBooking: {val: -1, ids: []}, evalGoogle: {val: -1, ids: []}, book: {val: -1, ids: []}, attendance: {val: -1, ids: []} };
-});
-// 2. Calculate Stats & Winners (with attendance bonus/discount)
-db.forEach(emp => {
-const s = calcStats(emp);
-const bw = branchWinners[emp.branch];
-if (!bw) return;
-if (s.net > bw.net.val) { bw.net.val = s.net; bw.net.ids = [s.id]; }
-else if (s.net === bw.net.val) { bw.net.ids.push(s.id); }
-// "الأكثر تقييماً" = Booking فقط
-if (s.ev > bw.eval.val) { bw.eval.val = s.ev; bw.eval.ids = [s.id]; }
-else if (s.ev === bw.eval.val) { bw.eval.ids.push(s.id); }
-// Separate tracking for Booking and Google Maps
-const evBooking = emp.evaluationsBooking || 0;
-const evGoogle = emp.evaluationsGoogle || 0;
-if (evBooking > bw.evalBooking.val) { bw.evalBooking.val = evBooking; bw.evalBooking.ids = [s.id]; }
-else if (evBooking === bw.evalBooking.val) { bw.evalBooking.ids.push(s.id); }
-if (evGoogle > bw.evalGoogle.val) { bw.evalGoogle.val = evGoogle; bw.evalGoogle.ids = [s.id]; }
-else if (evGoogle === bw.evalGoogle.val) { bw.evalGoogle.ids.push(s.id); }
-if (s.count > bw.book.val) { bw.book.val = s.count; bw.book.ids = [s.id]; }
-else if (s.count === bw.book.val) { bw.book.ids.push(s.id); }
-// Track most committed (attendance26Days = true)
-const attendance26Days = emp.attendance26Days === true; // Only true if user manually activated
-if (attendance26Days === true) {
-if (bw.attendance.val === -1) {
-bw.attendance.val = 1;
-bw.attendance.ids = [emp.id];
-} else {
-bw.attendance.ids.push(emp.id);
-}
-}
-});
-// 3. Calculate View Winners & Totals (with attendance bonus/discount) — للفروع فقط تُستخدم هذه الإجماليات؛ عند «الكل» الإجماليات النهائية تُحدَّث من الحلقة الرئيسية لاحقاً
+// 1. Branch Winners from single source
+const { branchWinners } = computeBranchWinnersAndLosers(db, branches);
+// 2. Calculate View Winners & Totals (with attendance bonus/discount) — للفروع فقط تُستخدم هذه الإجماليات؛ عند «الكل» الإجماليات النهائية تُحدَّث من الحلقة الرئيسية لاحقاً
 let filtered = [...db];
 if (currentFilter !== 'الكل') {
 filtered = filtered.filter(d => d.branch === currentFilter);
@@ -2615,7 +2560,9 @@ db.forEach(emp => {
     if (bw && attendance26Days && bw.attendance.ids.includes(branchEmp.id) && (bw.eval.ids.includes(branchEmp.id) && bw.eval.val > 0 || bw.book.ids.includes(branchEmp.id) && bw.book.val > 0)) hasCommitment = true;
   });
   let aggNet = totalNetFromBranches + (hasExcellence ? 50 : 0) + (hasCommitment ? 50 : 0);
-  if (typeof getTotalDiscountForEmployee === 'function') aggNet = Math.max(0, aggNet - getTotalDiscountForEmployee(emp.name));
+  // خصم الخصم ليطابق الجدول (نفس منطق عمود الصافي)
+  var discountFn = typeof getTotalDiscountForEmployee === 'function' ? getTotalDiscountForEmployee : (typeof window !== 'undefined' && typeof window.getTotalDiscountForEmployee === 'function' ? window.getTotalDiscountForEmployee : null);
+  if (discountFn) { try { aggNet = Math.max(0, aggNet - (discountFn(emp.name) || 0)); } catch (e) {} }
   if (aggNet > bestAggNetVal) {
     bestAggNetVal = aggNet;
     bestAggNetName = emp.name;
@@ -2692,42 +2639,7 @@ badgeWrap.innerHTML = badgesHtml;
 });
 }
 function updateCommitmentBonusRow() {
-// Recalculate branch winners to check for commitment bonus
-const branchWinners = {}; 
-[...branches].forEach(b => {
-branchWinners[b] = { net: {val: -1, ids: []}, eval: {val: -1, ids: []}, book: {val: -1, ids: []}, attendance: {val: -1, ids: []} };
-});
-// Calculate branch winners and most committed (attendance26Days = true)
-db.forEach(emp => {
-const rate = emp.count > 100 ? 3 : (emp.count > 50 ? 2 : 1);
-const evBooking = emp.evaluationsBooking || 0;
-const evGoogle = emp.evaluationsGoogle || 0;
-const totalEval = evBooking + evGoogle;
-const gross = (emp.count * rate) + (evBooking * 20) + (evGoogle * 10);
-const fund = gross * 0.15;
-let net = gross - fund;
-// Apply attendance bonus/discount
-const attendance26Days = emp.attendance26Days === true; // Only true if user manually activated
-const attendanceBonus = attendance26Days ? net * 0.25 : 0; // 25% bonus only if user activated "تم"
-net = net + attendanceBonus; // No discount - only bonus if activated
-const bw = branchWinners[emp.branch];
-if (!bw) return;
-if (net > bw.net.val) { bw.net.val = net; bw.net.ids = [emp.id]; }
-else if (net === bw.net.val) { bw.net.ids.push(emp.id); }
-if (totalEval > bw.eval.val) { bw.eval.val = totalEval; bw.eval.ids = [emp.id]; }
-else if (totalEval === bw.eval.val) { bw.eval.ids.push(emp.id); }
-if (emp.count > bw.book.val) { bw.book.val = emp.count; bw.book.ids = [emp.id]; }
-else if (emp.count === bw.book.val) { bw.book.ids.push(emp.id); }
-// Track most committed (attendance26Days = true)
-if (attendance26Days === true) {
-if (bw.attendance.val === -1) {
-bw.attendance.val = 1;
-bw.attendance.ids = [emp.id];
-} else {
-bw.attendance.ids.push(emp.id);
-}
-}
-});
+const { branchWinners } = computeBranchWinnersAndLosers(db, branches);
 // Find employees with commitment bonus
 // Condition: Most committed (attendance26Days = true) AND (most evaluations OR most bookings) in same branch
 const commitmentEmployees = [];
@@ -2816,43 +2728,7 @@ if (topCommitmentValue) topCommitmentValue.innerText = '0';
 }
 }
 function updateExcellenceBonusRow() {
-// Recalculate branch winners to check for excellence bonus
-const branchWinners = {}; 
-[...branches].forEach(b => {
-branchWinners[b] = { net: {val: -1, ids: []}, eval: {val: -1, ids: []}, book: {val: -1, ids: []}, attendance: {val: -1, ids: []} };
-});
-// Calculate branch winners (including attendance bonus/discount)
-db.forEach(emp => {
-const rate = emp.count > 100 ? 3 : (emp.count > 50 ? 2 : 1);
-const evBooking = emp.evaluationsBooking || 0;
-const evGoogle = emp.evaluationsGoogle || 0;
-const totalEval = evBooking + evGoogle;
-const gross = (emp.count * rate) + (evBooking * 20) + (evGoogle * 10);
-const fund = gross * 0.15;
-let net = gross - fund;
-// Apply attendance bonus/discount
-const attendance26Days = emp.attendance26Days === true; // Only true if user manually activated
-const attendanceBonus = attendance26Days ? net * 0.25 : 0; // 25% bonus only if user activated "تم"
-net = net + attendanceBonus; // No discount - only bonus if activated
-const bw = branchWinners[emp.branch];
-if (!bw) return;
-if (net > bw.net.val) { bw.net.val = net; bw.net.ids = [emp.id]; }
-else if (net === bw.net.val) { bw.net.ids.push(emp.id); }
-// "الأكثر تقييماً" = Booking فقط (NOT Google Maps)
-if (evBooking > bw.eval.val) { bw.eval.val = evBooking; bw.eval.ids = [emp.id]; }
-else if (evBooking === bw.eval.val) { bw.eval.ids.push(emp.id); }
-if (emp.count > bw.book.val) { bw.book.val = emp.count; bw.book.ids = [emp.id]; }
-else if (emp.count === bw.book.val) { bw.book.ids.push(emp.id); }
-// Track most committed (attendance26Days = true)
-if (attendance26Days === true) {
-if (bw.attendance.val === -1) {
-bw.attendance.val = 1;
-bw.attendance.ids = [emp.id];
-} else {
-bw.attendance.ids.push(emp.id);
-}
-}
-});
+const { branchWinners } = computeBranchWinnersAndLosers(db, branches);
 // Find employees with excellence bonus (most bookings + most evaluations in same branch)
 const excellenceEmployees = [];
 let totalExcellenceBonus = 0;
@@ -2968,80 +2844,7 @@ tbody.innerHTML = '';
 // Update report title based on filter
 updateReportTitle();
 // --- 1. Pre-calculate Winners & Losers (Branch & View) ---
-const branchWinners = {}; 
-const branchLosers = {};
-[...branches].forEach(b => {
-branchWinners[b] = { net: {val: -1, ids: []}, eval: {val: -1, ids: []}, book: {val: -1, ids: []}, attendance: {val: -1, ids: []} };
-branchLosers[b] = { net: {val: Infinity, ids: []}, eval: {val: Infinity, ids: []}, book: {val: Infinity, ids: []} };
-});
-// First pass: calculate branch winners/losers without excellence bonus
-db.forEach(emp => {
-const rate = emp.count > 100 ? 3 : (emp.count > 50 ? 2 : 1);
-const evBooking = emp.evaluationsBooking || 0;
-const evGoogle = emp.evaluationsGoogle || 0;
-const totalEval = evBooking + evGoogle;
-const gross = (emp.count * rate) + (evBooking * 20) + (evGoogle * 10);
-const fund = gross * 0.15;
-const net = gross - fund;
-const bw = branchWinners[emp.branch];
-const bl = branchLosers[emp.branch];
-if (!bw || !bl) return;
-// Winners (Best) - using count and ev directly (not net, to avoid circular dependency)
-if (net > bw.net.val) { bw.net.val = net; bw.net.ids = [emp.id]; }
-else if (net === bw.net.val) { bw.net.ids.push(emp.id); }
-// "الأكثر تقييماً" = Booking فقط (NOT Google Maps)
-if (evBooking > bw.eval.val) { bw.eval.val = evBooking; bw.eval.ids = [emp.id]; }
-else if (evBooking === bw.eval.val) { bw.eval.ids.push(emp.id); }
-if (emp.count > bw.book.val) { bw.book.val = emp.count; bw.book.ids = [emp.id]; }
-else if (emp.count === bw.book.val) { bw.book.ids.push(emp.id); }
-// Track most committed (attendance26Days = true)
-// For duplicate employees: use totalAttendanceDays
-const empNameCount = db.filter(e => e.name === emp.name).length;
-let empAttendanceDays = emp.attendance26Days === true ? 26 : 0;
-if (empNameCount > 1) {
-empAttendanceDays = emp.totalAttendanceDays || (emp.attendance26Days === true ? 26 : 0);
-}
-if (empAttendanceDays >= 26) {
-// Compare with other employees in this branch (using aggregated days for duplicates)
-let isHighestDays = true;
-const branchEmployees = db.filter(e => e.branch === emp.branch);
-branchEmployees.forEach(otherEmp => {
-if (otherEmp.name === emp.name) return; // Skip self
-const otherNameCount = db.filter(e => e.name === otherEmp.name).length;
-let otherDays = otherEmp.attendance26Days === true ? 26 : 0;
-if (otherNameCount > 1) {
-otherDays = otherEmp.totalAttendanceDays || (otherEmp.attendance26Days === true ? 26 : 0);
-}
-if (otherDays > empAttendanceDays) {
-isHighestDays = false;
-}
-});
-if (isHighestDays) {
-if (bw.attendance.val === -1) {
-bw.attendance.val = empAttendanceDays;
-bw.attendance.ids = [emp.id];
-} else if (empAttendanceDays > bw.attendance.val) {
-bw.attendance.val = empAttendanceDays;
-bw.attendance.ids = [emp.id];
-} else if (empAttendanceDays === bw.attendance.val) {
-bw.attendance.ids.push(emp.id);
-}
-}
-}
-// Losers (Worst) - only if value > 0
-if (net > 0 && net < bl.net.val) { bl.net.val = net; bl.net.ids = [emp.id]; }
-else if (net > 0 && net === bl.net.val) { bl.net.ids.push(emp.id); }
-// 0 is the worst (less than any positive number)
-// Use totalEval (sum of Booking + Google Maps evaluations)
-if (totalEval < bl.eval.val || (totalEval === 0 && bl.eval.val > 0)) { 
-bl.eval.val = totalEval; 
-bl.eval.ids = [emp.id]; 
-} else if (totalEval === bl.eval.val) { 
-bl.eval.ids.push(emp.id); 
-}
-if (emp.count > 0 && emp.count < bl.book.val) { bl.book.val = emp.count; bl.book.ids = [emp.id]; }
-else if (emp.count > 0 && emp.count === bl.book.val) { bl.book.ids.push(emp.id); }
-});
+const { branchWinners, branchLosers } = computeBranchWinnersAndLosers(db, branches);
 // --- Stats Helper (after branchWinners is calculated) ---
 // Helper to calculate aggregated stats for duplicate employees
 const getAggregatedStats = (empName) => {
@@ -3051,13 +2854,17 @@ const totalEvalBooking = allEmpBranches.reduce((sum, e) => sum + (e.evaluationsB
 const totalEvalGoogle = allEmpBranches.reduce((sum, e) => sum + (e.evaluationsGoogle || 0), 0);
 // "الأكثر تقييماً" = Booking فقط (NOT Google Maps)
 const totalEval = totalEvalBooking; // Use Booking evaluations only for "الأكثر تقييماً"
-// Calculate total days from attendanceDaysPerBranch (use first employee's data since all share the same object)
-const firstEmp = allEmpBranches[0];
+// إجمالي أيام الحضور للمتكرر: مجموع أيام كل فرع من صف ذلك الفرع (يعمل مع أو بدون مشاركة attendanceDaysPerBranch)
 let totalDays = 0;
-if (firstEmp && firstEmp.attendanceDaysPerBranch) {
-totalDays = Object.values(firstEmp.attendanceDaysPerBranch).reduce((sum, d) => sum + (parseInt(d) || 0), 0);
-} else {
-totalDays = firstEmp?.totalAttendanceDays || (firstEmp?.attendance26Days === true ? 26 : 0);
+allEmpBranches.forEach((e) => {
+  const branchDays = (e.attendanceDaysPerBranch && e.attendanceDaysPerBranch[e.branch] !== undefined)
+    ? (parseInt(e.attendanceDaysPerBranch[e.branch], 10) || 0)
+    : (e.totalAttendanceDays !== undefined ? e.totalAttendanceDays : (e.attendance26Days === true ? 26 : 0));
+  totalDays += typeof branchDays === 'number' ? branchDays : (parseInt(branchDays, 10) || 0);
+});
+if (totalDays === 0 && allEmpBranches[0]) {
+  const first = allEmpBranches[0];
+  totalDays = first.totalAttendanceDays !== undefined ? first.totalAttendanceDays : (first.attendance26Days === true ? 26 : 0);
 }
 return { totalCount, totalEval, totalEvalBooking, totalEvalGoogle, totalDays };
 };
@@ -3313,7 +3120,11 @@ if (filter === 'الكل') {
       const combined = (pctCount + pctEval) / 2;
       const boost = has26 ? 0.15 : 0;
       let score = Math.min(1, combined + boost);
-      if (typeof getTotalDiscountForEmployee === 'function' && getTotalDiscountForEmployee(name) > 0) score = Math.max(0, score - 0.25);
+      let discountPoints = 0;
+      if (typeof getTotalDiscountForEmployee === 'function' && getTotalDiscountForEmployee(name) > 0) discountPoints += 0.25;
+      if (typeof getHotelRatingDeductionForEmployee === 'function' && getHotelRatingDeductionForEmployee(name) > 0) discountPoints += 0.10;
+      discountPoints = Math.min(0.10, discountPoints);
+      score = Math.max(0, score - discountPoints);
       const points = Math.round(score * 100);
       let level = 'سيء';
       if (points >= 90) level = 'ممتاز';
@@ -3490,26 +3301,53 @@ let duplicateFinalNet = 0;
 if (filter === 'الكل' && s.isDuplicate) {
 // Get all branches for this employee
 const allEmpBranches = db.filter(e => e.name === emp.name);
-// Sum net from each branch (each branch's net already includes attendance bonus)
+// حافز تحدي الظروف (25%): يُعطى مرة واحدة للمتكرر — الفرع الذي له أعلى صافي بعد الـ 25% (نفس منطق challengeRowId)
+let challengeRowId = null;
+let maxChallengeTotalAmount = -1;
+allEmpBranches.forEach(branchEmp => {
+  const branchRate = branchEmp.count > 100 ? 3 : (branchEmp.count > 50 ? 2 : 1);
+  const branchEvBooking = branchEmp.evaluationsBooking || 0;
+  const branchEvGoogle = branchEmp.evaluationsGoogle || 0;
+  const branchGross = (branchEmp.count * branchRate) + (branchEvBooking * 20) + (branchEvGoogle * 10);
+  const branchFund = branchGross * 0.15;
+  let eNet = branchGross - branchFund;
+  const eAttendance26Days = branchEmp.attendance26Days === true;
+  const eAttendanceBonus = eAttendance26Days ? eNet * 0.25 : 0;
+  eNet = eNet + eAttendanceBonus;
+  if (eAttendance26Days && eAttendanceBonus > 0 && eNet > maxChallengeTotalAmount) {
+    maxChallengeTotalAmount = eNet;
+    challengeRowId = branchEmp.id;
+  }
+});
 let totalNetFromBranches = 0;
 let totalFundFromBranches = 0;
+let hasExcellenceForEmployee = false;
+let hasCommitmentForEmployee = false;
 allEmpBranches.forEach(branchEmp => {
-// Calculate net for this branch (same as calcStats but for this specific branch)
+// Calculate net for this branch (25% only for the branch that won challengeRowId)
 const branchRate = branchEmp.count > 100 ? 3 : (branchEmp.count > 50 ? 2 : 1);
 const branchEvBooking = branchEmp.evaluationsBooking || 0;
 const branchEvGoogle = branchEmp.evaluationsGoogle || 0;
 const branchGross = (branchEmp.count * branchRate) + (branchEvBooking * 20) + (branchEvGoogle * 10);
 const branchFund = branchGross * 0.15;
 let branchNet = branchGross - branchFund;
-// Add attendance bonus for this branch if applicable
 const branchAttendance26Days = branchEmp.attendance26Days === true;
-const branchAttendanceBonus = branchAttendance26Days ? branchNet * 0.25 : 0;
+const branchAttendanceBonus = (branchAttendance26Days && challengeRowId === branchEmp.id) ? branchNet * 0.25 : 0;
 branchNet = branchNet + branchAttendanceBonus;
 totalNetFromBranches += branchNet;
 totalFundFromBranches += branchFund;
+// Check if employee has excellence/commitment in ANY branch (to match card "الأكثر مكافأة")
+const bw = branchWinners[branchEmp.branch];
+if (bw && bw.book.ids.includes(branchEmp.id) && bw.eval.ids.includes(branchEmp.id) && bw.book.val > 0) hasExcellenceForEmployee = true;
+if (bw && branchAttendance26Days && bw.attendance.ids.includes(branchEmp.id) && ((bw.eval.ids.includes(branchEmp.id) && bw.eval.val > 0) || (bw.book.ids.includes(branchEmp.id) && bw.book.val > 0))) hasCommitmentForEmployee = true;
 });
 // Add fund to totalFund (sum from all branches)
 totalFund += totalFundFromBranches;
+// Use employee-level bonuses (any branch) so table net matches card "الأكثر مكافأة"
+finalExcellenceBonus = hasExcellenceForEmployee ? 50 : 0;
+finalCommitmentBonus = hasCommitmentForEmployee ? 50 : 0;
+finalHasExcellenceBonus = hasExcellenceForEmployee;
+finalHasCommitmentBonus = hasCommitmentForEmployee;
 // Add bonuses once (not per branch)
 duplicateFinalNet = totalNetFromBranches + finalExcellenceBonus + finalCommitmentBonus;
 // Apply discounts (calculate total discount from all branches)
@@ -3531,20 +3369,19 @@ finalAttendanceBonus = s.attendanceBonus;
 finalAttendance26Days = s.attendance26Days;
 }
 duplicateFinalNet = s.net + finalExcellenceBonus + finalCommitmentBonus + finalAttendanceBonus;
-// Apply discounts for duplicate employees (apply to this branch's net only)
 if (typeof getDiscountForEmployeeInBranch === 'function') {
-  const employeeDiscount = getDiscountForEmployeeInBranch(emp.name, s.net + finalAttendanceBonus);
+  let employeeDiscount = getDiscountForEmployeeInBranch(emp.name, s.net + finalAttendanceBonus);
+  if (typeof getHotelRatingDeductionForEmployee === 'function') employeeDiscount += getHotelRatingDeductionForEmployee(emp.name);
   duplicateFinalNet = Math.max(0, duplicateFinalNet - employeeDiscount);
 }
 }
 totalNet += duplicateFinalNet;
 } else {
-// For non-duplicate: apply bonus normally
-totalFund += s.fund; // Add fund for non-duplicate employees
+totalFund += s.fund;
 let nonDuplicateFinalNet = s.net + s.excellenceBonus + s.commitmentBonus;
-// Apply discounts for non-duplicate employees (apply to this branch's net only)
 if (typeof getDiscountForEmployeeInBranch === 'function') {
-  const employeeDiscount = getDiscountForEmployeeInBranch(emp.name, s.net);
+  let employeeDiscount = getDiscountForEmployeeInBranch(emp.name, s.net);
+  if (typeof getHotelRatingDeductionForEmployee === 'function') employeeDiscount += getHotelRatingDeductionForEmployee(emp.name);
   nonDuplicateFinalNet = Math.max(0, nonDuplicateFinalNet - employeeDiscount);
 }
 totalNet += nonDuplicateFinalNet;
@@ -3601,7 +3438,7 @@ ${displayIndex + 1}
 ${(isDuplicate && filter === 'الكل') ? `
 <div style="text-align: right; direction: rtl;">
 <div class="font-bold text-base text-orange-100 print:text-black" style="text-align: right; direction: rtl;">
-<span onclick="${filter === 'الكل' ? `handleEmployeeNameClick('${emp.name}', '${emp.id}', true)` : `showEmployeeReport('${emp.id}')`}" class="cursor-pointer hover:text-turquoise transition-colors" title="اضغط لعرض التقرير">${emp.name}</span>
+<span onclick="${filter === 'الكل' ? `handleEmployeeNameClick('${(typeof escAttr === 'function' ? escAttr(emp.name) : String(emp.name || '').replace(/'/g, "\\'"))}', '${(typeof escAttr === 'function' ? escAttr(emp.id) : String(emp.id || '').replace(/'/g, "\\'"))}', true)` : `showEmployeeReport('${(typeof escAttr === 'function' ? escAttr(emp.id) : String(emp.id || '').replace(/'/g, "\\'"))}')`}" class="cursor-pointer hover:text-turquoise transition-colors" title="اضغط لعرض التقرير">${(typeof escHtml === 'function' ? escHtml(emp.name) : String(emp.name || '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;'))}</span>
 <span class="badges-wrapper" style="display: inline-block; margin-right: 4px;">
 ${(() => {
 let badgesHtml = '';
@@ -3757,7 +3594,7 @@ return emp.branch;
 </div>
 ` : `
 <div class="font-bold text-base text-white print:text-black" style="text-align: right; direction: rtl;">
-<span onclick="${filter === 'الكل' ? `handleEmployeeNameClick('${emp.name}', '${emp.id}', false)` : `showEmployeeReport('${emp.id}')`}" class="cursor-pointer hover:text-turquoise transition-colors" title="اضغط لعرض التقرير">${emp.name}</span>
+<span onclick="${filter === 'الكل' ? `handleEmployeeNameClick('${(typeof escAttr === 'function' ? escAttr(emp.name) : String(emp.name || '').replace(/'/g, "\\'"))}', '${(typeof escAttr === 'function' ? escAttr(emp.id) : String(emp.id || '').replace(/'/g, "\\'"))}', false)` : `showEmployeeReport('${(typeof escAttr === 'function' ? escAttr(emp.id) : String(emp.id || '').replace(/'/g, "\\'"))}')`}" class="cursor-pointer hover:text-turquoise transition-colors" title="اضغط لعرض التقرير">${(typeof escHtml === 'function' ? escHtml(emp.name) : String(emp.name || '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;'))}</span>
 </div>
 ${showBranch && !isDuplicate ? `
 <div class="text-[10px] text-turquoise/60 font-semibold uppercase no-print mt-0.5 tracking-wider">
@@ -3769,7 +3606,7 @@ ${emp.branch}
 <td class="col-count p-2 text-center font-black text-white print:text-black text-lg number-display">
 ${(filter === 'الكل' && isDuplicate) ? (s.aggregatedCount || emp.count) : emp.count}
 </td>
-<td class="col-attendance p-2 text-center${(() => { try { var r = localStorage.getItem('adora_current_role'); return (r === 'hr') ? ' admin-entry-zone admin-entry-hr' : ''; } catch(e) { return ''; } })()}">
+<td class="col-attendance p-2 text-center${(() => { try { var r = localStorage.getItem('adora_current_role'); var submitted = typeof isAdminLinkSubmitted === 'function' && isAdminLinkSubmitted(); return (r === 'hr' && !submitted) ? ' admin-entry-zone admin-entry-hr' : ''; } catch(e) { return ''; } })()}">
 <div class="flex flex-col items-center gap-1">
 <div class="attendance-readonly-accounting flex flex-col items-center gap-1" style="display:none;">${(() => { const allEb = db.filter(e => e.name === emp.name); const isDup = filter === 'الكل' && allEb.length > 1; let days = 0, totalDays = 0, branchDaysStr = (emp.attendanceDaysPerBranch && emp.attendanceDaysPerBranch[emp.branch]) || '0'; if (isDup && filter === 'الكل') { totalDays = allEb.reduce((s, eb) => s + (parseInt(eb.attendanceDaysPerBranch && eb.attendanceDaysPerBranch[eb.branch]) || 0), 0); days = totalDays; } else { days = parseInt(branchDaysStr) || 0; } const colorClass = days >= 26 ? 'text-green-400' : 'text-red-400'; const statusText = days >= 26 ? 'تم' : 'لم يتم'; const daysSpan = days < 26 ? '<span class="text-yellow-300 text-sm font-bold">' + days + ' يوم</span>' : ''; const totalSpan = (isDup && filter === 'الكل') ? '<div class="text-[9px] text-green-400 font-bold">المجموع: ' + totalDays + '</div>' : (!isDup ? '<span class="text-[10px] text-yellow-300">' + emp.branch + ': ' + branchDaysStr + '</span>' : ''); return '<span class="text-[10px] font-bold ' + colorClass + '">' + statusText + '</span>' + daysSpan + totalSpan; })()}</div>
 <div class="attendance-editable">
@@ -3814,6 +3651,8 @@ const currentRole = localStorage.getItem('adora_current_role');
 if (currentRole && currentRole !== 'hr' && currentRole !== 'admin') return 'disabled';
 // الكل للعرض والتجميع فقط — لا تعديل لأي أحد (بما فيه الأدمن)
 if (filter === 'الكل') return 'disabled';
+// بعد إرسال HR: عرض فقط في كل الفروع
+if (currentRole === 'hr' && typeof isAdminLinkSubmitted === 'function' && isAdminLinkSubmitted()) return 'disabled';
 return '';
 })()}
 ${(() => {
@@ -3821,6 +3660,8 @@ ${(() => {
 if (filter === 'الكل') return '';
 const currentRole = localStorage.getItem('adora_current_role');
 if (currentRole && currentRole !== 'hr' && currentRole !== 'admin') return '';
+// بعد إرسال HR: لا تعديل
+if (currentRole === 'hr' && typeof isAdminLinkSubmitted === 'function' && isAdminLinkSubmitted()) return '';
 return 'onchange="updateAttendance(\'' + emp.id + '\', this.checked, this)"';
 })()}
 title="${(() => {
@@ -3878,8 +3719,16 @@ const allEmpBranches = db.filter(function(e) { return e.name === emp.name; });
 const isDuplicate = allEmpBranches.length > 1;
 const roleForHr = typeof localStorage !== 'undefined' ? localStorage.getItem('adora_current_role') : null;
 const canEditHr = roleForHr === 'hr' || roleForHr === 'admin';
-// الكل للعرض فقط — لا حقل إدخال لأيام الحضور في "الكل" (التعديل في الفروع)
-if (!isDuplicate && filter === 'الكل') return '';
+// الكل للعرض فقط — عرض المجموع (أو أيام الفرع) للموظف غير المكرر أيضاً حتى تظهر البيانات المُدخلة في الفروع
+if (!isDuplicate && filter === 'الكل') {
+  var totalDaysSingle = 0;
+  if (emp.attendanceDaysPerBranch && emp.branch) {
+    totalDaysSingle = parseInt(emp.attendanceDaysPerBranch[emp.branch], 10) || 0;
+  } else if (typeof emp.totalAttendanceDays === 'number') {
+    totalDaysSingle = emp.totalAttendanceDays;
+  }
+  return '<div class="text-[9px] text-green-400 font-bold">المجموع: ' + totalDaysSingle + '</div>';
+}
 // غير متكرر في عرض الفرع: حقل أيام البصمة — HR وأدمن (خانات إدخال نشطة لجميع الموظفين في الفروع)
 if (!isDuplicate && filter !== 'الكل') {
 var bName = emp.branch;
@@ -3888,6 +3737,7 @@ var en = (emp.name || '').replace(/'/g, "\\'");
 var bn = (bName || '').replace(/'/g, "\\'");
 var roleForReadOnly = typeof localStorage !== 'undefined' ? localStorage.getItem('adora_current_role') : null;
 var readOnly = roleForReadOnly && roleForReadOnly !== 'hr' && roleForReadOnly !== 'admin';
+if (roleForReadOnly === 'hr' && typeof isAdminLinkSubmitted === 'function' && isAdminLinkSubmitted()) readOnly = true;
 if (readOnly) {
 return '<div class="flex items-center justify-center gap-1.5 mt-1">' +
 '<span class="text-[10px] text-yellow-300 font-semibold">' + bName + ':</span>' +
@@ -3896,7 +3746,7 @@ return '<div class="flex items-center justify-center gap-1.5 mt-1">' +
 return '<div class="flex items-center justify-center gap-1.5 mt-1">' +
 '<span class="text-[10px] text-yellow-300 font-semibold">' + bName + ':</span>' +
 '<input type="text" class="attendance-days-input w-16 bg-yellow-400/10 border-2 border-yellow-400/60 rounded px-2 py-1 text-center text-sm text-yellow-300 font-bold focus:outline-none focus:border-yellow-400 focus:bg-yellow-400/20 transition-all font-sans" ' +
-'data-emp-name="' + (emp.name || '').replace(/"/g, '&quot;') + '" data-emp-branch="' + (bName || '').replace(/"/g, '&quot;') + '" placeholder="0" value="' + bDays + '" ' +
+'data-emp-name="' + (typeof escHtml === 'function' ? escHtml(emp.name) : (emp.name || '').replace(/"/g, '&quot;')) + '" data-emp-branch="' + (typeof escHtml === 'function' ? escHtml(bName) : (bName || '').replace(/"/g, '&quot;')) + '" placeholder="0" value="' + (typeof escHtml === 'function' ? escHtml(String(bDays)) : String(bDays).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;')) + '" ' +
 'oninput="handleAttendanceDaysInputSingle(this, \'' + en + '\', \'' + bn + '\')" onblur="handleAttendanceDaysBlur(this, \'' + en + '\', \'' + bn + '\')" ' +
 'onkeydown="if(event.key === \'Enter\') { this.blur(); }" title="أيام الحضور في ' + bName + ' (أدخل أي رقم: 8، 22، 30، إلخ)">' +
 '</div>';
@@ -3918,7 +3768,8 @@ const branchDays = emp.attendanceDaysPerBranch && emp.attendanceDaysPerBranch[em
 const branchNameForInput = emp.branch;
 const empNameForInput = emp.name;
 const currentRole = localStorage.getItem('adora_current_role');
-const isReadOnly = currentRole && currentRole !== 'hr' && currentRole !== 'admin';
+let isReadOnly = currentRole && currentRole !== 'hr' && currentRole !== 'admin';
+if (currentRole === 'hr' && typeof isAdminLinkSubmitted === 'function' && isAdminLinkSubmitted()) isReadOnly = true;
 if (isReadOnly) {
   inputsHtml += '<div class="flex items-center justify-center gap-1.5 mt-1">' +
   '<span class="text-[10px] text-yellow-300 font-semibold">' + branchNameForInput + ':</span>' +
@@ -3929,12 +3780,12 @@ if (isReadOnly) {
   '<span class="text-[10px] text-yellow-300 font-semibold">' + branchNameForInput + ':</span>' +
   '<input type="text" ' +
   'class="attendance-days-input w-16 bg-yellow-400/10 border-2 border-yellow-400/60 rounded px-2 py-1 text-center text-sm text-yellow-300 font-bold focus:outline-none focus:border-yellow-400 focus:bg-yellow-400/20 transition-all font-sans" ' +
-  'data-emp-name="' + empNameForInput + '" ' +
-  'data-emp-branch="' + branchNameForInput + '" ' +
+  'data-emp-name="' + (typeof escHtml === 'function' ? escHtml(empNameForInput) : (empNameForInput || '').replace(/"/g, '&quot;')) + '" ' +
+  'data-emp-branch="' + (typeof escHtml === 'function' ? escHtml(branchNameForInput) : (branchNameForInput || '').replace(/"/g, '&quot;')) + '" ' +
   'placeholder="0" ' +
-  'value="' + branchDays + '" ' +
-  'oninput="handleAttendanceDaysInputSingle(this, \'' + empNameForInput + '\', \'' + branchNameForInput + '\')" ' +
-  'onblur="handleAttendanceDaysBlur(this, \'' + empNameForInput + '\', \'' + branchNameForInput + '\')" ' +
+  'value="' + (typeof escHtml === 'function' ? escHtml(String(branchDays)) : String(branchDays || '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;')) + '" ' +
+  'oninput="handleAttendanceDaysInputSingle(this, \'' + (empNameForInput || '').replace(/\\/g, '\\\\').replace(/'/g, "\\'") + '\', \'' + (branchNameForInput || '').replace(/\\/g, '\\\\').replace(/'/g, "\\'") + '\')" ' +
+  'onblur="handleAttendanceDaysBlur(this, \'' + (empNameForInput || '').replace(/\\/g, '\\\\').replace(/'/g, "\\'") + '\', \'' + (branchNameForInput || '').replace(/\\/g, '\\\\').replace(/'/g, "\\'") + '\')" ' +
   'onkeydown="if(event.key === \'Enter\') { this.blur(); }" ' +
   'title="أيام الحضور في ' + branchNameForInput + ' (أدخل أي رقم: 8، 22، 30، إلخ)">' +
   '</div>';
@@ -3948,27 +3799,29 @@ return inputsHtml;
 <td class="col-rate p-2 text-center text-xs text-gray-300 print:text-black font-medium">
 ${(emp.count > 100 ? 3 : (emp.count > 50 ? 2 : 1))} ريال
 </td>
-<td class="col-eval-booking p-2 text-center${(() => { try { var r = localStorage.getItem('adora_current_role'); return (r === 'supervisor' && filter !== 'الكل') ? ' admin-entry-zone admin-entry-supervisor' : ''; } catch(e) { return ''; } })()}">
+<td class="col-eval-booking p-2 text-center${(() => { try { var r = localStorage.getItem('adora_current_role'); var submitted = typeof isAdminLinkSubmitted === 'function' && isAdminLinkSubmitted(); return (r === 'supervisor' && filter !== 'الكل' && !submitted) ? ' admin-entry-zone admin-entry-supervisor' : ''; } catch(e) { return ''; } })()}">
 ${(() => {
   const currentRole = localStorage.getItem('adora_current_role');
   const viewOnlyAll = (filter === 'الكل');
-  const isReadOnly = viewOnlyAll || (currentRole && currentRole !== 'supervisor' && currentRole !== 'admin');
+  const submittedViewOnly = typeof isAdminLinkSubmitted === 'function' && isAdminLinkSubmitted();
+  const isReadOnly = viewOnlyAll || (currentRole && currentRole !== 'supervisor' && currentRole !== 'admin') || submittedViewOnly;
   if (isReadOnly) {
     return `<span class="text-blue-400 font-bold text-base number-display">${isDuplicate ? (s.aggregatedEvalBooking || emp.evaluationsBooking || 0) : (emp.evaluationsBooking || 0)}</span>`;
   }
   return `<input type="text" inputmode="numeric" pattern="[0-9]*" lang="en" dir="ltr"
 value="${emp.evaluationsBooking || ''}" placeholder="0"
-oninput="this.value = this.value.replace(/[^0-9]/g, ''); updateEvalBooking('${emp.id}', this.value, this, false)"
-onblur="updateEvalBooking('${emp.id}', this.value, this, true)"
+oninput="this.value = this.value.replace(/[^0-9]/g, ''); updateEvalBooking('${(typeof escAttr === 'function' ? escAttr(emp.id) : String(emp.id || '').replace(/'/g, "\\'"))}', this.value, this, false)"
+onblur="updateEvalBooking('${(typeof escAttr === 'function' ? escAttr(emp.id) : String(emp.id || '').replace(/'/g, "\\'"))}', this.value, this, true)"
 onkeydown="handleEvalKey(event, this)"
 class="eval-input text-blue-400 w-16 bg-white/5 border border-blue-400/50 rounded px-2 py-1 text-center focus:outline-none focus:border-blue-400 transition-colors number-display font-sans">`;
 })()}
 </td>
-<td class="col-eval-google p-2 text-center${(() => { try { var r = localStorage.getItem('adora_current_role'); return (r === 'supervisor' && filter !== 'الكل') ? ' admin-entry-zone admin-entry-supervisor' : ''; } catch(e) { return ''; } })()}">
+<td class="col-eval-google p-2 text-center${(() => { try { var r = localStorage.getItem('adora_current_role'); var submitted = typeof isAdminLinkSubmitted === 'function' && isAdminLinkSubmitted(); return (r === 'supervisor' && filter !== 'الكل' && !submitted) ? ' admin-entry-zone admin-entry-supervisor' : ''; } catch(e) { return ''; } })()}">
 ${(() => {
   const currentRole = localStorage.getItem('adora_current_role');
   const viewOnlyAll = (filter === 'الكل');
-  const isReadOnly = viewOnlyAll || (currentRole && currentRole !== 'supervisor' && currentRole !== 'admin');
+  const submittedViewOnly = typeof isAdminLinkSubmitted === 'function' && isAdminLinkSubmitted();
+  const isReadOnly = viewOnlyAll || (currentRole && currentRole !== 'supervisor' && currentRole !== 'admin') || submittedViewOnly;
   if (isReadOnly) {
     return `<span class="text-green-400 font-bold text-base number-display">${isDuplicate ? (s.aggregatedEvalGoogle || emp.evaluationsGoogle || 0) : (emp.evaluationsGoogle || 0)}</span>`;
   }
@@ -4018,17 +3871,16 @@ baseNet = s.net; // s.net يتضمن attendance bonus/discount فقط
 // Calculate final net including all bonuses (excellence + commitment)
 finalNet = baseNet + s.excellenceBonus + s.commitmentBonus;
 }
-// Apply discounts (if function exists)
+// Apply discounts (if function exists) — يتضمن خصم تقييم الفندق دائماً
 let totalDiscountAmount = 0;
 if (typeof getDiscountForEmployeeInBranch === 'function' && typeof getTotalDiscountForEmployee === 'function') {
   if (filter === 'الكل' && isDuplicate) {
-    // For duplicates in "الكل" view: calculate total discount from all branches
     totalDiscountAmount = getTotalDiscountForEmployee(emp.name);
   } else {
-    // For non-duplicates or branch view: apply discount to this branch's net only
     totalDiscountAmount = getDiscountForEmployeeInBranch(emp.name, baseNet);
+    if (typeof getHotelRatingDeductionForEmployee === 'function') totalDiscountAmount += getHotelRatingDeductionForEmployee(emp.name);
   }
-  finalNet = Math.max(0, finalNet - totalDiscountAmount); // Ensure net doesn't go below 0
+  finalNet = Math.max(0, finalNet - totalDiscountAmount);
 }
 // الصافي الأبيض يجب أن يتضمن الحوافز مباشرة
 // Show final net (white) - الرقم الأبيض فقط بدون إضافات (الإضافات موجودة في تقرير الموظف)
@@ -4301,7 +4153,44 @@ function appendChunk(startIndex) {
     runAfterTableRender();
   }
 }
+function updateNegativeRatingsHeader() {
+  const cell = document.getElementById('negativeRatingsCell');
+  const row = document.getElementById('negativeRatingsHeaderRow');
+  if (!cell || !row) return;
+  // صف التقييمات السلبية: للمشرف والأدمن فقط — إخفاؤه عن HR والحسابات والمدير
+  var currentRole = typeof localStorage !== 'undefined' ? localStorage.getItem('adora_current_role') : null;
+  var isAdmin = typeof isAdminMode === 'function' && isAdminMode();
+  if (currentRole !== 'supervisor' && !isAdmin) {
+    row.style.display = 'none';
+    return;
+  }
+  let branchList = typeof branches !== 'undefined' ? [...branches] : [];
+  if (branchList.length === 0) {
+    row.style.display = 'none';
+    return;
+  }
+  // عند اختيار فرع معين (الكورنيش أو الأندلس): عرض خانة هذا الفرع فقط. في «الكل» عرض كل الفروع
+  if (typeof currentFilter !== 'undefined' && currentFilter !== 'الكل' && branchList.indexOf(currentFilter) >= 0) {
+    branchList = [currentFilter];
+  }
+  row.style.display = 'table-row';
+  const counts = typeof branchNegativeRatingsCount !== 'undefined' ? branchNegativeRatingsCount : {};
+  let total = 0;
+  function escapeHtmlBranch(s) {
+    return String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+  }
+  const parts = branchList.map(b => {
+    const val = parseInt(counts[b], 10) || 0;
+    total += val;
+    const labelSafe = escapeHtmlBranch(b);
+    return `<span class="inline-flex items-center gap-1.5 mx-1"><label class="text-gray-400 text-[10px]">${labelSafe}:</label><input type="number" min="0" step="1" value="${val}" data-branch="${escapeHtmlBranch(b)}" class="negative-ratings-input w-14 px-1.5 py-0.5 rounded text-center text-white bg-white/10 border border-white/20 text-xs number-display" onchange="(function(b,v){ if(typeof branchNegativeRatingsCount==='undefined') return; branchNegativeRatingsCount[b]=Math.max(0,parseInt(v,10)||0); try{ localStorage.setItem('adora_rewards_negativeRatingsCount', JSON.stringify(branchNegativeRatingsCount)); }catch(e){} if(typeof window!=='undefined') window.branchNegativeRatingsCount=branchNegativeRatingsCount; if(typeof syncLivePeriodToFirebase==='function') syncLivePeriodToFirebase(); if(typeof renderUI==='function') renderUI(typeof currentFilter!=='undefined'?currentFilter:'الكل'); })(this.dataset.branch, this.value)"></span>`;
+  }).join(' ');
+  const totalHtml = currentFilter === 'الكل' ? `<span class="text-turquoise font-bold mr-2">إجمالي: ${total}</span>` : '';
+  cell.innerHTML = (totalHtml ? totalHtml + ' ' : '') + parts;
+}
+
 function runAfterTableRender() {
+  if (typeof updateNegativeRatingsHeader === 'function') updateNegativeRatingsHeader();
 // Update Excellence Bonus (صف الحوافز الموحد)
 const bonusesRow = document.getElementById('bonusesCombinedRow');
 const excellenceText = document.getElementById('excellenceBonusText');
@@ -4311,8 +4200,8 @@ if (excellenceEmployees.length > 0) {
 if (bonusesRow) bonusesRow.style.display = 'table-row';
 if (excellenceBlock) excellenceBlock.style.display = '';
 if (excellenceText) {
-const names = excellenceEmployees.map(e => `${e.name} (${e.branch})`).join(' - ');
-excellenceText.innerHTML = names;
+const names = excellenceEmployees.map(e => (typeof escHtml === 'function' ? escHtml(e.name) : String(e.name || '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;')) + ' (' + (typeof escHtml === 'function' ? escHtml(e.branch) : String(e.branch || '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;')) + ')').join(' - ');
+  excellenceText.innerHTML = names;
 }
 if (excellenceValue) excellenceValue.innerText = `+${totalExcellenceBonus.toFixed(2)}`;
 } else {
@@ -4525,6 +4414,16 @@ setTimeout(() => {
 updateBadges();
 }, 150);
 });
+// إذا صفحة الإحصائيات مفتوحة: حدّثها بالبيانات الحالية (تقييمات سلبية، خصومات، إلخ)
+setTimeout(function () {
+  try {
+    var rp = document.getElementById('reportsPage');
+    var sc = document.getElementById('statisticsReportsContent');
+    if (rp && !rp.classList.contains('hidden') && sc && !sc.classList.contains('hidden') && typeof loadStatisticsPage === 'function') {
+      loadStatisticsPage();
+    }
+  } catch (e) {}
+}, 50);
 }
 appendChunk(0);
 }
@@ -4583,35 +4482,7 @@ employeesToPrint.sort((a, b) => a.name.localeCompare(b.name, 'ar'));
 // Calculate totals
 let totalFund = 0, totalNet = 0, totalEval = 0, totalBookings = 0, totalNetNoEval = 0;
 let totalExcellenceBonus = 0, totalCommitmentBonus = 0;
-const branchWinners = {};
-[...branches].forEach(b => {
-branchWinners[b] = { net: {val: -1, ids: []}, eval: {val: -1, ids: []}, book: {val: -1, ids: []}, attendance: {val: -1, ids: []} };
-});
-// Calculate branch winners
-db.forEach(emp => {
-const rate = emp.count > 100 ? 3 : (emp.count > 50 ? 2 : 1);
-const evBooking = emp.evaluationsBooking || 0;
-const evGoogle = emp.evaluationsGoogle || 0;
-const gross = (emp.count * rate) + (evBooking * 20) + (evGoogle * 10);
-const fund = gross * 0.15;
-let net = gross - fund;
-const attendance26Days = emp.attendance26Days === true;
-const attendanceBonus = attendance26Days ? net * 0.25 : 0;
-net = net + attendanceBonus;
-const bw = branchWinners[emp.branch];
-if (bw) {
-if (net > bw.net.val) { bw.net.val = net; bw.net.ids = [emp.id]; }
-else if (net === bw.net.val) { bw.net.ids.push(emp.id); }
-if (evBooking > bw.eval.val) { bw.eval.val = evBooking; bw.eval.ids = [emp.id]; }
-else if (evBooking === bw.eval.val) { bw.eval.ids.push(emp.id); }
-if (emp.count > bw.book.val) { bw.book.val = emp.count; bw.book.ids = [emp.id]; }
-else if (emp.count === bw.book.val) { bw.book.ids.push(emp.id); }
-if (attendance26Days) {
-if (bw.attendance.val === -1) { bw.attendance.val = 1; bw.attendance.ids = [emp.id]; }
-else { bw.attendance.ids.push(emp.id); }
-}
-}
-});
+const { branchWinners } = computeBranchWinnersAndLosers(db, branches);
 // Calculate nameCounts for duplicate detection
 const nameCounts = {};
 db.forEach(e => {
@@ -4766,100 +4637,212 @@ challengeRowId: challengeRowId
 }
 }
 });
-// Process employees for print
+// Process employees for print — عند "طباعة الكل" نُجمّع المتكررين في صف واحد مثل عرض "الكل"
 const printRows = [];
-employeesToPrint.forEach(emp => {
-const s = calcStats(emp);
-let finalExcellenceBonus = s.excellenceBonus;
-let finalCommitmentBonus = s.commitmentBonus;
-let finalAttendanceBonus = s.attendanceBonus;
-let finalAttendance26Days = s.attendance26Days;
-if (s.isDuplicate) {
-const shouldApplyExcellence = bonusApplied[emp.name]?.excellenceRowId === emp.id;
-const shouldApplyCommitment = bonusApplied[emp.name]?.commitmentRowId === emp.id;
-const shouldApplyChallenge = bonusApplied[emp.name]?.challengeRowId === emp.id;
-finalExcellenceBonus = shouldApplyExcellence ? s.excellenceBonus : 0;
-finalCommitmentBonus = shouldApplyCommitment ? s.commitmentBonus : 0;
-if (!shouldApplyChallenge && s.attendanceBonus > 0) {
-s.net = s.net - s.attendanceBonus;
-finalAttendanceBonus = 0;
-finalAttendance26Days = false;
-} else if (shouldApplyChallenge) {
-finalAttendanceBonus = s.attendanceBonus;
-finalAttendance26Days = s.attendance26Days;
+if (filter === 'الكل' && !onlySelected) {
+  // One row per unique employee name (aggregated like "الكل" view)
+  const uniqueNames = [...new Set(db.map(e => e.name))];
+  uniqueNames.sort((a, b) => a.localeCompare(b, 'ar'));
+  uniqueNames.forEach(name => {
+    const allEmpBranches = db.filter(e => e.name === name);
+    const firstEmp = allEmpBranches[0];
+    const aggregatedCount = allEmpBranches.reduce((sum, e) => sum + (e.count || 0), 0);
+    const aggregatedEvalBooking = allEmpBranches.reduce((sum, e) => sum + (e.evaluationsBooking || 0), 0);
+    const aggregatedEvalGoogle = allEmpBranches.reduce((sum, e) => sum + (e.evaluationsGoogle || 0), 0);
+    let aggregatedDays = 0;
+    if (firstEmp && firstEmp.attendanceDaysPerBranch) {
+      aggregatedDays = Object.values(firstEmp.attendanceDaysPerBranch).reduce((sum, d) => sum + (parseInt(d) || 0), 0);
+    } else {
+      aggregatedDays = firstEmp?.totalAttendanceDays || (firstEmp?.attendance26Days === true ? 26 : 0);
+    }
+    // حافز تحدي الظروف (25%): مرة واحدة للمتكرر — الفرع الذي له أعلى صافي بعد الـ 25%
+    let challengeRowId = null;
+    let maxChallengeTotalAmount = -1;
+    allEmpBranches.forEach(branchEmp => {
+      const branchRate = branchEmp.count > 100 ? 3 : (branchEmp.count > 50 ? 2 : 1);
+      const branchEvBooking = branchEmp.evaluationsBooking || 0;
+      const branchEvGoogle = branchEmp.evaluationsGoogle || 0;
+      const branchGross = (branchEmp.count * branchRate) + (branchEvBooking * 20) + (branchEvGoogle * 10);
+      const branchFund = branchGross * 0.15;
+      let eNet = branchGross - branchFund;
+      const eAttendance26Days = branchEmp.attendance26Days === true;
+      const eAttendanceBonus = eAttendance26Days ? eNet * 0.25 : 0;
+      eNet = eNet + eAttendanceBonus;
+      if (eAttendance26Days && eAttendanceBonus > 0 && eNet > maxChallengeTotalAmount) {
+        maxChallengeTotalAmount = eNet;
+        challengeRowId = branchEmp.id;
+      }
+    });
+    let totalNetFromBranches = 0;
+    let totalFundFromBranches = 0;
+    let hasExcellenceForEmployee = false;
+    let hasCommitmentForEmployee = false;
+    allEmpBranches.forEach(branchEmp => {
+      const branchRate = branchEmp.count > 100 ? 3 : (branchEmp.count > 50 ? 2 : 1);
+      const branchEvBooking = branchEmp.evaluationsBooking || 0;
+      const branchEvGoogle = branchEmp.evaluationsGoogle || 0;
+      const branchGross = (branchEmp.count * branchRate) + (branchEvBooking * 20) + (branchEvGoogle * 10);
+      const branchFund = branchGross * 0.15;
+      let branchNet = branchGross - branchFund;
+      const branchAttendance26Days = branchEmp.attendance26Days === true;
+      const branchAttendanceBonus = (branchAttendance26Days && challengeRowId === branchEmp.id) ? branchNet * 0.25 : 0;
+      branchNet = branchNet + branchAttendanceBonus;
+      totalNetFromBranches += branchNet;
+      totalFundFromBranches += branchFund;
+      const bw = branchWinners[branchEmp.branch];
+      if (bw && bw.book.ids.includes(branchEmp.id) && bw.eval.ids.includes(branchEmp.id) && bw.book.val > 0) hasExcellenceForEmployee = true;
+      if (bw && branchAttendance26Days && bw.attendance.ids.includes(branchEmp.id) && ((bw.eval.ids.includes(branchEmp.id) && bw.eval.val > 0) || (bw.book.ids.includes(branchEmp.id) && bw.book.val > 0))) hasCommitmentForEmployee = true;
+    });
+    const finalExcellenceBonus = hasExcellenceForEmployee ? 50 : 0;
+    const finalCommitmentBonus = hasCommitmentForEmployee ? 50 : 0;
+    const attendance26Days = aggregatedDays >= 26 && allEmpBranches.some(e => e.attendance26Days === true);
+    let finalNet = totalNetFromBranches + finalExcellenceBonus + finalCommitmentBonus;
+    let totalDiscountAmount = 0;
+    let discountDetails = [];
+    if (typeof getTotalDiscountForEmployee === 'function') {
+      totalDiscountAmount = getTotalDiscountForEmployee(name) || 0;
+      finalNet = Math.max(0, finalNet - totalDiscountAmount);
+    }
+    if (typeof getDiscountDetailsForEmployee === 'function') {
+      discountDetails = getDiscountDetailsForEmployee(name);
+    }
+    const rate = aggregatedCount > 100 ? 3 : (aggregatedCount > 50 ? 2 : 1);
+    const gross = (aggregatedCount * rate) + (aggregatedEvalBooking * 20) + (aggregatedEvalGoogle * 10);
+    const fund = totalFundFromBranches;
+    const badges = [];
+    if (finalExcellenceBonus > 0) badges.push('حافز الأفضل تقييماً + الأكثر حجوزات');
+    if (finalCommitmentBonus > 0) badges.push('حافز الجمع بين الحضور والأكثر تميز (الأكثر حجوزات أو الأفضل تقييم)');
+    if (attendance26Days) badges.push('بطل تحدي الظروف');
+    if (totalDiscountAmount > 0) {
+      discountDetails.forEach(d => badges.push(d.isHotelRating ? `خصم ${d.discountType}: ${(d.amount || 0).toFixed(2)} ريال` : `خصم ${d.discountPercentage}% (${d.discountType})`));
+    }
+    totalFund += totalFundFromBranches;
+    totalNet += finalNet;
+    totalEval += aggregatedEvalBooking + aggregatedEvalGoogle;
+    totalBookings += aggregatedCount;
+    // مطابقة getFooterTotals: totalNetNoEval = مجموع لكل فرع (b.count * r_b) * 0.85
+    allEmpBranches.forEach(b => {
+      const r = b.count > 100 ? 3 : (b.count > 50 ? 2 : 1);
+      totalNetNoEval += (b.count * r) * 0.85;
+    });
+    totalExcellenceBonus += finalExcellenceBonus;
+    totalCommitmentBonus += finalCommitmentBonus;
+    const explanations = [];
+    if (hasExcellenceForEmployee) explanations.push(`حافز الأفضل تقييماً + الأكثر حجوزات: +${finalExcellenceBonus.toFixed(2)} ريال`);
+    if (hasCommitmentForEmployee) explanations.push(`حافز الجمع بين الحضور والأكثر تميز (الأكثر حجوزات أو الأفضل تقييم): +${finalCommitmentBonus.toFixed(2)} ريال`);
+    const explanationText = explanations.length > 0 ? explanations.join(' | ') : '';
+    printRows.push({
+      name: name,
+      branch: 'جميع الفروع',
+      count: aggregatedCount,
+      totalDiscountAmount: totalDiscountAmount,
+      discountDetails: discountDetails,
+      rate: rate,
+      evBooking: aggregatedEvalBooking,
+      evGoogle: aggregatedEvalGoogle,
+      gross: gross,
+      fund: fund,
+      net: totalNetFromBranches,
+      attendanceBonus: 0,
+      excellenceBonus: finalExcellenceBonus,
+      commitmentBonus: finalCommitmentBonus,
+      finalNet: finalNet,
+      badges: badges,
+      attendance26Days: attendance26Days,
+      explanation: explanationText
+    });
+  });
+} else {
+  // Per-row (فرع معين أو طباعة المحدد)
+  employeesToPrint.forEach(emp => {
+    const s = calcStats(emp);
+    let finalExcellenceBonus = s.excellenceBonus;
+    let finalCommitmentBonus = s.commitmentBonus;
+    let finalAttendanceBonus = s.attendanceBonus;
+    let finalAttendance26Days = s.attendance26Days;
+    if (s.isDuplicate) {
+      const shouldApplyExcellence = bonusApplied[emp.name]?.excellenceRowId === emp.id;
+      const shouldApplyCommitment = bonusApplied[emp.name]?.commitmentRowId === emp.id;
+      const shouldApplyChallenge = bonusApplied[emp.name]?.challengeRowId === emp.id;
+      finalExcellenceBonus = shouldApplyExcellence ? s.excellenceBonus : 0;
+      finalCommitmentBonus = shouldApplyCommitment ? s.commitmentBonus : 0;
+      if (!shouldApplyChallenge && s.attendanceBonus > 0) {
+        s.net = s.net - s.attendanceBonus;
+        finalAttendanceBonus = 0;
+        finalAttendance26Days = false;
+      } else if (shouldApplyChallenge) {
+        finalAttendanceBonus = s.attendanceBonus;
+        finalAttendance26Days = s.attendance26Days;
+      }
+    }
+    let finalNet = s.net + finalExcellenceBonus + finalCommitmentBonus;
+    let totalDiscountAmount = 0;
+    let discountDetails = [];
+    if (typeof getDiscountForEmployeeInBranch === 'function') {
+      const branchBaseNet = s.net;
+      totalDiscountAmount = getDiscountForEmployeeInBranch(s.name, branchBaseNet);
+      if (typeof getHotelRatingDeductionForEmployee === 'function') totalDiscountAmount += getHotelRatingDeductionForEmployee(s.name);
+      finalNet = Math.max(0, finalNet - totalDiscountAmount);
+    }
+    if (typeof getDiscountDetailsForEmployee === 'function') {
+      discountDetails = getDiscountDetailsForEmployee(s.name);
+    }
+    const badges = [];
+    if (finalExcellenceBonus > 0) badges.push('حافز الأفضل تقييماً + الأكثر حجوزات');
+    if (finalCommitmentBonus > 0) badges.push('حافز الجمع بين الحضور والأكثر تميز (الأكثر حجوزات أو الأفضل تقييم)');
+    if (finalAttendance26Days) badges.push('بطل تحدي الظروف');
+    if (totalDiscountAmount > 0) {
+      discountDetails.forEach(d => badges.push(d.isHotelRating ? `خصم ${d.discountType}: ${(d.amount || 0).toFixed(2)} ريال` : `خصم ${d.discountPercentage}% (${d.discountType})`));
+    }
+    totalFund += s.fund;
+    totalNet += finalNet;
+    totalEval += s.evBooking + s.evGoogle;
+    totalBookings += s.count;
+    totalNetNoEval += (s.count * (s.count > 100 ? 3 : (s.count > 50 ? 2 : 1))) * 0.85;
+    totalExcellenceBonus += finalExcellenceBonus;
+    totalCommitmentBonus += finalCommitmentBonus;
+    const explanations = [];
+    if (finalAttendanceBonus > 0) {
+      explanations.push(`حافز تحدي الظروف (25%): +${finalAttendanceBonus.toFixed(2)} ريال`);
+    }
+    if (finalExcellenceBonus > 0) {
+      const isMostEval = branchWinners[s.branch]?.eval.ids.includes(s.id) && branchWinners[s.branch].eval.val > 0;
+      const isMostBook = branchWinners[s.branch]?.book.ids.includes(s.id) && branchWinners[s.branch].book.val > 0;
+      if (isMostEval && isMostBook) {
+        explanations.push(`حافز الأفضل تقييماً + الأكثر حجوزات: +${finalExcellenceBonus.toFixed(2)} ريال`);
+      }
+    }
+    if (finalCommitmentBonus > 0) {
+      const isMostCommitted = branchWinners[s.branch]?.attendance.ids.includes(s.id);
+      const isMostEval = branchWinners[s.branch]?.eval.ids.includes(s.id) && branchWinners[s.branch].eval.val > 0;
+      const isMostBook = branchWinners[s.branch]?.book.ids.includes(s.id) && branchWinners[s.branch].book.val > 0;
+      if (isMostCommitted && (isMostEval || isMostBook)) {
+        explanations.push(`حافز الجمع بين الحضور والأكثر تميز (الأكثر حجوزات أو الأفضل تقييم): +${finalCommitmentBonus.toFixed(2)} ريال`);
+      }
+    }
+    const explanationText = explanations.length > 0 ? explanations.join(' | ') : '';
+    printRows.push({
+      name: s.name,
+      branch: s.branch,
+      count: s.count,
+      totalDiscountAmount: totalDiscountAmount,
+      discountDetails: discountDetails,
+      rate: s.count > 100 ? 3 : (s.count > 50 ? 2 : 1),
+      evBooking: s.evBooking,
+      evGoogle: s.evGoogle,
+      gross: s.gross,
+      fund: s.fund,
+      net: s.net,
+      attendanceBonus: finalAttendanceBonus,
+      excellenceBonus: finalExcellenceBonus,
+      commitmentBonus: finalCommitmentBonus,
+      finalNet: finalNet,
+      badges: badges,
+      attendance26Days: finalAttendance26Days,
+      explanation: explanationText
+    });
+  });
 }
-}
-let finalNet = s.net + finalExcellenceBonus + finalCommitmentBonus;
-// Apply discounts (apply to this branch's net only)
-let totalDiscountAmount = 0;
-let discountDetails = [];
-if (typeof getDiscountForEmployeeInBranch === 'function') {
-  // Calculate base net for this branch (before bonuses)
-  const branchBaseNet = s.net; // s.net already includes attendance bonus
-  totalDiscountAmount = getDiscountForEmployeeInBranch(s.name, branchBaseNet);
-  finalNet = Math.max(0, finalNet - totalDiscountAmount);
-}
-if (typeof getDiscountDetailsForEmployee === 'function') {
-  discountDetails = getDiscountDetailsForEmployee(s.name);
-}
-// Badges
-const badges = [];
-if (finalExcellenceBonus > 0) badges.push('حافز التفوق');
-if (finalCommitmentBonus > 0) badges.push('حافز الالتزام');
-if (finalAttendance26Days) badges.push('بطل تحدي الظروف');
-if (totalDiscountAmount > 0) {
-  discountDetails.forEach(d => badges.push(`خصم ${d.discountPercentage}% (${d.discountType})`));
-}
-totalFund += s.fund;
-totalNet += finalNet;
-totalEval += s.evBooking + s.evGoogle;
-totalBookings += s.count;
-totalNetNoEval += (s.count * (s.count > 100 ? 3 : (s.count > 50 ? 2 : 1))) * 0.85;
-totalExcellenceBonus += finalExcellenceBonus;
-totalCommitmentBonus += finalCommitmentBonus;
-// Generate detailed explanation for this employee
-const explanations = [];
-if (finalAttendanceBonus > 0) {
-explanations.push(`حافز تحدي الظروف (25%): +${finalAttendanceBonus.toFixed(2)} ريال`);
-}
-if (finalExcellenceBonus > 0) {
-const isMostEval = branchWinners[s.branch]?.eval.ids.includes(s.id) && branchWinners[s.branch].eval.val > 0;
-const isMostBook = branchWinners[s.branch]?.book.ids.includes(s.id) && branchWinners[s.branch].book.val > 0;
-if (isMostEval && isMostBook) {
-explanations.push(`حافز التفوق (الأعلى تقييماً والأكثر حجوزات): +${finalExcellenceBonus.toFixed(2)} ريال`);
-}
-}
-if (finalCommitmentBonus > 0) {
-const isMostCommitted = branchWinners[s.branch]?.attendance.ids.includes(s.id);
-const isMostEval = branchWinners[s.branch]?.eval.ids.includes(s.id) && branchWinners[s.branch].eval.val > 0;
-const isMostBook = branchWinners[s.branch]?.book.ids.includes(s.id) && branchWinners[s.branch].book.val > 0;
-if (isMostCommitted && (isMostEval || isMostBook)) {
-explanations.push(`حافز الالتزام (الأكثر التزاماً + ${isMostEval ? 'الأعلى تقييماً' : 'الأكثر حجوزات'}): +${finalCommitmentBonus.toFixed(2)} ريال`);
-}
-}
-const explanationText = explanations.length > 0 ? explanations.join(' | ') : '';
-
-printRows.push({
-name: s.name,
-branch: s.branch,
-count: s.count,
-totalDiscountAmount: totalDiscountAmount,
-discountDetails: discountDetails,
-rate: s.count > 100 ? 3 : (s.count > 50 ? 2 : 1),
-evBooking: s.evBooking,
-evGoogle: s.evGoogle,
-gross: s.gross,
-fund: s.fund,
-net: s.net,
-attendanceBonus: finalAttendanceBonus,
-excellenceBonus: finalExcellenceBonus,
-commitmentBonus: finalCommitmentBonus,
-finalNet: finalNet,
-badges: badges,
-attendance26Days: finalAttendance26Days,
-explanation: explanationText
-});
-});
 // Validate that we have employees to print
 if (printRows.length === 0) {
 alert('لا توجد بيانات للطباعة. يرجى التأكد من تحديد الموظفين بشكل صحيح.');
@@ -5087,7 +5070,11 @@ if (row.commitmentBonus > 0) bonuses.push(`+${row.commitmentBonus.toFixed(2)}`);
 if (row.totalDiscountAmount > 0 && row.discountDetails) {
   row.discountDetails.forEach(d => {
     var appliedByLabel = d.appliedBy && d.appliedBy.trim() ? d.appliedBy : 'الأدمن';
-    bonuses.push(`-${(row.finalNet / (1 - d.discountPercentage / 100) * (d.discountPercentage / 100)).toFixed(2)} (${d.discountPercentage}% ${d.discountType} - مطبق من ${appliedByLabel})`);
+    if (d.isHotelRating && d.amount != null) {
+      bonuses.push(`-${Number(d.amount).toFixed(2)} (${d.discountType})`);
+    } else {
+      bonuses.push(`-${(row.finalNet / (1 - d.discountPercentage / 100) * (d.discountPercentage / 100)).toFixed(2)} (${d.discountPercentage}% ${d.discountType} - مطبق من ${appliedByLabel})`);
+    }
   });
 }
 const bonusesText = bonuses.length > 0 ? bonuses.join('<br>') : '-';
@@ -5180,25 +5167,28 @@ if (attendanceBonus > 0) {
 // Add excellence bonus
 const excellenceBonus = row.excellenceBonus || 0;
 if (excellenceBonus > 0) {
-  explanation += ` + حافز التفوق ${excellenceBonus.toFixed(2)} ريال`;
+  explanation += ` + حافز الأفضل تقييماً + الأكثر حجوزات ${excellenceBonus.toFixed(2)} ريال`;
 }
 
 // Add commitment bonus
 const commitmentBonus = row.commitmentBonus || 0;
 if (commitmentBonus > 0) {
-  explanation += ` + حافز الالتزام ${commitmentBonus.toFixed(2)} ريال`;
+  explanation += ` + حافز الجمع بين الحضور والأكثر تميز (الأكثر حجوزات أو الأفضل تقييم) ${commitmentBonus.toFixed(2)} ريال`;
 }
 
 // Subtract discounts
 const totalDiscountAmount = row.totalDiscountAmount || 0;
 if (totalDiscountAmount > 0 && row.discountDetails && Array.isArray(row.discountDetails)) {
-  // Discount is calculated from row.net (net after attendance bonus, before excellence/commitment bonuses)
   const netForDiscount = row.net || 0;
   row.discountDetails.forEach(d => {
-    const discountAmount = (netForDiscount * (d.discountPercentage / 100));
     const eventDate = d.eventDate ? new Date(d.eventDate + 'T00:00:00').toLocaleDateString('ar-SA') : '';
     const appliedByLabel = (d.appliedBy && typeof d.appliedBy === 'string' && d.appliedBy.trim()) ? d.appliedBy.trim() : (d.appliedBy || 'الأدمن');
-    explanation += ` - خصم ${discountAmount.toFixed(2)} ريال (${d.discountPercentage}% ${d.eventDate ? `- ${eventDate} ` : ''}${d.discountType} - مطبق من ${appliedByLabel})`;
+    if (d.isHotelRating && d.amount != null) {
+      explanation += ` - خصم ${Number(d.amount).toFixed(2)} ريال (${d.discountType})`;
+    } else {
+      const discountAmount = (netForDiscount * (d.discountPercentage / 100));
+      explanation += ` - خصم ${discountAmount.toFixed(2)} ريال (${d.discountPercentage}% ${d.eventDate ? `- ${eventDate} ` : ''}${d.discountType} - مطبق من ${appliedByLabel})`;
+    }
   });
 }
 
@@ -5651,9 +5641,11 @@ function submitAdminAndLock() {
   if (typeof initializeFirebase === 'function') initializeFirebase();
   var syncPromise = new Promise(function (resolve, reject) {
     setTimeout(function () {
+      // دفع قيم حقول HR (أيام الحضور) من الـ DOM إلى db و localStorage قبل الرفع — مثل المشرف
+      if (typeof flushAdminInputsToStorage === 'function') flushAdminInputsToStorage();
       var p = typeof doSyncLivePeriodNow === 'function' ? doSyncLivePeriodNow() : Promise.resolve();
       p.then(resolve).catch(reject);
-    }, 200);
+    }, 300);
   });
   syncPromise.then(function () {
     setProgress(100);
@@ -5702,12 +5694,14 @@ data-filter="الكل">
 </button>
 `;
 branches.forEach(b => {
-const isActive = currentReportsBranchFilter === b;
-html += `
-<button onclick="filterReportsByBranch('${b}')" 
+  const isActive = currentReportsBranchFilter === b;
+  const bAttr = typeof escAttr === 'function' ? escAttr(b) : String(b).replace(/'/g, "\\'").replace(/"/g, '&quot;');
+  const bHtml = typeof escHtml === 'function' ? escHtml(b) : String(b).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+  html += `
+<button onclick="filterReportsByBranch('${bAttr}')" 
 class="filter-reports-pill ${isActive ? 'active' : ''} px-4 py-2 rounded-lg text-sm font-bold transition-all ${isActive ? 'text-white shadow-[0_0_20px_rgba(64,224,208,0.3)]' : 'text-white bg-white/5 border border-white/10 hover:bg-white/10 hover:border-turquoise/50'}" 
-data-filter="${b}">
-${b}
+data-filter="${bHtml}">
+${bHtml}
 </button>
 `;
 });
@@ -5736,24 +5730,19 @@ sortedNames.forEach(name => {
 const employees = uniqueEmployees.get(name);
 const isDuplicate = employees.length > 1;
 const card = document.createElement('div');
-card.className = 'glass p-4 rounded-xl border border-white/20 hover:border-turquoise/50 transition-all cursor-pointer';
+card.className = 'glass p-3 rounded-lg border border-white/15 hover:border-turquoise/40 transition-all cursor-pointer min-w-0';
 // Create click handler function
 const handleCardClick = (e) => {
 e.preventDefault();
 e.stopPropagation();
-console.log('Card clicked:', name, 'isDuplicate:', isDuplicate, 'empId:', isDuplicate ? 'multiple' : employees[0].id);
 if (isDuplicate) {
 showBranchSelectionForReport(name, employees);
 } else {
-const empId = employees[0].id;
-console.log('Calling showEmployeeReport with empId:', empId);
-showEmployeeReport(empId);
+showEmployeeReport(employees[0].id);
 }
 };
-// Attach click handler to card - use both onclick and addEventListener for compatibility
 card.onclick = handleCardClick;
 card.addEventListener('click', handleCardClick);
-const nameText = isDuplicate ? `${name} (${employees.length} فروع)` : name;
 const branchesText = isDuplicate ? employees.map(e => e.branch).join('، ') : employees[0].branch;
 // Calculate total for display
 let totalCount = 0;
@@ -5770,27 +5759,23 @@ net = net + attendanceBonus;
 totalCount += emp.count;
 totalNet += net;
 });
+const nameSafe = typeof escHtml === 'function' ? escHtml(name) : String(name || '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+const branchesTextSafe = typeof escHtml === 'function' ? escHtml(branchesText) : String(branchesText || '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
 card.innerHTML = `
-<div class="flex flex-col gap-2">
-<div class="flex items-center justify-between">
-<h3 class="text-lg font-bold text-white">${name}</h3>
-${isDuplicate ? '<span class="text-xs text-turquoise font-bold bg-turquoise/20 px-2 py-1 rounded">متكرر</span>' : ''}
+<div class="flex flex-col gap-1.5">
+<div class="flex items-center justify-between gap-2 min-w-0">
+<h3 class="text-sm font-bold text-white truncate">${nameSafe}</h3>
+${isDuplicate ? '<span class="text-[10px] text-turquoise font-semibold bg-turquoise/15 px-1.5 py-0.5 rounded shrink-0">متكرر</span>' : ''}
 </div>
-<p class="text-sm text-gray-300">الفرع: <span class="text-turquoise font-semibold">${branchesText}</span></p>
-${isDuplicate ? '' : `
-<div class="mt-2 pt-2 border-t border-white/10">
-<div class="flex justify-between items-center">
-<span class="text-xs text-gray-400">الحجوزات:</span>
-<span class="text-sm font-bold text-white">${employees[0].count}</span>
+<p class="text-xs text-gray-400 truncate">${branchesTextSafe}</p>
+<div class="flex items-center gap-2 text-xs">
+${isDuplicate
+  ? `<span class="text-gray-400">${totalCount} حجز إجمالي</span><span class="text-white/50">·</span><span class="text-turquoise font-semibold">${totalNet.toFixed(2)} ر</span>`
+  : `<span class="text-gray-400">${employees[0].count} حجز</span><span class="text-white/50">·</span><span class="text-turquoise font-semibold">${totalNet.toFixed(2)} ر</span>`
+}
 </div>
-<div class="flex justify-between items-center mt-1">
-<span class="text-xs text-gray-400">المبلغ الصافي:</span>
-<span class="text-sm font-bold text-turquoise">${totalNet.toFixed(2)} ريال</span>
-</div>
-</div>
-`}
-<div class="mt-2 pt-2 border-t border-turquoise/30">
-<span class="text-xs text-turquoise font-semibold">عرض التقرير →</span>
+<div class="flex items-center justify-end pt-1 border-t border-white/10 mt-0.5">
+<span class="text-[10px] text-turquoise/90 font-medium">عرض التقرير ←</span>
 </div>
 </div>
 `;
@@ -5859,11 +5844,11 @@ content.innerHTML = `
 <div class="space-y-3">
 <p class="text-white mb-4 font-semibold">الموظف موجود في ${employees.length} فروع. اختر الفرع لعرض التقرير:</p>
 ${employees.map(emp => `
-<div onclick="showEmployeeReport('${emp.id}')" class="p-4 rounded-xl cursor-pointer transition-all" style="background: rgba(255, 255, 255, 0.1); border: 1px solid rgba(64, 224, 208, 0.3);" onmouseover="this.style.background='rgba(255, 255, 255, 0.15)'; this.style.borderColor='rgba(64, 224, 208, 0.6)';" onmouseout="this.style.background='rgba(255, 255, 255, 0.1)'; this.style.borderColor='rgba(64, 224, 208, 0.3)';">
+<div onclick="showEmployeeReport('${(typeof escAttr === 'function' ? escAttr(emp.id) : String(emp.id || '').replace(/'/g, "\\'"))}')" class="p-4 rounded-xl cursor-pointer transition-all" style="background: rgba(255, 255, 255, 0.1); border: 1px solid rgba(64, 224, 208, 0.3);" onmouseover="this.style.background='rgba(255, 255, 255, 0.15)'; this.style.borderColor='rgba(64, 224, 208, 0.6)';" onmouseout="this.style.background='rgba(255, 255, 255, 0.1)'; this.style.borderColor='rgba(64, 224, 208, 0.3)';">
 <div class="flex items-center justify-between">
 <div>
-<h3 class="text-lg font-bold text-white">${emp.name}</h3>
-<p class="text-sm text-gray-300 mt-1">الفرع: <span class="text-turquoise font-semibold">${emp.branch}</span></p>
+<h3 class="text-lg font-bold text-white">${(typeof escHtml === 'function' ? escHtml(emp.name) : String(emp.name || '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;'))}</h3>
+<p class="text-sm text-gray-300 mt-1">الفرع: <span class="text-turquoise font-semibold">${(typeof escHtml === 'function' ? escHtml(emp.branch) : String(emp.branch || '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;'))}</span></p>
 </div>
 <span class="text-turquoise text-xl">→</span>
 </div>
@@ -5878,65 +5863,7 @@ modal.classList.remove('hidden');
 function calculateEmployeeReport(empId) {
 const emp = db.find(e => e.id === empId);
 if (!emp) return null;
-// Recalculate branch winners for bonuses
-const branchWinners = {};
-[...branches].forEach(b => {
-branchWinners[b] = { net: {val: -1, ids: []}, eval: {val: -1, ids: []}, evalBooking: {val: -1, ids: []}, evalGoogle: {val: -1, ids: []}, book: {val: -1, ids: []}, attendance: {val: -1, ids: []} };
-});
-db.forEach(e => {
-const rate = e.count > 100 ? 3 : (e.count > 50 ? 2 : 1);
-const evBooking = e.evaluationsBooking || 0;
-const evGoogle = e.evaluationsGoogle || 0;
-const gross = (e.count * rate) + (evBooking * 20) + (evGoogle * 10);
-const fund = gross * 0.15;
-let net = gross - fund;
-const attendance26Days = e.attendance26Days === true;
-const attendanceBonus = attendance26Days ? net * 0.25 : 0;
-net = net + attendanceBonus;
-const bw = branchWinners[e.branch];
-if (!bw) return;
-if (net > bw.net.val) { bw.net.val = net; bw.net.ids = [e.id]; }
-else if (net === bw.net.val) { bw.net.ids.push(e.id); }
-if (evBooking > bw.eval.val) { bw.eval.val = evBooking; bw.eval.ids = [e.id]; }
-else if (evBooking === bw.eval.val) { bw.eval.ids.push(e.id); }
-if (evBooking > bw.evalBooking.val) { bw.evalBooking.val = evBooking; bw.evalBooking.ids = [e.id]; }
-else if (evBooking === bw.evalBooking.val) { bw.evalBooking.ids.push(e.id); }
-if (evGoogle > bw.evalGoogle.val) { bw.evalGoogle.val = evGoogle; bw.evalGoogle.ids = [e.id]; }
-else if (evGoogle === bw.evalGoogle.val) { bw.evalGoogle.ids.push(e.id); }
-if (e.count > bw.book.val) { bw.book.val = e.count; bw.book.ids = [e.id]; }
-else if (e.count === bw.book.val) { bw.book.ids.push(e.id); }
-const empNameCount = db.filter(emp => emp.name === e.name).length;
-let empAttendanceDays = attendance26Days ? 26 : 0;
-if (empNameCount > 1) {
-empAttendanceDays = e.totalAttendanceDays || (attendance26Days ? 26 : 0);
-}
-if (empAttendanceDays >= 26) {
-let isHighestDays = true;
-const branchEmployees = db.filter(emp => emp.branch === e.branch);
-branchEmployees.forEach(otherEmp => {
-if (otherEmp.name === e.name) return;
-const otherNameCount = db.filter(emp => emp.name === otherEmp.name).length;
-let otherDays = otherEmp.attendance26Days === true ? 26 : 0;
-if (otherNameCount > 1) {
-otherDays = otherEmp.totalAttendanceDays || (otherEmp.attendance26Days === true ? 26 : 0);
-}
-if (otherDays > empAttendanceDays) {
-isHighestDays = false;
-}
-});
-if (isHighestDays) {
-if (bw.attendance.val === -1) {
-bw.attendance.val = empAttendanceDays;
-bw.attendance.ids = [e.id];
-} else if (empAttendanceDays > bw.attendance.val) {
-bw.attendance.val = empAttendanceDays;
-bw.attendance.ids = [e.id];
-} else if (empAttendanceDays === bw.attendance.val) {
-bw.attendance.ids.push(e.id);
-}
-}
-}
-});
+const { branchWinners } = computeBranchWinnersAndLosers(db, branches);
 // Calculate employee's details
 const rate = emp.count > 100 ? 3 : (emp.count > 50 ? 2 : 1);
 const evBooking = emp.evaluationsBooking || 0;
@@ -6003,13 +5930,12 @@ const hasCommitmentBonus = finalAttendance26Days && isMostCommitted && (isMostEv
 const commitmentBonus = hasCommitmentBonus ? 50 : 0;
 let finalNet = net + excellenceBonus + commitmentBonus;
 
-// Apply discounts (apply to this branch's net only)
 let totalDiscountAmount = 0;
 let discountDetails = [];
 if (typeof getDiscountForEmployeeInBranch === 'function') {
-  // Calculate base net for this branch (before bonuses)
-  const branchBaseNet = net; // net already includes attendance bonus
+  const branchBaseNet = net;
   totalDiscountAmount = getDiscountForEmployeeInBranch(emp.name, branchBaseNet);
+  if (typeof getHotelRatingDeductionForEmployee === 'function') totalDiscountAmount += getHotelRatingDeductionForEmployee(emp.name);
   finalNet = Math.max(0, finalNet - totalDiscountAmount);
 }
 if (typeof getDiscountDetailsForEmployee === 'function') {
@@ -6041,6 +5967,87 @@ isMostBook,
 maxEvalCount: bw?.eval.val || 0,
 maxBookCount: bw?.book.val || 0
 };
+}
+/** تقرير مجمع للموظف المتكرر (اسم واحد = تقرير واحد يجمع كل الفروع). غير متكرر: نفس نتيجة calculateEmployeeReport. */
+function calculateAggregatedEmployeeReport(empName) {
+  const allEmpBranches = db.filter(function (e) { return e.name === empName; });
+  if (allEmpBranches.length === 0) return null;
+  if (allEmpBranches.length === 1) return calculateEmployeeReport(allEmpBranches[0].id);
+  const agg = typeof getAggregatedStats === 'function' ? getAggregatedStats(empName) : null;
+  if (!agg) return calculateEmployeeReport(allEmpBranches[0].id);
+  const totalCount = agg.totalCount || 0;
+  const totalEvalBooking = agg.totalEvalBooking || 0;
+  const totalEvalGoogle = agg.totalEvalGoogle || 0;
+  const totalDays = agg.totalDays || 0;
+  const rate = totalCount > 100 ? 3 : (totalCount > 50 ? 2 : 1);
+  const gross = (totalCount * rate) + (totalEvalBooking * 20) + (totalEvalGoogle * 10);
+  const fund = gross * 0.15;
+  let net = gross - fund;
+  const netBeforeAttendanceBonus = net;
+  const attendance26Days = totalDays >= 26;
+  const attendanceBonus = attendance26Days ? net * 0.25 : 0;
+  net = net + attendanceBonus;
+  const branchReports = allEmpBranches.map(function (e) { return calculateEmployeeReport(e.id); }).filter(Boolean);
+  let totalNetFromBranches = 0;
+  let hasExcellenceForEmployee = false;
+  let hasCommitmentForEmployee = false;
+  const branchWinners = typeof computeBranchWinnersAndLosers === 'function' ? computeBranchWinnersAndLosers(db, branches).branchWinners : {};
+  allEmpBranches.forEach(function (branchEmp) {
+    const branchRate = branchEmp.count > 100 ? 3 : (branchEmp.count > 50 ? 2 : 1);
+    const branchEvBooking = branchEmp.evaluationsBooking || 0;
+    const branchEvGoogle = branchEmp.evaluationsGoogle || 0;
+    const branchGross = (branchEmp.count * branchRate) + (branchEvBooking * 20) + (branchEvGoogle * 10);
+    const branchFund = branchGross * 0.15;
+    let branchNet = branchGross - branchFund;
+    const branchAttendance26Days = branchEmp.attendance26Days === true;
+    const branchAttendanceBonus = branchAttendance26Days ? branchNet * 0.25 : 0;
+    branchNet = branchNet + branchAttendanceBonus;
+    totalNetFromBranches += branchNet;
+    const bw = branchWinners[branchEmp.branch];
+    if (bw && bw.book && bw.book.ids && bw.book.ids.includes(branchEmp.id) && bw.eval && bw.eval.ids && bw.eval.ids.includes(branchEmp.id) && bw.book.val > 0) hasExcellenceForEmployee = true;
+    if (bw && branchAttendance26Days && bw.attendance && bw.attendance.ids && bw.attendance.ids.includes(branchEmp.id) && ((bw.eval && bw.eval.ids && bw.eval.ids.includes(branchEmp.id) && bw.eval.val > 0) || (bw.book && bw.book.ids && bw.book.ids.includes(branchEmp.id) && bw.book.val > 0))) hasCommitmentForEmployee = true;
+  });
+  let finalNet = totalNetFromBranches + (hasExcellenceForEmployee ? 50 : 0) + (hasCommitmentForEmployee ? 50 : 0);
+  let totalDiscountAmount = 0;
+  if (typeof getTotalDiscountForEmployee === 'function') {
+    totalDiscountAmount = getTotalDiscountForEmployee(empName) || 0;
+    finalNet = Math.max(0, finalNet - totalDiscountAmount);
+  }
+  let discountDetails = [];
+  if (typeof getDiscountDetailsForEmployee === 'function') discountDetails = getDiscountDetailsForEmployee(empName) || [];
+  const hasExcellenceBonus = hasExcellenceForEmployee;
+  const hasCommitmentBonus = hasCommitmentForEmployee;
+  const excellenceBonus = hasExcellenceBonus ? 50 : 0;
+  const commitmentBonus = hasCommitmentBonus ? 50 : 0;
+  const branchesLabel = allEmpBranches.map(function (e) { return e.branch; }).join('، ');
+  const syntheticEmp = { name: empName, branch: 'جميع الفروع (' + branchesLabel + ')', id: allEmpBranches[0].id, count: totalCount };
+  const maxEvalCount = branchReports.length ? Math.max.apply(null, branchReports.map(function (r) { return r.maxEvalCount || 0; })) : 0;
+  const maxBookCount = branchReports.length ? Math.max.apply(null, branchReports.map(function (r) { return r.maxBookCount || 0; })) : 0;
+  return {
+    emp: syntheticEmp,
+    rate: rate,
+    evBooking: totalEvalBooking,
+    evGoogle: totalEvalGoogle,
+    gross: gross,
+    fund: fund,
+    net: net,
+    netBeforeAttendanceBonus: netBeforeAttendanceBonus,
+    attendanceBonus: attendanceBonus,
+    actualAttendanceDays: totalDays,
+    excellenceBonus: excellenceBonus,
+    commitmentBonus: commitmentBonus,
+    finalNet: finalNet,
+    totalDiscountAmount: totalDiscountAmount,
+    discountDetails: discountDetails,
+    hasExcellenceBonus: hasExcellenceBonus,
+    hasCommitmentBonus: hasCommitmentBonus,
+    attendance26Days: attendance26Days,
+    isMostCommitted: branchReports.some(function (r) { return r.isMostCommitted; }),
+    isMostEval: branchReports.some(function (r) { return r.isMostEval; }),
+    isMostBook: branchReports.some(function (r) { return r.isMostBook; }),
+    maxEvalCount: maxEvalCount,
+    maxBookCount: maxBookCount
+  };
 }
 function showEmployeeReport(empId) {
 console.log('showEmployeeReport called with empId:', empId);
@@ -6105,14 +6112,16 @@ ${totalDiscountAmount > 0 ? `
 <div class="space-y-2 text-sm">
 ${discountDetails.map(discount => {
   const eventDate = discount.eventDate ? new Date(discount.eventDate + 'T00:00:00').toLocaleDateString('ar-SA') : '';
+  const amt = discount.isHotelRating && discount.amount != null ? Number(discount.amount) : (calculateAggregatedNetForEmployee(emp.name) * (discount.discountPercentage / 100));
+  const label = discount.isHotelRating ? discount.discountType : `${discount.discountType} (${discount.discountPercentage}%)`;
   return `
 <div class="bg-red-500/5 p-3 rounded-lg border border-red-500/20">
 <div class="flex justify-between items-center mb-1">
-<span class="text-gray-300">${discount.discountType} (${discount.discountPercentage}%):</span>
-<span class="font-bold text-red-400">-${(calculateAggregatedNetForEmployee(emp.name) * (discount.discountPercentage / 100)).toFixed(2)} ريال</span>
+<span class="text-gray-300">${label}:</span>
+<span class="font-bold text-red-400">-${amt.toFixed(2)} ريال</span>
 </div>
-<p class="text-xs text-gray-400 mt-1">تم خصم ${discount.discountPercentage}% بسبب ${discount.discountType}${eventDate ? ` - تاريخ الحدث: ${eventDate}` : ''}</p>
-<p class="text-xs text-gray-500 mt-0.5">مطبق من: ${discount.appliedBy || 'الأدمن'}</p>
+<p class="text-xs text-gray-400 mt-1">${discount.isHotelRating ? discount.discountType : `تم خصم ${discount.discountPercentage}% بسبب ${discount.discountType}`}${eventDate ? ` - تاريخ الحدث: ${eventDate}` : ''}</p>
+${discount.isHotelRating ? '' : `<p class="text-xs text-gray-500 mt-0.5">مطبق من: ${discount.appliedBy || 'الأدمن'}</p>`}
 </div>
 `;
 }).join('')}
@@ -6217,7 +6226,7 @@ ${attendance26Days ? `
 ${hasExcellenceBonus ? `
 <div class="bg-turquoise/20 p-3 rounded-lg border border-turquoise/50">
 <div class="flex justify-between items-center mb-1">
-<span class="text-gray-300">✨ حافز التفوق:</span>
+<span class="text-gray-300">✨ حافز الأفضل تقييماً + الأكثر حجوزات:</span>
 <span class="font-bold text-turquoise">+${excellenceBonus.toFixed(2)} ريال</span>
 </div>
 <p class="text-xs text-gray-400 mt-1">الأعلى تقييماً بـ ${maxEvalCount} تقييم والأكثر حجوزات ${maxBookCount} حجز في ${emp.branch}</p>
@@ -6226,7 +6235,7 @@ ${hasExcellenceBonus ? `
 ${hasCommitmentBonus ? `
 <div class="bg-purple-500/20 p-3 rounded-lg border border-purple-500/50">
 <div class="flex justify-between items-center mb-1">
-<span class="text-gray-300">✓ حافز التزام:</span>
+<span class="text-gray-300">✓ حافز الجمع بين الحضور والأكثر تميز (الأكثر حجوزات أو الأفضل تقييم):</span>
 <span class="font-bold text-purple-400">+${commitmentBonus.toFixed(2)} ريال</span>
 </div>
 <p class="text-xs text-gray-400 mt-1">الأكثر التزاماً + ${isMostEval && isMostBook ? `(الأعلى تقييماً بـ ${maxEvalCount} تقييم والأكثر حجوزات ${maxBookCount} حجز)` : isMostEval ? `(الأعلى تقييماً بـ ${maxEvalCount} تقييم)` : isMostBook ? `(الأكثر حجوزات ${maxBookCount} حجز)` : ''} في ${emp.branch}</p>
@@ -6261,13 +6270,13 @@ ${attendanceBonus > 0 ? `
 ` : ''}
 ${excellenceBonus > 0 ? `
 <div class="flex justify-between items-center text-gray-300">
-<span>حافز التفوق:</span>
+<span>حافز الأفضل تقييماً + الأكثر حجوزات:</span>
 <span class="font-bold text-turquoise">+${excellenceBonus.toFixed(2)} ريال</span>
 </div>
 ` : ''}
 ${commitmentBonus > 0 ? `
 <div class="flex justify-between items-center text-gray-300">
-<span>حافز التزام:</span>
+<span>حافز الجمع بين الحضور والأكثر تميز (الأكثر حجوزات أو الأفضل تقييم):</span>
 <span class="font-bold text-purple-400">+${commitmentBonus.toFixed(2)} ريال</span>
 </div>
 ` : ''}
@@ -6275,10 +6284,12 @@ ${totalDiscountAmount > 0 ? `
 ${discountDetails.map(discount => {
   const eventDate = discount.eventDate ? new Date(discount.eventDate + 'T00:00:00').toLocaleDateString('ar-SA') : '';
   const appliedByLabel = (discount.appliedBy && typeof discount.appliedBy === 'string' && discount.appliedBy.trim()) ? discount.appliedBy : (discount.appliedBy || 'الأدمن');
+  const amt = discount.isHotelRating && discount.amount != null ? Number(discount.amount) : (finalNet / (1 - discount.discountPercentage / 100) * (discount.discountPercentage / 100));
+  const label = discount.isHotelRating ? discount.discountType : `خصم ${discount.discountPercentage}% (${discount.discountType})${eventDate ? ` - ${eventDate}` : ''} - مطبق من ${appliedByLabel}`;
   return `
 <div class="flex justify-between items-center text-gray-300">
-<span>خصم ${discount.discountPercentage}% (${discount.discountType})${eventDate ? ` - ${eventDate}` : ''} - مطبق من ${appliedByLabel}:</span>
-<span class="font-bold text-red-400">-${(finalNet / (1 - discount.discountPercentage / 100) * (discount.discountPercentage / 100)).toFixed(2)} ريال</span>
+<span>${label}:</span>
+<span class="font-bold text-red-400">-${amt.toFixed(2)} ريال</span>
 </div>
 `;
 }).join('')}
@@ -6352,183 +6363,183 @@ setTimeout(function () {
 }, 350);
 }
 
-function printEmployeeReport() {
-const modal = document.getElementById('employeeReportModal');
-if (!modal) return;
-const empId = modal.dataset.empId;
-if (!empId) return;
-const report = calculateEmployeeReport(empId);
-if (!report) return;
-const { emp, rate, evBooking, evGoogle, gross, fund, net, netBeforeAttendanceBonus, attendanceBonus, actualAttendanceDays, excellenceBonus, commitmentBonus, finalNet, totalDiscountAmount, discountDetails, hasExcellenceBonus, hasCommitmentBonus, attendance26Days, isMostCommitted, isMostEval, isMostBook, maxEvalCount, maxBookCount } = report;
-const periodText = document.getElementById('headerPeriodRange')?.innerText || '-';
-const reportDate = new Date().toLocaleDateString('ar-SA');
-const printWindow = window.open('', '_blank');
-const printContent = `
-<!DOCTYPE html>
-<html dir="rtl" lang="ar">
-<head>
-<meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>تقرير ${emp.name}</title>
-<style>
-@page {
-size: A4 portrait;
-margin: 10mm 8mm;
+function getEmployeeReportPrintStyles(forAllReports) {
+  return `@page {
+  size: A4 portrait;
+  margin: 8mm;
 }
 * {
-margin: 0;
-padding: 0;
-box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+  box-sizing: border-box;
 }
 html, body {
-height: 100%;
-overflow: hidden;
+  height: 100%;
+  overflow: hidden;
 }
 body {
-font-family: 'IBM Plex Sans Arabic', Arial, sans-serif;
-direction: rtl;
-background: white;
-color: #000;
-padding: 8px;
-font-size: 10px;
-line-height: 1.3;
-max-height: 277mm;
-overflow: hidden;
+  font-family: 'IBM Plex Sans Arabic', Arial, sans-serif;
+  direction: rtl;
+  background: white;
+  color: #000;
+  padding: 4px 6px;
+  font-size: 9px;
+  line-height: 1.2;
+  max-height: 281mm;
+  overflow: hidden;
+}
+body.multi-report {
+  max-height: none;
+  overflow: visible;
+  height: auto;
+}
+.print-page {
+  max-height: 281mm;
+  overflow: hidden;
+  page-break-after: avoid;
+  page-break-inside: avoid;
+}
+body.multi-report .print-page {
+  page-break-after: always;
 }
 .header {
-border-bottom: 2px solid #40E0D0;
-padding-bottom: 6px;
-margin-bottom: 8px;
+  border-bottom: 1px solid #40E0D0;
+  padding-bottom: 3px;
+  margin-bottom: 4px;
 }
 .header h1 {
-font-size: 16px;
-font-weight: 900;
-color: #000;
-margin-bottom: 4px;
+  font-size: 13px;
+  font-weight: 900;
+  color: #000;
+  margin-bottom: 2px;
 }
 .header p {
-font-size: 10px;
-color: #333;
-margin: 2px 0;
+  font-size: 9px;
+  color: #333;
+  margin: 1px 0;
 }
 .detail-section {
-margin-bottom: 8px;
-padding: 8px;
-border: 1px solid #e5e7eb;
-border-radius: 4px;
-background: #f9fafb;
+  margin-bottom: 4px;
+  padding: 4px 6px;
+  border: 1px solid #e5e7eb;
+  border-radius: 3px;
+  background: #f9fafb;
 }
 .detail-section h3 {
-font-size: 12px;
-font-weight: 800;
-color: #000;
-margin-bottom: 5px;
-border-bottom: 1px solid #40E0D0;
-padding-bottom: 2px;
+  font-size: 10px;
+  font-weight: 800;
+  color: #000;
+  margin-bottom: 2px;
+  border-bottom: 1px solid #40E0D0;
+  padding-bottom: 1px;
 }
 .summary-box {
-background: linear-gradient(135deg, #10b981 0%, #059669 100%);
-color: white;
-padding: 10px;
-border-radius: 4px;
-text-align: center;
-margin: 8px 0;
+  background: linear-gradient(135deg, #10b981 0%, #059669 100%);
+  color: white;
+  padding: 5px 8px;
+  border-radius: 3px;
+  text-align: center;
+  margin: 4px 0;
 }
 .summary-box h2 {
-font-size: 12px;
-font-weight: 800;
-margin-bottom: 4px;
+  font-size: 10px;
+  font-weight: 800;
+  margin-bottom: 2px;
 }
 .summary-box .amount {
-font-size: 24px;
-font-weight: 900;
-margin-top: 4px;
+  font-size: 18px;
+  font-weight: 900;
+  margin-top: 2px;
 }
 .row {
-display: flex;
-justify-content: space-between;
-align-items: flex-start;
-padding: 5px 0;
-border-bottom: 1px solid #e5e7eb;
-font-size: 10px;
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  padding: 2px 0;
+  border-bottom: 1px solid #e5e7eb;
+  font-size: 9px;
 }
 .row:last-child {
-border-bottom: none;
+  border-bottom: none;
 }
 .row > div {
-flex: 1;
-min-width: 0;
+  flex: 1;
+  min-width: 0;
 }
 .row > div > span:first-child {
-display: block;
-font-weight: 600;
-margin-bottom: 3px;
+  display: block;
+  font-weight: 600;
+  margin-bottom: 1px;
 }
 .row > div > span:last-child {
-display: block;
-font-size: 8px;
-color: #666;
-line-height: 1.4;
+  display: block;
+  font-size: 8px;
+  color: #666;
+  line-height: 1.2;
 }
 .total-row {
-font-weight: 900;
-font-size: 12px;
-border-top: 2px solid #40E0D0;
-padding-top: 5px;
-margin-top: 5px;
+  font-weight: 900;
+  font-size: 10px;
+  border-top: 1px solid #40E0D0;
+  padding-top: 2px;
+  margin-top: 2px;
 }
 .approval-stamp {
-position: fixed;
-bottom: 20mm;
-left: 50%;
-transform: translateX(-50%);
-text-align: center;
-width: 120px;
-height: 120px;
-border: 3px solid #8b0000;
-border-radius: 50%;
-padding: 20px;
-background: rgba(255, 255, 255, 0.95);
-display: flex;
-flex-direction: column;
-justify-content: center;
-align-items: center;
-box-shadow: 0 2px 4px rgba(0, 0, 0, 0.15);
+  position: fixed;
+  bottom: 8mm;
+  left: 50%;
+  transform: translateX(-50%);
+  text-align: center;
+  width: 80px;
+  height: 80px;
+  border: 2px solid #8b0000;
+  border-radius: 50%;
+  padding: 10px;
+  background: rgba(255, 255, 255, 0.95);
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  align-items: center;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.12);
 }
 .approval-stamp::before {
-content: '';
-position: absolute;
-top: -2px;
-left: -2px;
-right: -2px;
-bottom: -2px;
-border: 1px solid #8b0000;
-border-radius: 50%;
-opacity: 0.3;
+  content: '';
+  position: absolute;
+  top: -2px;
+  left: -2px;
+  right: -2px;
+  bottom: -2px;
+  border: 1px solid #8b0000;
+  border-radius: 50%;
+  opacity: 0.3;
 }
 .approval-stamp .checkmark {
-color: #006400;
-font-size: 28px;
-font-weight: 900;
-margin-bottom: 5px;
-line-height: 1;
+  color: #006400;
+  font-size: 20px;
+  font-weight: 900;
+  margin-bottom: 2px;
+  line-height: 1;
 }
 .approval-stamp .department {
-color: #8b0000;
-font-size: 11px;
-font-weight: 700;
-margin-bottom: 3px;
-line-height: 1.2;
+  color: #8b0000;
+  font-size: 9px;
+  font-weight: 700;
+  margin-bottom: 1px;
+  line-height: 1.1;
 }
 .approval-stamp .approved {
-color: #8b0000;
-font-size: 13px;
-font-weight: 800;
-line-height: 1.2;
+  color: #8b0000;
+  font-size: 10px;
+  font-weight: 800;
+  line-height: 1.1;
 }
-</style>
-</head>
-<body>
+`;
+}
+
+function buildEmployeeReportBodyContent(report, periodText, reportDate) {
+  const { emp, rate, evBooking, evGoogle, gross, fund, net, netBeforeAttendanceBonus, attendanceBonus, actualAttendanceDays, excellenceBonus, commitmentBonus, finalNet, totalDiscountAmount, discountDetails, hasExcellenceBonus, hasCommitmentBonus, attendance26Days, isMostCommitted, isMostEval, isMostBook, maxEvalCount, maxBookCount } = report;
+  return `
+<div class="print-page">
 <div class="header">
 <h1>فندق إليت - تقرير المكافآت</h1>
 <p><strong>الموظف:</strong> ${emp.name}</p>
@@ -6539,7 +6550,7 @@ line-height: 1.2;
 <div class="summary-box">
 <h2>المبلغ الصافي المستحق</h2>
 <div class="amount">${finalNet.toFixed(2)} ريال</div>
-${totalDiscountAmount > 0 ? `<p style="font-size: 10px; margin-top: 4px; opacity: 0.9;">بعد خصم ${totalDiscountAmount.toFixed(2)} ريال</p>` : ''}
+${totalDiscountAmount > 0 ? `<p style="font-size: 8px; margin-top: 2px; opacity: 0.9;">بعد خصم ${totalDiscountAmount.toFixed(2)} ريال</p>` : ''}
 </div>
 <div class="detail-section">
 <h3>📊 مكافآت الحجوزات</h3>
@@ -6606,28 +6617,28 @@ ${attendanceBonus > 0 || excellenceBonus > 0 || commitmentBonus > 0 ? `
 <div class="detail-section">
 <h3>🏆 الحوافز الإضافية</h3>
 ${attendance26Days ? `
-<div class="row" style="border-bottom: 1px solid #e5e7eb; padding-bottom: 5px; margin-bottom: 5px;">
+<div class="row" style="border-bottom: 1px solid #e5e7eb; padding-bottom: 2px; margin-bottom: 2px;">
 <div style="flex: 1;">
 <span>✓ حافز تحدي الظروف (25%):</span>
-<span style="display: block; font-size: 9px; color: #666; margin-top: 2px; margin-right: 15px;">تم إتمام ${actualAttendanceDays} يوماً وأكثر من العطاء (الصافي قبل الحافز: ${netBeforeAttendanceBonus.toFixed(2)} ريال × 25% = ${attendanceBonus.toFixed(2)} ريال) - يتم حسابها من خلال بصمه الموظف</span>
+<span style="display: block; font-size: 8px; color: #666; margin-top: 1px; margin-right: 10px;">تم إتمام ${actualAttendanceDays} يوماً وأكثر من العطاء (الصافي قبل الحافز: ${netBeforeAttendanceBonus.toFixed(2)} ريال × 25% = ${attendanceBonus.toFixed(2)} ريال)</span>
 </div>
 <span><strong style="color: #10b981;">+${attendanceBonus.toFixed(2)} ريال</strong></span>
 </div>
 ` : ''}
 ${hasExcellenceBonus ? `
-<div class="row" style="border-bottom: 1px solid #e5e7eb; padding-bottom: 5px; margin-bottom: 5px;">
+<div class="row" style="border-bottom: 1px solid #e5e7eb; padding-bottom: 2px; margin-bottom: 2px;">
 <div style="flex: 1;">
-<span>✨ حافز التفوق:</span>
-<span style="display: block; font-size: 9px; color: #666; margin-top: 2px; margin-right: 15px;">الأعلى تقييماً بـ ${maxEvalCount} تقييم والأكثر حجوزات ${maxBookCount} حجز في فرع ${emp.branch}</span>
+<span>✨ حافز الأفضل تقييماً + الأكثر حجوزات:</span>
+<span style="display: block; font-size: 8px; color: #666; margin-top: 1px; margin-right: 10px;">الأعلى تقييماً بـ ${maxEvalCount} تقييم والأكثر حجوزات ${maxBookCount} حجز في فرع ${emp.branch}</span>
 </div>
 <span><strong style="color: #14b8a6;">+${excellenceBonus.toFixed(2)} ريال</strong></span>
 </div>
 ` : ''}
 ${hasCommitmentBonus ? `
-<div class="row" style="border-bottom: 1px solid #e5e7eb; padding-bottom: 5px; margin-bottom: 5px;">
+<div class="row" style="border-bottom: 1px solid #e5e7eb; padding-bottom: 2px; margin-bottom: 2px;">
 <div style="flex: 1;">
-<span>✓ حافز التزام:</span>
-<span style="display: block; font-size: 9px; color: #666; margin-top: 2px; margin-right: 15px;">الأكثر التزاماً (26+ يوم)${isMostEval && isMostBook ? ` + الأعلى تقييماً بـ ${maxEvalCount} تقييم والأكثر حجوزات ${maxBookCount} حجز` : isMostEval ? ` + الأعلى تقييماً بـ ${maxEvalCount} تقييم` : isMostBook ? ` + الأكثر حجوزات ${maxBookCount} حجز` : ''} في فرع ${emp.branch}</span>
+<span>✓ حافز الجمع بين الحضور والأكثر تميز (الأكثر حجوزات أو الأفضل تقييم):</span>
+<span style="display: block; font-size: 8px; color: #666; margin-top: 1px; margin-right: 10px;">الأكثر التزاماً (26+ يوم)${isMostEval && isMostBook ? ` + الأعلى تقييماً بـ ${maxEvalCount} تقييم والأكثر حجوزات ${maxBookCount} حجز` : isMostEval ? ` + الأعلى تقييماً بـ ${maxEvalCount} تقييم` : isMostBook ? ` + الأكثر حجوزات ${maxBookCount} حجز` : ''} في فرع ${emp.branch}</span>
 </div>
 <span><strong style="color: #a855f7;">+${commitmentBonus.toFixed(2)} ريال</strong></span>
 </div>
@@ -6638,15 +6649,15 @@ ${totalDiscountAmount > 0 ? `
 <div class="detail-section">
 <h3>💰 الخصومات المطبقة</h3>
 ${discountDetails.map(discount => {
-  const discountAmount = typeof calculateAggregatedNetForEmployee === 'function' 
-    ? (calculateAggregatedNetForEmployee(emp.name) * (discount.discountPercentage / 100))
-    : 0;
+  const discountAmount = discount.isHotelRating && discount.amount != null ? Number(discount.amount) : (typeof calculateAggregatedNetForEmployee === 'function' ? (calculateAggregatedNetForEmployee(emp.name) * (discount.discountPercentage / 100)) : 0);
   const appliedByLabel = (discount.appliedBy && typeof discount.appliedBy === 'string' && discount.appliedBy.trim()) ? discount.appliedBy : (discount.appliedBy || 'الأدمن');
+  const label = discount.isHotelRating ? discount.discountType : `${discount.discountType} (${discount.discountPercentage}%)`;
+  const sub = discount.isHotelRating ? discount.discountType : `تم خصم ${discount.discountPercentage}% بسبب ${discount.discountType} - مطبق من ${appliedByLabel}`;
   return `
-<div class="row" style="border-bottom: 1px solid #e5e7eb; padding-bottom: 5px; margin-bottom: 5px;">
+<div class="row" style="border-bottom: 1px solid #e5e7eb; padding-bottom: 2px; margin-bottom: 2px;">
 <div style="flex: 1;">
-<span>${discount.discountType} (${discount.discountPercentage}%):</span>
-<span style="display: block; font-size: 9px; color: #666; margin-top: 2px; margin-right: 15px;">تم خصم ${discount.discountPercentage}% بسبب ${discount.discountType} - مطبق من ${appliedByLabel}</span>
+<span>${label}:</span>
+<span style="display: block; font-size: 8px; color: #666; margin-top: 1px; margin-right: 10px;">${sub}</span>
 </div>
 <span><strong style="color: #ef4444;">-${discountAmount.toFixed(2)} ريال</strong></span>
 </div>
@@ -6679,45 +6690,45 @@ ${attendanceBonus > 0 ? `
 </div>
 ` : ''}
 ${excellenceBonus > 0 ? `
-<div class="row" style="border-bottom: 1px solid #e5e7eb; padding-bottom: 5px; margin-bottom: 5px;">
+<div class="row" style="border-bottom: 1px solid #e5e7eb; padding-bottom: 2px; margin-bottom: 2px;">
 <div style="flex: 1;">
-<span>حافز التفوق:</span>
-<span style="display: block; font-size: 9px; color: #666; margin-top: 2px; margin-right: 15px;">الأعلى تقييماً (${evBooking} تقييم Booking) والأكثر حجوزات (${emp.count} حجز) في فرع ${emp.branch}</span>
+<span>حافز الأفضل تقييماً + الأكثر حجوزات:</span>
+<span style="display: block; font-size: 8px; color: #666; margin-top: 1px; margin-right: 10px;">الأعلى تقييماً (${evBooking} تقييم Booking) والأكثر حجوزات (${emp.count} حجز) في فرع ${emp.branch}</span>
 </div>
 <span><strong style="color: #14b8a6;">+${excellenceBonus.toFixed(2)} ريال</strong></span>
 </div>
 ` : ''}
 ${commitmentBonus > 0 ? `
-<div class="row" style="border-bottom: 1px solid #e5e7eb; padding-bottom: 5px; margin-bottom: 5px;">
+<div class="row" style="border-bottom: 1px solid #e5e7eb; padding-bottom: 2px; margin-bottom: 2px;">
 <div style="flex: 1;">
-<span>حافز التزام:</span>
-<span style="display: block; font-size: 9px; color: #666; margin-top: 2px; margin-right: 15px;">الأكثر التزاماً (26+ يوم)${isMostEval && isMostBook ? ' + الأعلى تقييماً والأكثر حجوزات' : isMostEval ? ' + الأعلى تقييماً' : isMostBook ? ' + الأكثر حجوزات' : ''} في فرع ${emp.branch}</span>
+<span>حافز الجمع بين الحضور والأكثر تميز (الأكثر حجوزات أو الأفضل تقييم):</span>
+<span style="display: block; font-size: 8px; color: #666; margin-top: 1px; margin-right: 10px;">الأكثر التزاماً (26+ يوم)${isMostEval && isMostBook ? ' + الأعلى تقييماً والأكثر حجوزات' : isMostEval ? ' + الأعلى تقييماً' : isMostBook ? ' + الأكثر حجوزات' : ''} في فرع ${emp.branch}</span>
 </div>
 <span><strong style="color: #a855f7;">+${commitmentBonus.toFixed(2)} ريال</strong></span>
 </div>
 ` : ''}
 ${totalDiscountAmount > 0 ? `
 ${discountDetails.map(discount => {
-  const discountAmount = typeof calculateAggregatedNetForEmployee === 'function' 
-    ? (calculateAggregatedNetForEmployee(emp.name) * (discount.discountPercentage / 100))
-    : 0;
+  const discountAmount = discount.isHotelRating && discount.amount != null ? Number(discount.amount) : (typeof calculateAggregatedNetForEmployee === 'function' ? (calculateAggregatedNetForEmployee(emp.name) * (discount.discountPercentage / 100)) : 0);
   const eventDate = discount.eventDate ? new Date(discount.eventDate + 'T00:00:00').toLocaleDateString('ar-SA') : '';
   const appliedByLabel = (discount.appliedBy && typeof discount.appliedBy === 'string' && discount.appliedBy.trim()) ? discount.appliedBy : (discount.appliedBy || 'الأدمن');
+  const label = discount.isHotelRating ? discount.discountType : `خصم ${discount.discountPercentage}% (${discount.discountType})${eventDate ? ` - ${eventDate}` : ''} - مطبق من ${appliedByLabel}`;
   return `
 <div class="row">
-<span>خصم ${discount.discountPercentage}% (${discount.discountType})${eventDate ? ` - ${eventDate}` : ''} - مطبق من ${appliedByLabel}:</span>
+<span>${label}:</span>
 <span><strong style="color: #ef4444;">-${discountAmount.toFixed(2)} ريال</strong></span>
 </div>
 `;
 }).join('')}
-<div class="row" style="border-bottom: 1px solid #e5e7eb; padding-bottom: 5px; margin-bottom: 5px;">
+<div class="row" style="border-bottom: 1px solid #e5e7eb; padding-bottom: 2px; margin-bottom: 2px;">
 <span>إجمالي الخصومات:</span>
 <span><strong style="color: #ef4444;">-${totalDiscountAmount.toFixed(2)} ريال</strong></span>
 </div>
 ` : ''}
-<div class="row total-row" style="background: #f0fdf4; padding: 8px; border-radius: 4px; margin-top: 8px;">
-<span style="font-size: 14px;">المبلغ الصافي المستحق:</span>
-<span style="font-size: 20px; color: #10b981;"><strong>${finalNet.toFixed(2)} ريال</strong></span>
+<div class="row total-row" style="background: #f0fdf4; padding: 4px 6px; border-radius: 3px; margin-top: 4px;">
+<span style="font-size: 11px;">المبلغ الصافي المستحق:</span>
+<span style="font-size: 16px; color: #10b981;"><strong>${finalNet.toFixed(2)} ريال</strong></span>
+</div>
 </div>
 </div>
 <div class="approval-stamp">
@@ -6725,15 +6736,59 @@ ${discountDetails.map(discount => {
 <div class="department">إدارة التشغيل</div>
 <div class="approved">معتمد</div>
 </div>
-</body>
-</html>
 `;
-printWindow.document.write(printContent);
+}
+
+function printEmployeeReport() {
+const modal = document.getElementById('employeeReportModal');
+if (!modal) return;
+const empId = modal.dataset.empId;
+if (!empId) return;
+const report = calculateEmployeeReport(empId);
+if (!report) return;
+const periodText = document.getElementById('headerPeriodRange')?.innerText || '-';
+const reportDate = new Date().toLocaleDateString('ar-SA');
+const printWindow = window.open('', '_blank');
+const fullHtml = '<!DOCTYPE html><html dir="rtl" lang="ar"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><title>تقرير ' + report.emp.name + '</title><style>' + getEmployeeReportPrintStyles() + '</style></head><body>' + buildEmployeeReportBodyContent(report, periodText, reportDate) + '</body></html>';
+printWindow.document.write(fullHtml);
 printWindow.document.close();
 printWindow.focus();
 setTimeout(() => {
-printWindow.print();
+  printWindow.print();
 }, 250);
+}
+
+function printAllEmployeeReports() {
+  if (typeof db === 'undefined' || !Array.isArray(db) || db.length === 0) {
+    alert('لا توجد بيانات موظفين للطباعة.');
+    return;
+  }
+  const periodText = document.getElementById('headerPeriodRange')?.innerText || '-';
+  const reportDate = new Date().toLocaleDateString('ar-SA');
+  const bodyParts = [];
+  const uniqueNames = [];
+  db.forEach(function (emp) {
+    if (uniqueNames.indexOf(emp.name) === -1) uniqueNames.push(emp.name);
+  });
+  uniqueNames.forEach(function (empName) {
+    const report = typeof calculateAggregatedEmployeeReport === 'function'
+      ? calculateAggregatedEmployeeReport(empName)
+      : (db.find(function (e) { return e.name === empName; }) ? calculateEmployeeReport(db.find(function (e) { return e.name === empName; }).id) : null);
+    if (report) bodyParts.push(buildEmployeeReportBodyContent(report, periodText, reportDate));
+  });
+  if (bodyParts.length === 0) {
+    alert('لا توجد تقارير جاهزة للطباعة.');
+    return;
+  }
+  const pageBreak = '<div style="page-break-after: always;"></div>';
+  const fullHtml = '<!DOCTYPE html><html dir="rtl" lang="ar"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><title>تقارير الموظفين - الكل</title><style>' + getEmployeeReportPrintStyles(true) + '</style></head><body class="multi-report">' + bodyParts.join(pageBreak) + '</body></html>';
+  const printWindow = window.open('', '_blank');
+  printWindow.document.write(fullHtml);
+  printWindow.document.close();
+  printWindow.focus();
+  setTimeout(function () {
+    printWindow.print();
+  }, Math.max(500, bodyParts.length * 80));
 }
 // === Role-Based UI Functions ===
 function initializeRoleBasedUI(role) {
@@ -6790,21 +6845,24 @@ function initializeRoleBasedUI(role) {
   }
   
   // منع رجوع المتصفح من فتح المشروع الكامل: عند ضغط "رجوع المتصفح" نعرض شاشة إنهاء فقط
+  // لا نضيف popstate للمدير العام والحسابات: واجهتهما عرض فقط وبدون زر رجوع، وتفعيل popstate يسبب انتقالاً تلقائياً لواجهة «لا يمكنك الرجوع» في بعض المتصفحات
   if (['supervisor', 'hr', 'accounting', 'manager'].indexOf(role) >= 0) {
     try {
       if (typeof history !== 'undefined' && history.pushState) {
         history.pushState({ adminRestricted: true }, '', window.location.href);
       }
-      window.addEventListener('popstate', function adminPopstate(e) {
-        var r = typeof localStorage !== 'undefined' ? localStorage.getItem('adora_current_role') : null;
-        var urlRole = new URLSearchParams(window.location.search).get('role');
-        var adminRoles = ['supervisor', 'hr', 'accounting', 'manager'];
-        var isAdmin = (r && adminRoles.indexOf(r) >= 0) || (urlRole && adminRoles.indexOf(urlRole) >= 0);
-        if (isAdmin && typeof showAdminNoReturnScreen === 'function') {
-          showAdminNoReturnScreen();
-          if (history.pushState) history.pushState({ adminRestricted: true }, '', window.location.href);
-        }
-      });
+      if (role !== 'manager' && role !== 'accounting') {
+        window.addEventListener('popstate', function adminPopstate(e) {
+          var r = typeof localStorage !== 'undefined' ? localStorage.getItem('adora_current_role') : null;
+          var urlRole = new URLSearchParams(window.location.search).get('role');
+          var adminRoles = ['supervisor', 'hr', 'accounting', 'manager'];
+          var isAdmin = (r && adminRoles.indexOf(r) >= 0) || (urlRole && adminRoles.indexOf(urlRole) >= 0);
+          if (isAdmin && typeof showAdminNoReturnScreen === 'function') {
+            showAdminNoReturnScreen();
+            if (history.pushState) history.pushState({ adminRestricted: true }, '', window.location.href);
+          }
+        });
+      }
     } catch (err) {}
   }
   
@@ -7258,14 +7316,15 @@ padding: 4px 8px;
 <div class="section bonuses">
 <h2>🏆 الحوافز الإضافية</h2>
 <ul>
-<li>50 ريال حافز تفوق (الأعلى تقييماً والأكثر حجوزات في نفس الفرع)</li>
-<li>50 ريال حافز التزام مضافه الى الـ 25% كباقي الموظفين الذين تموا 26 يوم دوام (الموظف الذي جمع الأكثر التزاماً + الأعلى تقييماً أو الأكثر حجوزات في نفس الفرع)</li>
+<li>50 ريال حافز الأفضل تقييماً + الأكثر حجوزات (في نفس الفرع)</li>
+<li>50 ريال حافز الجمع بين الحضور والأكثر تميز (الأكثر حجوزات أو الأفضل تقييم) مضافاً إلى الـ 25% لمن أتم 26 يوم دوام</li>
 </ul>
 </div>
 <div class="section discounts" style="background-color: rgba(239, 68, 68, 0.08); border-color: rgba(239, 68, 68, 0.4); border-right: 5px solid rgba(239, 68, 68, 0.6);">
 <h2>💰 خصومات التقصير</h2>
 <ul>
 <li>الحفاظ علي معايير الجودة والأداء 💎</li>
+<li><strong>خصم على فريق العمل كامل في حال وصول تقييم أقل من تقييم الفندق.</strong> التقييم الحالي: تقييم الكورنيش 8.7، تقييم الأندلس 8.2 — جوجل الكورنيش 4.3، جوجل الأندلس 4.3. بقيمة 10 ريال على كل تقييم سلبي من صافي كل موظف، ويُخصم حد أقصى 10 نقاط من تقييم كل موظف (بغض النظر عن عدد التقييمات السلبية).</li>
 <li class="highlight-red">تطبق إدارة التشغيل خصومات تتراوح بين 15% إلى 50% من صافي المستحق في حالات تقصير الموظفين وعدم اتباع التعليمات</li>
 <li>( فى حال عدم استلامك نسخه من التعليمات اطلب نسختك المطبوعه الان ).</li>
 <li>تُحدد نسبة الخصم بناءً على جسامة التأثير على جودة الخدمة، وتُسجل رسمياً في سجل وأرشيف الموظف وتؤثر على تقييم اداءه.</li>
@@ -7338,51 +7397,60 @@ function initializeFirebase() {
 const LIVE_PERIOD_PATH = 'periods/live.json';
 let syncLivePeriodTimer = null;
 
-/** يجلب آخر وضع الفترة الحية من Firebase. يُستخدم عند فتح التطبيق. يستخدم getBlob لتقليل الزمن وتجنب CORS (مثل admin_tokens). */
-async function fetchLivePeriodFromFirebase() {
-  const st = typeof storage !== 'undefined' ? storage : (typeof window !== 'undefined' ? window.storage : null);
+/** يُطبّع استجابة Firebase: يدعم صيغة الحية { db, branches, ... } وصيغة الأرشيف { data: { db, branches, ... } }. */
+function normalizePeriodPayload(raw) {
+  if (!raw || typeof raw !== 'object') return null;
+  var data = raw;
+  if (raw.data && typeof raw.data === 'object' && Array.isArray(raw.data.db)) data = raw.data;
+  if (!data || !Array.isArray(data.db)) return null;
+  return data;
+}
+
+/** جلب نص ملف من Firebase: getBlob أولاً، عند الفشل getDownloadURL + fetch (أفضل توافق في بعض المتصفحات). */
+async function fetchStorageJson(st, path) {
   if (!st || typeof st.ref !== 'function') return null;
+  var text = null;
   try {
-    const ref = st.ref(LIVE_PERIOD_PATH);
-    const blob = await ref.getBlob();
-    const text = typeof blob.text === 'function' ? await blob.text() : await new Promise((res, rej) => {
-      const r = new FileReader();
-      r.onload = () => res(r.result);
+    var ref = st.ref(path);
+    var blob = await ref.getBlob();
+    text = typeof blob.text === 'function' ? await blob.text() : await new Promise(function (res, rej) {
+      var r = new FileReader();
+      r.onload = function () { res(r.result); };
       r.onerror = rej;
       r.readAsText(blob);
     });
-    const data = JSON.parse(text);
-    if (!data || !Array.isArray(data.db)) return null;
-    return data;
-  } catch (e) {
+  } catch (e1) {
+    try {
+      var url = await st.ref(path).getDownloadURL();
+      var resp = await fetch(url);
+      if (resp && resp.ok) text = await resp.text();
+    } catch (e2) {}
+  }
+  if (!text) return null;
+  try {
+    return JSON.parse(text);
+  } catch (e3) {
     return null;
   }
+}
+
+/** يجلب آخر وضع الفترة الحية من Firebase. يُستخدم عند فتح التطبيق. */
+async function fetchLivePeriodFromFirebase() {
+  const st = typeof storage !== 'undefined' ? storage : (typeof window !== 'undefined' ? window.storage : null);
+  var parsed = await fetchStorageJson(st, LIVE_PERIOD_PATH);
+  return normalizePeriodPayload(parsed);
 }
 
 /** يجلب بيانات فترة محددة من Firebase (periods/{periodId}.json) — احتياطي عند فتح رابط إداري عندما live.json فارغ أو غير موجود. */
 async function fetchPeriodFromFirebase(periodId) {
   if (!periodId || typeof periodId !== 'string') return null;
-  // توحيد التنسيق: الملف يُكتب كـ 2026_01؛ الرابط قد يأتي بـ 2026-01
   var normalizedId = String(periodId).replace(/-/g, '_').trim();
   if (!normalizedId) return null;
   const st = typeof storage !== 'undefined' ? storage : (typeof window !== 'undefined' ? window.storage : null);
-  if (!st || typeof st.ref !== 'function') return null;
-  try {
-    const path = 'periods/' + normalizedId + '.json';
-    const ref = st.ref(path);
-    const blob = await ref.getBlob();
-    const text = typeof blob.text === 'function' ? await blob.text() : await new Promise((res, rej) => {
-      const r = new FileReader();
-      r.onload = () => res(r.result);
-      r.onerror = rej;
-      r.readAsText(blob);
-    });
-    const data = JSON.parse(text);
-    if (!data || !Array.isArray(data.db) || data.db.length === 0) return null;
-    return data;
-  } catch (e) {
-    return null;
-  }
+  var parsed = await fetchStorageJson(st, 'periods/' + normalizedId + '.json');
+  var data = normalizePeriodPayload(parsed);
+  if (!data || data.db.length === 0) return null;
+  return data;
 }
 
 /** آخر وقت تطبيق معروف من Firebase (لتجنّب استبدال بيانات أحدث بقديمة). */
@@ -7401,6 +7469,13 @@ function applyLivePeriod(data) {
     if (Array.isArray(data.discounts)) localStorage.setItem('adora_rewards_discounts', JSON.stringify(data.discounts));
     if (Array.isArray(data.discountTypes)) localStorage.setItem('adora_rewards_discountTypes', JSON.stringify(data.discountTypes));
     if (data.employeeCodes && typeof data.employeeCodes === 'object') localStorage.setItem('adora_rewards_employeeCodes', JSON.stringify(data.employeeCodes));
+    if (data.negativeRatingsCount && typeof data.negativeRatingsCount === 'object') {
+      try {
+        branchNegativeRatingsCount = data.negativeRatingsCount;
+        localStorage.setItem('adora_rewards_negativeRatingsCount', JSON.stringify(branchNegativeRatingsCount));
+        if (typeof window !== 'undefined') window.branchNegativeRatingsCount = branchNegativeRatingsCount;
+      } catch (_) {}
+    }
     if (data.lastModified != null) lastAppliedLiveModified = Number(data.lastModified) || 0;
   } catch (e) {
     console.warn('⚠️ applyLivePeriod:', e);
@@ -7413,7 +7488,15 @@ function syncLivePeriodToFirebase() {
   syncLivePeriodTimer = setTimeout(async () => {
     var role = (typeof localStorage !== 'undefined' && localStorage.getItem('adora_current_role')) || '';
     var hideSyncUI = (role === 'supervisor' || role === 'hr');
-    const st = typeof storage !== 'undefined' ? storage : (typeof window !== 'undefined' ? window.storage : null);
+    var st = typeof storage !== 'undefined' ? storage : (typeof window !== 'undefined' ? window.storage : null);
+    if (!st || typeof st.ref !== 'function') {
+      if (typeof initializeFirebase === 'function') initializeFirebase();
+      var waitStart = Date.now();
+      while (!(typeof window !== 'undefined' && window.storage) && (Date.now() - waitStart) < 6000) {
+        await new Promise(function (r) { setTimeout(r, 200); });
+      }
+      st = typeof window !== 'undefined' ? window.storage : null;
+    }
     if (!st || typeof st.ref !== 'function') return;
     if (!hideSyncUI && typeof showLoadingOverlay === 'function') showLoadingOverlay('جاري المزامنة...');
     try {
@@ -7430,16 +7513,17 @@ function syncLivePeriodToFirebase() {
         discounts: (() => { try { return JSON.parse(localStorage.getItem('adora_rewards_discounts') || '[]'); } catch (_) { return []; } })(),
         discountTypes: (() => { try { return JSON.parse(localStorage.getItem('adora_rewards_discountTypes') || '[]'); } catch (_) { return []; } })(),
         employeeCodes: (() => { try { return JSON.parse(localStorage.getItem('adora_rewards_employeeCodes') || '{}'); } catch (_) { return {}; } })(),
+        negativeRatingsCount: (() => { try { return JSON.parse(localStorage.getItem('adora_rewards_negativeRatingsCount') || '{}'); } catch (_) { return {}; } })(),
         lastModified: Date.now()
       };
       const blob = new Blob([JSON.stringify(payload)], { type: 'application/json' });
       await st.ref(LIVE_PERIOD_PATH).put(blob);
       if (payload.lastModified) lastAppliedLiveModified = payload.lastModified;
-      // كتابة نسخة حسب periodId (periods/2026_01.json) حتى يعمل رابط الإداري من أي جهاز
+      // كتابة نسخة حسب periodId (periods/2026_01.json) دائماً حتى يعمل رابط الإداري — استخدم startDate أو getCurrentPeriodId أو الشهر الحالي
       var startDate = payload.reportStartDate || localStorage.getItem('adora_rewards_startDate');
-      if (startDate && /^\d{4}-\d{2}-\d{2}/.test(String(startDate))) {
-        var periodId = String(startDate).substring(0, 7).replace('-', '_');
-        try { await st.ref('periods/' + periodId + '.json').put(blob); } catch (_) {}
+      var periodIdForWrite = (startDate && /^\d{4}-\d{2}-\d{2}/.test(String(startDate))) ? String(startDate).substring(0, 7).replace('-', '_') : (typeof window.getCurrentPeriodId === 'function' ? window.getCurrentPeriodId() : (new Date().getFullYear() + '_' + String(new Date().getMonth() + 1).padStart(2, '0')));
+      if (periodIdForWrite) {
+        try { await st.ref('periods/' + periodIdForWrite + '.json').put(blob); } catch (_) {}
       }
     } catch (e) {
       // صامت عند الفشل لئلا نزعج المستخدم
@@ -7447,6 +7531,27 @@ function syncLivePeriodToFirebase() {
       if (!hideSyncUI && typeof hideLoadingOverlay === 'function') hideLoadingOverlay();
     }
   }, 150);
+}
+
+/** دفع قيم حقول HR (أيام الحضور) من الـ DOM إلى db و localStorage قبل الرفع — لضمان أن إرسال HR يحفظ مثل المشرف حتى لو لم يُنفَّذ blur. */
+function flushAdminInputsToStorage() {
+  try {
+    if (typeof db === 'undefined' || !db.length) return;
+    var inputs = document.querySelectorAll('.attendance-days-input');
+    inputs.forEach(function (el) {
+      var name = el.getAttribute('data-emp-name');
+      var branch = el.getAttribute('data-emp-branch');
+      if (!name || !branch) return;
+      var val = parseInt(el.value, 10) || 0;
+      if (typeof updateAttendanceDaysForBranch === 'function') {
+        updateAttendanceDaysForBranch(name, branch, val, false);
+      }
+    });
+    if (typeof db !== 'undefined' && db && db.length > 0) {
+      localStorage.setItem('adora_rewards_db', JSON.stringify(db));
+      if (typeof window !== 'undefined') window.db = db;
+    }
+  } catch (e) {}
 }
 
 /** مزامنة فورية (بدون debounce) — تُستدعى عند الضغط على إرسال في المشرف/HR. تُرجع Promise. إذا Firebase غير جاهز: ننتظر ثم نرفض حتى يظهر للمستخدم خطأ. */
@@ -7480,15 +7585,16 @@ function doSyncLivePeriodNow() {
         discounts: (function () { try { return JSON.parse(localStorage.getItem('adora_rewards_discounts') || '[]'); } catch (_) { return []; } })(),
         discountTypes: (function () { try { return JSON.parse(localStorage.getItem('adora_rewards_discountTypes') || '[]'); } catch (_) { return []; } })(),
         employeeCodes: (function () { try { return JSON.parse(localStorage.getItem('adora_rewards_employeeCodes') || '{}'); } catch (_) { return {}; } })(),
+        negativeRatingsCount: (function () { try { return JSON.parse(localStorage.getItem('adora_rewards_negativeRatingsCount') || '{}'); } catch (_) { return {}; } })(),
         lastModified: Date.now()
       };
       var blob = new Blob([JSON.stringify(payload)], { type: 'application/json' });
       await st.ref(LIVE_PERIOD_PATH).put(blob);
       if (payload.lastModified && typeof lastAppliedLiveModified !== 'undefined') lastAppliedLiveModified = payload.lastModified;
       var startDate = payload.reportStartDate || (typeof localStorage !== 'undefined' ? localStorage.getItem('adora_rewards_startDate') : null);
-      if (startDate && /^\d{4}-\d{2}-\d{2}/.test(String(startDate))) {
-        var periodId = String(startDate).substring(0, 7).replace('-', '_');
-        try { await st.ref('periods/' + periodId + '.json').put(blob); } catch (_) {}
+      var periodIdForWrite = (startDate && /^\d{4}-\d{2}-\d{2}/.test(String(startDate))) ? String(startDate).substring(0, 7).replace('-', '_') : (typeof window.getCurrentPeriodId === 'function' ? window.getCurrentPeriodId() : (new Date().getFullYear() + '_' + String(new Date().getMonth() + 1).padStart(2, '0')));
+      if (periodIdForWrite) {
+        try { await st.ref('periods/' + periodIdForWrite + '.json').put(blob); } catch (_) {}
       }
       resolve();
     } catch (e) {
@@ -7499,7 +7605,7 @@ function doSyncLivePeriodNow() {
 
 /** جلب دوري لآخر وضع الفترة من Firebase وتحديث الواجهة — الأدمن كل ثانية (تحديث فوري بعد إرسال المشرف/HR)، وباقي الأدوار كل 15 ثانية. */
 const LIVE_POLL_INTERVAL_MS = 15000;
-const ADMIN_POLL_INTERVAL_MS = 1000;
+const ADMIN_POLL_INTERVAL_MS = 12000;
 let livePollTimerId = null;
 
 function startLivePeriodPolling() {
@@ -7526,6 +7632,7 @@ function startLivePeriodPolling() {
         if (typeof applyLivePeriod === 'function') applyLivePeriod(data);
         lastAppliedLiveModified = remoteModified;
         db = data.db;
+        if (typeof normalizeDuplicateAttendance === 'function') normalizeDuplicateAttendance(db);
         if (typeof window !== 'undefined') window.db = db;
         branches = new Set(Array.isArray(data.branches) ? data.branches : []);
         if (data.reportStartDate != null) reportStartDate = data.reportStartDate;
@@ -7572,6 +7679,47 @@ function stopLivePeriodPolling() {
   }
 }
 
+/** تحميل التحديثات من Firebase يدوياً (للأدمن فقط) — قراءة واحدة عند الطلب فقط، بدون قفل الصفحة ولا قراءات تلقائية */
+async function refreshLivePeriodFromFirebase() {
+  if (typeof isAdminMode !== 'function' || !isAdminMode()) return;
+  var btn = document.getElementById('refreshLiveBtn');
+  try {
+    if (btn) { btn.disabled = true; btn.setAttribute('aria-busy', 'true'); }
+    var data = typeof fetchLivePeriodFromFirebase === 'function' ? await fetchLivePeriodFromFirebase() : null;
+    if (!data || !Array.isArray(data.db) || data.db.length === 0) {
+      if (typeof showToast === 'function') showToast('لا توجد تحديثات جديدة أو فشل التحميل', 'info');
+      return;
+    }
+    var remoteModified = Number(data.lastModified) || 0;
+    if (typeof applyLivePeriod === 'function') applyLivePeriod(data);
+    lastAppliedLiveModified = remoteModified;
+    if (typeof db !== 'undefined') db = data.db;
+    if (typeof normalizeDuplicateAttendance === 'function' && Array.isArray(db)) normalizeDuplicateAttendance(db);
+    if (typeof window !== 'undefined') window.db = db;
+    if (typeof branches !== 'undefined') branches = new Set(Array.isArray(data.branches) ? data.branches : []);
+    if (data.reportStartDate != null && typeof reportStartDate !== 'undefined') reportStartDate = data.reportStartDate;
+    if (data.evalRate != null && typeof currentEvalRate !== 'undefined') currentEvalRate = parseInt(data.evalRate, 10) || 20;
+    if (Array.isArray(data.discounts) && typeof discounts !== 'undefined') { try { discounts = data.discounts; if (window.discounts !== undefined) window.discounts = data.discounts; } catch (_) {} }
+    if (Array.isArray(data.discountTypes) && typeof discountTypes !== 'undefined') { try { discountTypes = data.discountTypes; if (window.discountTypes !== undefined) window.discountTypes = data.discountTypes; } catch (_) {} }
+    if (data.employeeCodes && typeof data.employeeCodes === 'object' && typeof employeeCodesMap !== 'undefined') { try { employeeCodesMap = data.employeeCodes; if (typeof window !== 'undefined') window.employeeCodesMap = employeeCodesMap; } catch (_) {} }
+    if (data.negativeRatingsCount && typeof data.negativeRatingsCount === 'object' && typeof branchNegativeRatingsCount !== 'undefined') { try { branchNegativeRatingsCount = data.negativeRatingsCount; localStorage.setItem('adora_rewards_negativeRatingsCount', JSON.stringify(branchNegativeRatingsCount)); if (typeof window !== 'undefined') window.branchNegativeRatingsCount = branchNegativeRatingsCount; } catch (_) {} }
+    if (data.periodText != null) {
+      var periodRangeEl = document.getElementById('periodRange');
+      var headerPeriodRangeEl = document.getElementById('headerPeriodRange');
+      if (periodRangeEl) periodRangeEl.innerText = data.periodText;
+      if (headerPeriodRangeEl) headerPeriodRangeEl.innerText = data.periodText;
+    }
+    if (typeof renderUI === 'function' && typeof currentFilter !== 'undefined') requestAnimationFrame(function () { renderUI(currentFilter); });
+    if (typeof updateFilters === 'function') updateFilters();
+    if (typeof updatePrintButtonText === 'function') updatePrintButtonText();
+    if (typeof showToast === 'function') showToast('تم تحميل التحديثات من المشرف/HR', 'success');
+  } catch (e) {
+    if (typeof showToast === 'function') showToast('فشل تحميل التحديثات', 'error');
+  } finally {
+    if (btn) { btn.disabled = false; btn.removeAttribute('aria-busy'); }
+  }
+}
+
 if (typeof window !== 'undefined') {
   window.initializeFirebase = initializeFirebase;
   window.syncLivePeriodToFirebase = syncLivePeriodToFirebase;
@@ -7581,6 +7729,7 @@ if (typeof window !== 'undefined') {
   window.applyLivePeriod = applyLivePeriod;
   window.startLivePeriodPolling = startLivePeriodPolling;
   window.stopLivePeriodPolling = stopLivePeriodPolling;
+  window.refreshLivePeriodFromFirebase = refreshLivePeriodFromFirebase;
 }
 
 // Wait for Firebase SDK to load
