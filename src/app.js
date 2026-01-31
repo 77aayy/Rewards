@@ -7362,10 +7362,13 @@ async function fetchLivePeriodFromFirebase() {
 /** يجلب بيانات فترة محددة من Firebase (periods/{periodId}.json) — احتياطي عند فتح رابط إداري عندما live.json فارغ أو غير موجود. */
 async function fetchPeriodFromFirebase(periodId) {
   if (!periodId || typeof periodId !== 'string') return null;
+  // توحيد التنسيق: الملف يُكتب كـ 2026_01؛ الرابط قد يأتي بـ 2026-01
+  var normalizedId = String(periodId).replace(/-/g, '_').trim();
+  if (!normalizedId) return null;
   const st = typeof storage !== 'undefined' ? storage : (typeof window !== 'undefined' ? window.storage : null);
   if (!st || typeof st.ref !== 'function') return null;
   try {
-    const path = 'periods/' + periodId + '.json';
+    const path = 'periods/' + normalizedId + '.json';
     const ref = st.ref(path);
     const blob = await ref.getBlob();
     const text = typeof blob.text === 'function' ? await blob.text() : await new Promise((res, rej) => {

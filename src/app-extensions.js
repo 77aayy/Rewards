@@ -8,10 +8,11 @@ function generateAdminToken() {
 }
 
 // Get current period ID (based on header period range أو من الرابط عند الدخول برابط إداري أو startDate بعد استعادة فترة مغلقة)
+// يُرجع دائماً بصيغة YYYY_MM (شرطة سفلية) لأن Firebase يُخزّن الملفات بهذا الشكل (periods/2026_01.json)
 function getCurrentPeriodId() {
   if (typeof window !== 'undefined' && window.location && window.location.search) {
     const p = new URLSearchParams(window.location.search).get('period');
-    if (p) return p;
+    if (p) return String(p).replace(/-/g, '_');
   }
   try {
     const startDate = typeof localStorage !== 'undefined' ? localStorage.getItem('adora_rewards_startDate') : null;
@@ -22,9 +23,10 @@ function getCurrentPeriodId() {
   const periodText = document.getElementById('headerPeriodRange')?.innerText || '';
   if (!periodText || periodText === '-') {
     const now = new Date();
-    return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
+    return now.getFullYear() + '_' + String(now.getMonth() + 1).padStart(2, '0');
   }
-  return periodText.replace(/\s+/g, '-').replace(/[^a-zA-Z0-9-]/g, '');
+  var raw = periodText.replace(/\s+/g, '-').replace(/[^a-zA-Z0-9-]/g, '');
+  return raw ? raw.replace(/-/g, '_') : (new Date().getFullYear() + '_' + String(new Date().getMonth() + 1).padStart(2, '0'));
 }
 
 // Safe parse of archived periods from localStorage (returns array)
@@ -204,12 +206,14 @@ function showAdminManagementModal() {
         } catch (syncErr) {
           if (typeof showToast === 'function') showToast('فشل تحديث Firebase — تحقق من الاتصال وجرّب فتح «إدارة الإداريين» مرة أخرى', 'error');
         }
+      } else if (!hasData) {
+        if (typeof showToast === 'function') showToast('يجب رفع ملف الفترة أولاً ثم فتح هذه النافذة لتفعيل الروابط للإداريين', 'error');
       }
     } catch (_) {}
     saveAdminTokens();
     setTimeout(saveAdminTokens, 2000);
     setTimeout(saveAdminTokens, 5000);
-    populateAdminManagementModal();
+    populateAdminManagementModal(hasData);
     modal.classList.remove('hidden');
     modal.style.display = 'flex';
   })();
@@ -225,14 +229,19 @@ function closeAdminManagementModal(event) {
   }
 }
 
-// Populate admin management modal
-function populateAdminManagementModal() {
+// Populate admin management modal — hasData: إن كان false يُعرض تحذير أن رفع الملف ضروري لتفعيل الروابط
+function populateAdminManagementModal(hasData) {
   const container = document.getElementById('adminManagementContent');
   if (!container) return;
   
   const periodId = getCurrentPeriodId();
   const tokens = adminTokens[periodId] || {};
   const periodTextAdminMgmt = (document.getElementById('headerPeriodRange') && document.getElementById('headerPeriodRange').innerText) ? document.getElementById('headerPeriodRange').innerText : 'غير محدد';
+  
+  var html = '';
+  if (hasData === false) {
+    html += '<div class="mb-6 p-4 rounded-xl border-2 border-amber-500/50 bg-amber-500/10 text-amber-200" role="alert"><p class="font-bold mb-1">⚠️ يجب رفع ملف الفترة أولاً</p><p class="text-sm text-gray-300">الروابط أدناه لن تعمل للمشرف و HR حتى ترفع ملف الإكسيل ثم تفتح «إدارة الإداريين» مرة أخرى لتحديث Firebase.</p></div>';
+  }
   
   const roles = [
     { key: 'supervisor', label: 'المشرف', icon: '👨‍💼', description: 'إدخال تقييمات بوكينج وجوجل' },
@@ -241,7 +250,7 @@ function populateAdminManagementModal() {
     { key: 'manager', label: 'المدير العام', icon: '👑', description: 'عرض الإحصائيات فقط' }
   ];
   
-  let html = '<div class="grid grid-cols-1 md:grid-cols-2 gap-4">';
+  html += '<div class="grid grid-cols-1 md:grid-cols-2 gap-4">';
   
   roles.forEach(role => {
     const admin = tokens[role.key] || { token: generateAdminToken(), name: '', createdAt: new Date().toISOString(), active: true };
