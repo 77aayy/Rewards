@@ -1,3 +1,11 @@
+// === Verbose logging: تفصيلي في التطوير فقط، إيقاف في الإنتاج ===
+function logVerbose() {
+  try {
+    if (typeof window !== 'undefined' && window.location && (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1'))
+      console.log.apply(console, arguments);
+  } catch (e) {}
+}
+
 // === Role-Based Access Control (RBAC) ===
 // تحويل رابط المسار إلى query: /supervisor/TOKEN/2026_01 → ?role=supervisor&token=TOKEN&period=2026_01 (إعادة تحميل لقراءة الـ params)
 (function () {
@@ -97,6 +105,9 @@ function loadEmployeeCodesMap() {
 // === Security: Admin Secret Key ===
 // غيّر هذا المفتاح قبل النشر — راجع SECURITY.md (قسم "مفتاح الأدمن")
 const ADMIN_SECRET_KEY = 'ayman5255'; // Change before production — see SECURITY.md
+if (typeof window !== 'undefined') {
+  window.getAdminSecretKey = function () { return ADMIN_SECRET_KEY; };
+}
 
 // === Security: Check if user is in employee mode ===
 function isEmployeeMode() {
@@ -111,6 +122,14 @@ function isAdminMode() {
   return adminKey === ADMIN_SECRET_KEY;
 }
 
+// Security: عند التطوير المحلي (localhost/127.0.0.1) بدون params يُسمح بالدخول للاختبار
+function isLocalDevAllowed() {
+  if (typeof window === 'undefined' || !window.location || !window.location.hostname) return false;
+  var h = window.location.hostname;
+  if (h !== 'localhost' && h !== '127.0.0.1') return false;
+  return !role && !token && !period && !code;
+}
+
 // Load data from localStorage on page load
 function loadDataFromStorage() {
 try {
@@ -121,13 +140,6 @@ if (isEmployeeMode()) {
 }
 
 // Security: Allow admin، أو من فتح برابط إداري (role+token+period) وقد تم التحقق منه في أعلى الملف
-// عند التطوير المحلي (localhost/127.0.0.1) بدون params يُسمح بالدخول للاختبار
-function isLocalDevAllowed() {
-  if (typeof window === 'undefined' || !window.location || !window.location.hostname) return false;
-  var h = window.location.hostname;
-  if (h !== 'localhost' && h !== '127.0.0.1') return false;
-  return !role && !token && !period && !code;
-}
 const isRbacFromUrl = role && token && period && localStorage.getItem('adora_current_role') === role;
 if (!isAdminMode() && !isRbacFromUrl && !isLocalDevAllowed()) {
   // Not admin, not employee, not valid RBAC link, and not local dev - block access
@@ -218,6 +230,9 @@ console.log('✅ Data loaded from localStorage');
 }
 } catch (error) {
 console.error('❌ Error loading from localStorage:', error);
+db = [];
+branches = new Set();
+if (typeof window !== 'undefined') { window.db = db; }
 }
 }
 // Function to return to upload page
@@ -270,24 +285,6 @@ if (typeof window !== 'undefined' && window.location) {
 } catch (error) {
 console.error('❌ Error clearing:', error);
 }
-db = [];
-if (typeof window !== 'undefined') {
-  window.db = db;
-}
-branches = new Set();
-currentFilter = 'الكل';
-if (typeof stopLivePeriodPolling === 'function') stopLivePeriodPolling();
-currentEvalRate = clearPeriodData ? 20 : (parseInt(localStorage.getItem('adora_rewards_evalRate'), 10) || 20);
-reportStartDate = clearPeriodData ? null : (localStorage.getItem('adora_rewards_startDate') || null);
-// Show upload box and hide dashboard
-document.getElementById('uploadBox').classList.remove('hidden');
-document.getElementById('dashboard').classList.add('hidden');
-document.getElementById('actionBtns').style.display = 'none';
-// Clear file input
-const fileInput = document.getElementById('fileInput');
-if (fileInput) {
-fileInput.value = '';
-}
 }
 let currentSort = { key: 'net', order: 'desc' }; // Default: sort by net (highest first)
 // === Sorting ===
@@ -301,6 +298,7 @@ function updateSortIcons() {
 // === Initialize Particles ===
 function createParticles() {
 const container = document.getElementById('particles');
+if (!container) return;
 for (let i = 0; i < 30; i++) {
 const particle = document.createElement('div');
 particle.className = 'particle';
@@ -311,7 +309,11 @@ particle.style.animationDuration = (15 + Math.random() * 10) + 's';
 container.appendChild(particle);
 }
 }
-createParticles();
+if (document.readyState === 'loading') {
+  document.addEventListener('DOMContentLoaded', createParticles);
+} else {
+  createParticles();
+}
 
 async function doAppInit() {
   var urlRole = (typeof window !== 'undefined' && window.location && window.location.search) ? new URLSearchParams(window.location.search).get('role') : null;
@@ -361,24 +363,25 @@ async function doAppInit() {
       try {
         if (typeof initializeFirebase === 'function') initializeFirebase();
         var waitStart = Date.now();
-        var maxWaitMs = 8000;
+        var maxWaitMs = 12000;
         while (!(typeof window !== 'undefined' && window.storage) && (Date.now() - waitStart) < maxWaitMs) {
           await new Promise(function (r) { setTimeout(r, 150); });
         }
         var live = null;
         // أولاً: جلب periods/periodId.json (الملف الذي يُكتب عند فتح «إدارة الإداريين») — أنسب لفتح الرابط لأول مرة على جهاز الموظف
         if (urlPeriod && typeof fetchPeriodFromFirebase === 'function') {
-          live = await fetchPeriodFromFirebase(urlPeriod);
-          if (!live && (Date.now() - waitStart) < maxWaitMs - 500) await new Promise(function (r) { setTimeout(r, 800); });
-          if (!live) live = await fetchPeriodFromFirebase(urlPeriod);
+          for (var attemptPeriod = 0; attemptPeriod < 4 && !live; attemptPeriod++) {
+            live = await fetchPeriodFromFirebase(urlPeriod);
+            if (!live && attemptPeriod < 3) await new Promise(function (r) { setTimeout(r, 1200); });
+          }
         }
         // ثانياً: إن لم يُحمّل، جرب live.json (قد يكون محدّثاً من جهاز آخر)
         if (!live || !Array.isArray(live.db) || live.db.length === 0) {
-          var maxAttempts = 3;
+          var maxAttempts = 4;
           for (var attempt = 0; attempt < maxAttempts; attempt++) {
             if (typeof fetchLivePeriodFromFirebase === 'function') live = await fetchLivePeriodFromFirebase();
             if (live && Array.isArray(live.db) && live.db.length > 0) break;
-            if (attempt < maxAttempts - 1) await new Promise(function (r) { setTimeout(r, 1000); });
+            if (attempt < maxAttempts - 1) await new Promise(function (r) { setTimeout(r, 1200); });
           }
         }
         // احتياطي أخير: إعادة محاولة periods/periodId.json
@@ -432,26 +435,29 @@ async function doAppInit() {
     if (!isEmployeeMode() && typeof syncLivePeriodToFirebase === 'function') syncLivePeriodToFirebase();
     return;
   }
-  // Firebase-First للجميع: جلب الفترة من Firebase أولاً (أدمن، مشرف، HR، حسابات، مدير) ثم استخدام localStorage كـ cache احتياطي
+  // Firebase-First للجميع: جلب الفترة من Firebase أولاً (أدمن، مشرف، HR، حسابات، مدير) — لا اعتماد على localStorage إلا كاحتياطي
   try {
     if (typeof initializeFirebase === 'function') initializeFirebase();
     var waitStart = Date.now();
-    var maxWaitMs = 10000;
+    var maxWaitMs = 12000;
     while (!(typeof window !== 'undefined' && window.storage) && (Date.now() - waitStart) < maxWaitMs) {
       await new Promise(function (r) { setTimeout(r, 150); });
     }
     var live = null;
-    // محاولة جلب من live.json أولاً (آخر نسخة محدثة)
-    if (typeof fetchLivePeriodFromFirebase === 'function') live = await fetchLivePeriodFromFirebase();
-    // إن لم يُحمّل: جرب periods/periodId.json (حسب الشهر الحالي أو من localStorage)
-    if (!live || !Array.isArray(live.db) || live.db.length === 0) {
-      var periodId = null;
-      try {
-        var startDate = localStorage.getItem('adora_rewards_startDate');
-        if (startDate && /^\d{4}-\d{2}-\d{2}/.test(startDate)) periodId = startDate.substring(0, 7).replace('-', '_');
-      } catch (_) {}
-      if (!periodId) periodId = new Date().getFullYear() + '_' + String(new Date().getMonth() + 1).padStart(2, '0');
-      if (typeof fetchPeriodFromFirebase === 'function') live = await fetchPeriodFromFirebase(periodId);
+    var periodId = null;
+    try {
+      var startDate = localStorage.getItem('adora_rewards_startDate');
+      if (startDate && /^\d{4}-\d{2}-\d{2}/.test(startDate)) periodId = startDate.substring(0, 7).replace('-', '_');
+    } catch (_) {}
+    if (!periodId) periodId = new Date().getFullYear() + '_' + String(new Date().getMonth() + 1).padStart(2, '0');
+    for (var attempt = 0; attempt < 4 && (!live || !Array.isArray(live.db) || live.db.length === 0); attempt++) {
+      if (typeof fetchLivePeriodFromFirebase === 'function') live = await fetchLivePeriodFromFirebase();
+      if (!live || !Array.isArray(live.db) || live.db.length === 0) {
+        if (typeof fetchPeriodFromFirebase === 'function') live = await fetchPeriodFromFirebase(periodId);
+      }
+      if (!live || !Array.isArray(live.db) || live.db.length === 0) {
+        if (attempt < 3) await new Promise(function (r) { setTimeout(r, 800); });
+      }
     }
     // إذا جلبنا بيانات من Firebase: نطبقها ونعرض اللوحة
     if (!isEmployeeMode() && live && Array.isArray(live.db) && live.db.length > 0 && typeof applyLivePeriod === 'function') {
@@ -490,7 +496,12 @@ async function doAppInit() {
   }
   if (!isEmployeeMode() && typeof syncLivePeriodToFirebase === 'function') syncLivePeriodToFirebase();
   if (!isEmployeeMode() && typeof startLivePeriodPolling === 'function') startLivePeriodPolling();
-  if (isAdminMode()) return;
+  if (isAdminMode()) {
+    if (db.length > 0 && typeof doSyncLivePeriodNow === 'function') {
+      doSyncLivePeriodNow().catch(function () {});
+    }
+    return;
+  }
   var currentRole = typeof localStorage !== 'undefined' ? localStorage.getItem('adora_current_role') : null;
   // عدم تطبيق دور من localStorage إلا عندما الرابط نفسه مصرح (role+token+period) حتى لا يظهر بانر «مرحباً، HR/المشرف» فوق صفحة غير مصرح
   var urlAuthorizedRole = urlRole && urlToken && urlPeriod && currentRole === urlRole;
@@ -566,10 +577,17 @@ function doRbacThenInit() {
           }
         } catch (e) { if (console && console.warn) console.warn(e); }
       }
-      var reason = v.reason || 'الرابط غير صحيح أو الفترة مغلقة';
-      if (reason === 'الفترة غير موجودة') {
-        reason = 'تعذّر جلب بيانات الرابط من الخادم. تأكد أن الأدمن نسخ الرابط من «إدارة الإداريين» بعد رفع ملف الفترة، وأن اتصال الإنترنت يعمل.';
+      var rawReason = v.reason || 'الرابط غير صحيح أو الفترة مغلقة';
+      if (rawReason === 'الفترة غير موجودة') {
+        rawReason = 'تعذّر جلب بيانات الرابط من الخادم. تأكد أن الأدمن نسخ الرابط من «إدارة الإداريين» بعد رفع ملف الفترة، وأن اتصال الإنترنت يعمل.';
       }
+      function escapeHtml(s) {
+        if (s == null || typeof s !== 'string') return '';
+        var div = document.createElement('div');
+        div.textContent = s;
+        return div.innerHTML;
+      }
+      var reason = escapeHtml(rawReason);
       var adminErrorHtml = '<div style="display:flex;align-items:center;justify-content:center;min-height:100vh;background:linear-gradient(135deg,#0f172a 0%,#1a1f35 100%);color:#fff;font-family:\'IBM Plex Sans Arabic\',Arial,sans-serif;padding:1rem;">' +
         '<div style="text-align:center;padding:2rem;max-width:580px;">' +
         '<div style="font-size:4rem;margin-bottom:1rem;">🔒</div>' +
@@ -630,9 +648,24 @@ if (document.readyState === 'loading') {
   document.addEventListener('keydown', onKeyDown);
 })();
 // === File Upload Handler ===
+var EXCEL_MAX_SIZE_BYTES = 10 * 1024 * 1024; // 10MB
+var EXCEL_ALLOWED_TYPES = ['application/vnd.openxmlformats-officedocument.spreadsheetml.sheet', 'application/vnd.ms-excel'];
+var EXCEL_ALLOWED_EXT = /\.xlsx?$/i;
+function isExcelFileAllowed(file) {
+  if (!file || !file.name) return false;
+  if (file.size <= 0 || file.size > EXCEL_MAX_SIZE_BYTES) return false;
+  var extOk = EXCEL_ALLOWED_EXT.test(file.name);
+  var typeOk = EXCEL_ALLOWED_TYPES.indexOf(file.type) !== -1 || file.type === '' || file.type === 'application/octet-stream';
+  return extOk && typeOk;
+}
 document.getElementById('fileInput').addEventListener('change', (e) => {
 const file = e.target.files[0];
 if (!file) return;
+if (!isExcelFileAllowed(file)) {
+  showToast('الرجاء رفع ملف إكسيل (.xlsx) بحجم لا يتجاوز 10 ميجابايت', 'error');
+  e.target.value = '';
+  return;
+}
 const reader = new FileReader();
 reader.onload = async (evt) => {
 if (typeof showLoadingOverlay === 'function') showLoadingOverlay('جاري تحميل الملف...');
@@ -641,18 +674,25 @@ const wb = XLSX.read(new Uint8Array(evt.target.result), { type: 'array' });
 const sheet = wb.Sheets[wb.SheetNames[0]];
 // 1. Parse with formatting for robust Date Extraction
 const rowsFormatted = XLSX.utils.sheet_to_json(sheet, { header: 1, raw: false, dateNF: 'yyyy-mm-dd' });
-// --- Robust Date Extraction ---
+// --- Robust Date Extraction (extracted to parseExcelDates for maintainability) ---
+var dateResult = parseExcelDates(rowsFormatted);
+reportStartDate = dateResult.minDate || null;
+var periodText = dateResult.periodText || '';
+var periodRangeEl = document.getElementById('periodRange');
+if (periodRangeEl) periodRangeEl.innerText = periodText;
+var headerPeriodRangeEl = document.getElementById('headerPeriodRange');
+if (headerPeriodRangeEl) headerPeriodRangeEl.innerText = periodText;
+if (periodText) localStorage.setItem('adora_rewards_periodText', periodText);
+// ---- end date extraction ----
+function parseExcelDates(rowsFormatted) {
 // Matches YYYY-MM-DD (from Excel format) or DD/MM/YYYY (from text cells)
-// Also matches dates with time: YYYY-MM-DD HH:MM:SS or DD/MM/YYYY HH:MM:SS
 const datePattern = /(\d{4}-\d{2}-\d{2}(?:\s+\d{2}:\d{2}(?::\d{2})?)?)|(\d{1,2}\/\d{1,2}\/\d{4}(?:\s+\d{2}:\d{2}(?::\d{2})?)?)/g;
 let minDate = null;
 let maxDate = null;
-// Store minDate globally for report month name
-reportStartDate = null;
 // Search for "التاريخ من" and "التاريخ الي" in ALL rows (not just first 20)
 // التاريخ ممكن يتغير من صف إلى صف آخر
 // First pass: Look for exact labels "التاريخ من" and "التاريخ الي" in ALL rows
-console.log('🔍 Starting date extraction from Excel...');
+logVerbose('🔍 Starting date extraction from Excel...');
 rowsFormatted.forEach((row, rowIndex) => {
 row.forEach((cell, cellIndex) => {
 if (!cell) return;
@@ -662,7 +702,7 @@ const lowerStr = str.toLowerCase();
 const isDateFrom = lowerStr.includes('التاريخ من') || lowerStr.includes('date from');
 const isDateTo = lowerStr.includes('التاريخ الي') || lowerStr.includes('التاريخ إلى') || lowerStr.includes('date to');
 if (isDateFrom || isDateTo) {
-console.log(`📍 Found date label at row ${rowIndex}, cell ${cellIndex}:`, str);
+logVerbose('📍 Found date label at row', rowIndex, 'cell', cellIndex, ':', str);
 // Apply same logic as employee name extraction: search ALL cells in the row
 // But prioritize dates CLOSER to the label in the CORRECT direction
 let foundDate = false;
@@ -678,7 +718,7 @@ if (distance > 30) return;
 // Determine direction: BEFORE (left) or AFTER (right) the label
 const isBefore = i < cellIndex;
 const isAfter = i > cellIndex;
-console.log(`  Checking cell ${i} (distance: ${distance}, ${isBefore ? 'BEFORE' : isAfter ? 'AFTER' : 'SAME'}):`, cellStr.substring(0, 50));
+logVerbose('  Checking cell', i, '(distance:', distance, isBefore ? 'BEFORE' : isAfter ? 'AFTER' : 'SAME', '):', cellStr.substring(0, 50));
 let iso = null;
 // Pattern 1: Standard date formats (YYYY-MM-DD or DD/MM/YYYY, with optional time)
 const dateMatches = cellStr.match(datePattern);
@@ -711,7 +751,7 @@ if (year === 2026) {
 const month = String(excelDate.getMonth() + 1).padStart(2, '0');
 const day = String(excelDate.getDate()).padStart(2, '0');
 iso = `${year}-${month}-${day}`;
-console.log(`  📅 Parsed Excel serial ${serial} to date:`, iso);
+logVerbose('  📅 Parsed Excel serial', serial, 'to date:', iso);
 }
 }
 }
@@ -774,14 +814,14 @@ shouldUse = false;
 if (shouldUse) {
 closestDate = iso;
 closestDistance = distance;
-console.log(`  ✅ Found ${isDateFrom ? 'minDate' : 'maxDate'} candidate in cell ${i} (distance: ${distance}, ${isBefore ? 'BEFORE' : isAfter ? 'AFTER' : 'SAME'}):`, iso);
+logVerbose('  ✅ Found', isDateFrom ? 'minDate' : 'maxDate', 'candidate in cell', i, ':', iso);
 }
 }
 }
 });
 // Use the closest date found
 if (closestDate) {
-console.log(`  ✅ Using closest ${isDateFrom ? 'minDate' : 'maxDate'}:`, closestDate, `(distance: ${closestDistance})`);
+logVerbose('  ✅ Using closest', isDateFrom ? 'minDate' : 'maxDate', ':', closestDate, '(distance:', closestDistance, ')');
 if (isDateFrom && !minDate) {
 minDate = closestDate;
 foundDate = true;
@@ -800,7 +840,7 @@ for (let colOffset = -5; colOffset <= 5; colOffset++) {
 const checkCol = cellIndex + colOffset;
 if (checkCol >= 0 && checkCol < nextRow.length && nextRow[checkCol]) {
 const nextRowStr = String(nextRow[checkCol]).trim();
-console.log(`  Checking next row, column ${checkCol}:`, nextRowStr.substring(0, 50));
+logVerbose('  Checking next row, column', checkCol, ':', nextRowStr.substring(0, 50));
 let iso = null;
 // Try standard date patterns
 const dateMatches = nextRowStr.match(datePattern);
@@ -823,7 +863,7 @@ if (year === 2026) {
 const month = String(excelDate.getMonth() + 1).padStart(2, '0');
 const day = String(excelDate.getDate()).padStart(2, '0');
 iso = `${year}-${month}-${day}`;
-console.log(`  📅 Parsed Excel serial ${serial} to date:`, iso);
+logVerbose('  📅 Parsed Excel serial', serial, 'to date:', iso);
 }
 }
 }
@@ -832,10 +872,10 @@ if (iso) {
 // Verify date is in 2026 to avoid wrong dates
 const dateYear = iso.split('-')[0];
 if (dateYear !== '2026') {
-console.log('  ⚠️ Skipping date not in 2026:', iso);
+logVerbose('  ⚠️ Skipping date not in 2026:', iso);
 continue; // Skip dates not in 2026
 }
-console.log(`  ✅ Found ${isDateFrom ? 'minDate' : 'maxDate'} in next row:`, iso);
+logVerbose('  ✅ Found', isDateFrom ? 'minDate' : 'maxDate', 'in next row:', iso);
 if (isDateFrom && !minDate) {
 minDate = iso;
 foundDate = true;
@@ -852,13 +892,13 @@ break;
 // Also check previous row (in case date is above the label) - expanded range
 if (rowIndex > 0 && ((isDateFrom && !minDate) || (isDateTo && !maxDate))) {
 const prevRow = rowsFormatted[rowIndex - 1];
-console.log(`  Checking previous row (row ${rowIndex - 1}) around column ${cellIndex}...`);
+logVerbose('  Checking previous row (row', rowIndex - 1, ') around column', cellIndex, '...');
 // Expanded range: check ±10 columns around the label position
 for (let colOffset = -10; colOffset <= 10; colOffset++) {
 const checkCol = cellIndex + colOffset;
 if (checkCol >= 0 && checkCol < prevRow.length && prevRow[checkCol]) {
 const prevRowStr = String(prevRow[checkCol]).trim();
-console.log(`  Checking previous row, column ${checkCol}:`, prevRowStr.substring(0, 50));
+logVerbose('  Checking previous row, column', checkCol, ':', prevRowStr.substring(0, 50));
 let iso = null;
 // Try standard date patterns
 const dateMatches = prevRowStr.match(datePattern);
@@ -881,7 +921,7 @@ if (year === 2026) {
 const month = String(excelDate.getMonth() + 1).padStart(2, '0');
 const day = String(excelDate.getDate()).padStart(2, '0');
 iso = `${year}-${month}-${day}`;
-console.log(`  📅 Parsed Excel serial ${serial} to date:`, iso);
+logVerbose('  📅 Parsed Excel serial', serial, 'to date:', iso);
 }
 }
 }
@@ -889,7 +929,7 @@ console.log(`  📅 Parsed Excel serial ${serial} to date:`, iso);
 if (iso) {
 const dateYear = iso.split('-')[0];
 if (dateYear === '2026') {
-console.log(`  ✅ Found ${isDateFrom ? 'minDate' : 'maxDate'} in previous row:`, iso);
+logVerbose('  ✅ Found', isDateFrom ? 'minDate' : 'maxDate', 'in previous row:', iso);
 if (isDateFrom && !minDate) {
 minDate = iso;
 foundDate = true;
@@ -908,7 +948,7 @@ break;
 }
 }
 if (!foundDate) {
-console.log(`  ❌ No date found near "${str}" at row ${rowIndex}, cell ${cellIndex}`);
+logVerbose('  ❌ No date found near', str, 'at row', rowIndex, 'cell', cellIndex);
 }
 }
 });
@@ -916,14 +956,14 @@ console.log(`  ❌ No date found near "${str}" at row ${rowIndex}, cell ${cellIn
 // Second pass: If still not found, search for "من" and "إلى" ONLY in header rows (first 30 rows)
 // This prevents extracting dates from data rows
 if (!minDate || !maxDate) {
-console.log('⚠️ First pass did not find dates, trying second pass...');
+logVerbose('⚠️ First pass did not find dates, trying second pass...');
 const headerRows = rowsFormatted.slice(0, 30); // Only search in first 30 rows (header area)
 headerRows.forEach((row, rowIndex) => {
 const rowStr = row.join(' ').toLowerCase();
 const hasFrom = rowStr.includes('من') && !rowStr.includes('التاريخ من');
 const hasTo = (rowStr.includes('إلى') || rowStr.includes('الى')) && !rowStr.includes('التاريخ الي') && !rowStr.includes('التاريخ إلى');
 if (hasFrom || hasTo) {
-console.log(`📍 Found "من" or "إلى" in row ${rowIndex}:`, rowStr.substring(0, 100));
+logVerbose('📍 Found "من" or "إلى" in row', rowIndex, ':', rowStr.substring(0, 100));
 row.forEach((cell, cellIndex) => {
 if (!cell) return;
 const str = String(cell).trim();
@@ -937,7 +977,7 @@ if (parts.length === 3) iso = `${parts[2]}-${parts[1].padStart(2,'0')}-${parts[0
 // Verify date is in 2026 (current year) to avoid wrong dates
 const dateYear = iso.split('-')[0];
 if (dateYear !== '2026') {
-console.log('⚠️ Skipping date not in 2026:', iso);
+logVerbose('⚠️ Skipping date not in 2026:', iso);
 return; // Skip dates not in 2026
 }
 // Check if this date is near "من" or "إلى" in the row
@@ -946,27 +986,27 @@ const isNearFrom = hasFrom && (cellLower.includes('من') || (cellIndex > 0 && S
 const isNearTo = hasTo && (cellLower.includes('إلى') || cellLower.includes('الى') || (cellIndex > 0 && String(row[cellIndex - 1] || '').toLowerCase().includes('إلى')));
 if (isNearFrom && !minDate) {
 minDate = iso;
-console.log(`✅ Found minDate in second pass:`, iso);
+logVerbose('✅ Found minDate in second pass:', iso);
 }
 if (isNearTo && !maxDate) {
 maxDate = iso;
-console.log(`✅ Found maxDate in second pass:`, iso);
+logVerbose('✅ Found maxDate in second pass:', iso);
 }
 }
 });
 }
 });
 }
-console.log('📊 Final dates - minDate:', minDate, 'maxDate:', maxDate);
+logVerbose('📊 Final dates - minDate:', minDate, 'maxDate:', maxDate);
 // Update Print Report Directly
 let periodText = ""; // Empty by default - will show nothing if no dates found
 // Debug: Check if dates are found but not properly set
 if (!minDate && !maxDate) {
-console.log('❌ Both minDate and maxDate are null');
+logVerbose('❌ Both minDate and maxDate are null');
 } else if (!minDate) {
-console.log('⚠️ minDate is null, but maxDate is:', maxDate);
+logVerbose('⚠️ minDate is null, but maxDate is:', maxDate);
 } else if (!maxDate) {
-console.log('⚠️ maxDate is null, but minDate is:', minDate);
+logVerbose('⚠️ maxDate is null, but minDate is:', minDate);
 }
 if (minDate && maxDate) {
 // Format dates as DD-MM-YYYY
@@ -979,7 +1019,7 @@ return isoDate;
 };
 periodText = `من ${formatDate(minDate)} إلى ${formatDate(maxDate)}`;
 reportStartDate = minDate; // Store start date for report month name
-console.log('✅ Dates found - Period:', periodText, 'minDate:', minDate, 'maxDate:', maxDate);
+logVerbose('✅ Dates found - Period:', periodText, 'minDate:', minDate, 'maxDate:', maxDate);
 } else if (minDate) {
 const formatDate = (isoDate) => {
 const parts = isoDate.split('-');
@@ -990,30 +1030,12 @@ return isoDate;
 };
 periodText = `من ${formatDate(minDate)}`;
 reportStartDate = minDate; // Store start date for report month name
-console.log('⚠️ Only minDate found - Period:', periodText, 'minDate:', minDate);
+logVerbose('⚠️ Only minDate found - Period:', periodText, 'minDate:', minDate);
 } else {
 // If no dates found, leave empty - DO NOT extract dates randomly from data
-reportStartDate = null;
-console.log('❌ No dates found near "التاريخ من" or "التاريخ الي" labels');
+logVerbose('❌ No dates found near "التاريخ من" or "التاريخ الي" labels');
 }
-const periodRangeEl = document.getElementById('periodRange');
-if (periodRangeEl) {
-periodRangeEl.innerText = periodText;
-console.log('✅ Updated periodRange element:', periodRangeEl.innerText);
-} else {
-console.error('❌ periodRange element not found!');
-}
-// Update header period range
-const headerPeriodRangeEl = document.getElementById('headerPeriodRange');
-if (headerPeriodRangeEl) {
-headerPeriodRangeEl.innerText = periodText;
-console.log('✅ Updated headerPeriodRange element:', headerPeriodRangeEl.innerText);
-} else {
-console.error('❌ headerPeriodRange element not found!');
-}
-// Save period text to localStorage
-if (periodText) {
-localStorage.setItem('adora_rewards_periodText', periodText);
+return { periodText: periodText, minDate: minDate, maxDate: maxDate };
 }
 // -----------------------------
 // 2. Parse as RAW for reliable Data Processing (numbers as numbers)
@@ -1040,7 +1062,7 @@ async function processData(rows) {
 let oldDb = [];
 if (typeof reportStartDate === 'string' && reportStartDate && /^\d{4}-\d{2}-\d{2}/.test(reportStartDate)) {
 try {
-console.log('🔄 جاري جلب الفترة الحالية من Firebase للدمج مع الإكسيل...');
+logVerbose('🔄 جاري جلب الفترة الحالية من Firebase للدمج مع الإكسيل...');
 if (typeof initializeFirebase === 'function') initializeFirebase();
 var waitStart = Date.now();
 while (!(typeof window !== 'undefined' && window.storage) && (Date.now() - waitStart) < 5000) {
@@ -1056,7 +1078,7 @@ if (typeof fetchLivePeriodFromFirebase === 'function') data = await fetchLivePer
 }
 if (data && Array.isArray(data.db) && data.db.length > 0) {
 oldDb = data.db;
-console.log('✅ تم جلب البيانات الحالية من Firebase:', oldDb.length, 'موظف (سيتم دمج: تحديث count فقط، الباقي يبقى)');
+logVerbose('✅ تم جلب البيانات الحالية من Firebase:', oldDb.length, 'موظف (سيتم دمج: تحديث count فقط، الباقي يبقى)');
 }
 } catch (e) {
 console.warn('⚠️ فشل جلب البيانات من Firebase:', e.message || e);
@@ -1070,7 +1092,7 @@ const savedDb = localStorage.getItem('adora_rewards_db');
 if (savedDb) {
 oldDb = JSON.parse(savedDb);
 if (!Array.isArray(oldDb)) oldDb = [];
-else console.log('⚠️ استخدام البيانات من localStorage (cache) — Firebase لم يُحمّل:', oldDb.length, 'employees');
+else logVerbose('⚠️ استخدام البيانات من localStorage (cache) — Firebase لم يُحمّل:', oldDb.length, 'employees');
 }
 } catch (error) {
 console.error('❌ Error loading from localStorage:', error);
@@ -1149,7 +1171,7 @@ if (typeof window !== 'undefined') {
   window.db = db;
 }
 updatedCount++;
-console.log(`✅ Updated employee: ${newEmp.name} (${newEmp.branch})`, {
+logVerbose('✅ Updated employee:', newEmp.name, '(', newEmp.branch, ')', {
 oldCount: oldEmp.count,
 newCount: newEmp.count,
 hasEvaluations: !!(oldEmp.evaluationsBooking || oldEmp.evaluationsGoogle),
@@ -1172,14 +1194,14 @@ attendance26Days: false,
 attendanceDaysPerBranch: {}
 });
 newCount++;
-console.log(`➕ Added new employee: ${newEmp.name} (${newEmp.branch})`);
+logVerbose('➕ Added new employee:', newEmp.name, '(', newEmp.branch, ')');
 }
 });
 // Update window.db after all db updates
 if (typeof window !== 'undefined') {
   window.db = db;
 }
-console.log(`📊 Merge Summary: ${updatedCount} updated, ${newCount} new, ${db.length} total`);
+logVerbose('📊 Merge Summary:', updatedCount, 'updated,', newCount, 'new,', db.length, 'total');
 
 // Employees in old data but not in new file are automatically excluded (deleted)
 const deletedEmployees = oldDb.filter(oldEmp => {
@@ -1187,7 +1209,7 @@ const key = `${oldEmp.name}|${oldEmp.branch}`;
 return !newEmployees.some(newEmp => `${newEmp.name}|${newEmp.branch}` === key);
 });
 if (deletedEmployees.length > 0) {
-console.log(`🗑️ Deleted employees (not in new file):`, deletedEmployees.map(e => `${e.name} (${e.branch})`).join(', '));
+logVerbose('🗑️ Deleted employees (not in new file):', deletedEmployees.map(function(e) { return e.name + ' (' + e.branch + ')'; }).join(', '));
 }
 
 if (db.length > 0) {
@@ -1205,7 +1227,7 @@ localStorage.setItem('adora_rewards_startDate', reportStartDate);
 if (typeof syncLivePeriodToFirebase === 'function') syncLivePeriodToFirebase();
 if (typeof initializeAdminTokensForPeriod === 'function') initializeAdminTokensForPeriod();
 if (typeof saveAdminTokens === 'function') saveAdminTokens();
-console.log('✅ Data saved to localStorage:', {
+logVerbose('✅ Data saved to localStorage:', {
 totalEmployees: db.length,
 branches: [...branches],
 sampleEmployee: db[0] ? { name: db[0].name, count: db[0].count, hasEvaluations: !!(db[0].evaluationsBooking || db[0].evaluationsGoogle) } : null
@@ -1214,7 +1236,7 @@ sampleEmployee: db[0] ? { name: db[0].name, count: db[0].count, hasEvaluations: 
 const verify = localStorage.getItem('adora_rewards_db');
 if (verify) {
 const verifyData = JSON.parse(verify);
-console.log('✅ Verification: localStorage contains', verifyData.length, 'employees');
+logVerbose('✅ Verification: localStorage contains', verifyData.length, 'employees');
 } else {
 console.error('❌ Verification failed: localStorage is empty after save!');
 }
@@ -1224,7 +1246,7 @@ console.error('❌ Error saving to localStorage:', error);
 try {
 localStorage.setItem('test', 'test');
 localStorage.removeItem('test');
-console.log('✅ localStorage is available and working');
+logVerbose('✅ localStorage is available and working');
 } catch (storageError) {
 console.error('❌ localStorage is not available:', storageError);
 alert('⚠️ تحذير: لا يمكن حفظ البيانات. يرجى التحقق من إعدادات المتصفح (قد يكون في وضع التصفح الخاص أو محظور localStorage)');
@@ -5619,16 +5641,18 @@ function submitAdminAndLock() {
   }
   setProgress(0);
   setTimeout(function () { setProgress(25); }, 150);
-  // تفريغ الحقل النشط (blur) لضمان حفظ آخر قيمة في localStorage قبل الرفع، ثم تأخير بسيط لتنفيذ معالج الحفظ
+  // تفريغ الحقل النشط (blur) لضمان حفظ آخر قيمة في localStorage قبل الرفع
   try {
     var ae = document.activeElement;
     if (ae && ae.classList && (ae.classList.contains('eval-input') || ae.classList.contains('attendance-toggle') || ae.classList.contains('attendance-days-input')))
       ae.blur();
   } catch (_) {}
-  var syncPromise = new Promise(function (resolve) {
+  // تهيئة Firebase قبل الإرسال (صفحة المشرف/HR قد تكون فتحت قبل اكتمال التهيئة)
+  if (typeof initializeFirebase === 'function') initializeFirebase();
+  var syncPromise = new Promise(function (resolve, reject) {
     setTimeout(function () {
       var p = typeof doSyncLivePeriodNow === 'function' ? doSyncLivePeriodNow() : Promise.resolve();
-      p.then(resolve).catch(resolve);
+      p.then(resolve).catch(reject);
     }, 200);
   });
   syncPromise.then(function () {
@@ -5639,11 +5663,12 @@ function submitAdminAndLock() {
       if (sendBtn) sendBtn.disabled = false;
       showAdminSubmittedScreen();
     }, 400);
-  }).catch(function () {
+  }).catch(function (err) {
     setProgress(0);
     if (progressWrap) progressWrap.style.display = 'none';
     if (sendBtn) sendBtn.disabled = false;
-    if (typeof showToast === 'function') showToast('حدث خطأ أثناء المزامنة', 'error');
+    var msg = (err && err.message) ? err.message : 'حدث خطأ أثناء المزامنة';
+    if (typeof showToast === 'function') showToast(msg, 'error');
   });
 }
 
@@ -6783,6 +6808,15 @@ function initializeRoleBasedUI(role) {
     } catch (err) {}
   }
   
+  // للاختبار: إلغاء حالة «تم الإرسال» عند وجود reset_submitted=1 في الرابط (لتمكين إدخال بيانات من المشرف/HR مرة أخرى)
+  try {
+    var params = new URLSearchParams(window.location.search);
+    if (params.get('reset_submitted') === '1') {
+      var p = (params.get('period') || '').trim();
+      if (p && role) localStorage.removeItem('adora_admin_submitted_' + p + '_' + role);
+    }
+  } catch (_) {}
+
   // Show welcome message
   showRoleWelcomeMessage(role);
 
@@ -7290,7 +7324,6 @@ function initializeFirebase() {
       storage = firebase.storage();
       if (typeof window !== 'undefined') window.storage = storage;
       console.log('✅ Firebase Storage initialized');
-      testFirebaseConnection();
     } else {
       console.error('❌ Firebase Storage function not available');
       storage = null;
@@ -7298,20 +7331,6 @@ function initializeFirebase() {
   } catch (error) {
     console.error('❌ Firebase initialization error:', error);
     storage = null;
-  }
-}
-
-// Test Firebase connection
-async function testFirebaseConnection() {
-  if (!storage) return;
-  
-  try {
-    // Try to get a reference (this will fail if not properly configured, but won't throw if just testing)
-    const testRef = storage.ref('test-connection');
-    console.log('✅ Firebase Storage connection test passed');
-  } catch (error) {
-    console.warn('⚠️ Firebase Storage connection test failed:', error.message);
-    // Don't set storage to null, as it might still work for actual operations
   }
 }
 
@@ -7427,11 +7446,23 @@ function syncLivePeriodToFirebase() {
   }, 150);
 }
 
-/** مزامنة فورية (بدون debounce) — تُستدعى عند الضغط على إرسال في المشرف/HR. تُرجع Promise. */
+/** مزامنة فورية (بدون debounce) — تُستدعى عند الضغط على إرسال في المشرف/HR. تُرجع Promise. إذا Firebase غير جاهز: ننتظر ثم نرفض حتى يظهر للمستخدم خطأ. */
 function doSyncLivePeriodNow() {
   return new Promise(async function (resolve, reject) {
     var st = typeof storage !== 'undefined' ? storage : (typeof window !== 'undefined' ? window.storage : null);
-    if (!st || typeof st.ref !== 'function') { resolve(); return; }
+    if (!st || typeof st.ref !== 'function') {
+      if (typeof initializeFirebase === 'function') initializeFirebase();
+      var waitStart = Date.now();
+      var maxWaitMs = 10000;
+      while (!(typeof window !== 'undefined' && window.storage) && (Date.now() - waitStart) < maxWaitMs) {
+        await new Promise(function (r) { setTimeout(r, 200); });
+      }
+      st = typeof storage !== 'undefined' ? storage : (typeof window !== 'undefined' ? window.storage : null);
+    }
+    if (!st || typeof st.ref !== 'function') {
+      reject(new Error('Firebase غير جاهز — تحقق من الاتصال وجرّب مرة أخرى'));
+      return;
+    }
     try {
       var savedDb = localStorage.getItem('adora_rewards_db');
       if (!savedDb) { resolve(); return; }
@@ -7463,9 +7494,9 @@ function doSyncLivePeriodNow() {
   });
 }
 
-/** جلب دوري لآخر وضع الفترة من Firebase وتحديث الواجهة — الأدمن كل 2 ثوانٍ (تحديث فوري بعد إرسال المشرف/HR)، وباقي الأدوار كل 15 ثانية. */
+/** جلب دوري لآخر وضع الفترة من Firebase وتحديث الواجهة — الأدمن كل ثانية (تحديث فوري بعد إرسال المشرف/HR)، وباقي الأدوار كل 15 ثانية. */
 const LIVE_POLL_INTERVAL_MS = 15000;
-const ADMIN_POLL_INTERVAL_MS = 2000;
+const ADMIN_POLL_INTERVAL_MS = 1000;
 let livePollTimerId = null;
 
 function startLivePeriodPolling() {
@@ -7481,7 +7512,14 @@ function startLivePeriodPolling() {
         const data = await (typeof fetchLivePeriodFromFirebase === 'function' ? fetchLivePeriodFromFirebase() : null);
         if (!data || !Array.isArray(data.db) || data.db.length === 0) return;
         const remoteModified = Number(data.lastModified) || 0;
-        if (remoteModified <= lastAppliedLiveModified) return;
+        var isAdmin = typeof isAdminMode === 'function' && isAdminMode();
+        if (remoteModified <= lastAppliedLiveModified) {
+          if (isAdmin) {
+            var currentStr = typeof db !== 'undefined' && db && db.length ? JSON.stringify(db.map(function (e) { return { id: e.id, evaluationsBooking: e.evaluationsBooking, evaluationsGoogle: e.evaluationsGoogle, attendance26Days: e.attendance26Days, attendanceDaysPerBranch: e.attendanceDaysPerBranch, totalAttendanceDays: e.totalAttendanceDays }; })) : '';
+            var remoteStr = data.db && data.db.length ? JSON.stringify(data.db.map(function (e) { return { id: e.id, evaluationsBooking: e.evaluationsBooking, evaluationsGoogle: e.evaluationsGoogle, attendance26Days: e.attendance26Days, attendanceDaysPerBranch: e.attendanceDaysPerBranch, totalAttendanceDays: e.totalAttendanceDays }; })) : '';
+            if (currentStr === remoteStr) return;
+          } else return;
+        }
         if (typeof applyLivePeriod === 'function') applyLivePeriod(data);
         lastAppliedLiveModified = remoteModified;
         db = data.db;
@@ -7490,7 +7528,7 @@ function startLivePeriodPolling() {
         if (data.reportStartDate != null) reportStartDate = data.reportStartDate;
         if (data.evalRate != null) currentEvalRate = parseInt(data.evalRate, 10) || 20;
         if (Array.isArray(data.discounts)) { try { discounts = data.discounts; window.discounts = data.discounts; } catch (_) {} }
-        if (Array.isArray(data.discountTypes)) { try { window.discountTypes = data.discountTypes; } catch (_) {} }
+        if (Array.isArray(data.discountTypes)) { try { discountTypes = data.discountTypes; window.discountTypes = data.discountTypes; } catch (_) {} }
         if (data.employeeCodes && typeof data.employeeCodes === 'object') { try { employeeCodesMap = data.employeeCodes; if (typeof window !== 'undefined') window.employeeCodesMap = employeeCodesMap; } catch (_) {} }
         if (data.periodText != null) {
           try {
@@ -7503,6 +7541,7 @@ function startLivePeriodPolling() {
         if (typeof renderUI === 'function' && typeof currentFilter !== 'undefined') {
           requestAnimationFrame(function () { renderUI(currentFilter); });
         }
+        if (isAdmin && typeof showToast === 'function') showToast('تم تحديث البيانات من المشرف/HR', 'success');
       } catch (_) {}
       finally {
         if (indicator) indicator.style.display = 'none';
@@ -7514,6 +7553,13 @@ function startLivePeriodPolling() {
   var isAdmin = typeof isAdminMode === 'function' && isAdminMode();
   var firstDelay = isAdmin ? 0 : LIVE_POLL_INTERVAL_MS;
   livePollTimerId = setTimeout(poll, firstDelay);
+  if (isAdmin && typeof document !== 'undefined' && document.addEventListener) {
+    document.addEventListener('visibilitychange', function () {
+      if (document.visibilityState === 'visible' && typeof isAdminMode === 'function' && isAdminMode() && livePollTimerId != null) {
+        poll();
+      }
+    });
+  }
 }
 
 function stopLivePeriodPolling() {

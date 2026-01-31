@@ -27,12 +27,22 @@ function getCurrentPeriodId() {
   return periodText.replace(/\s+/g, '-').replace(/[^a-zA-Z0-9-]/g, '');
 }
 
+// Safe parse of archived periods from localStorage (returns array)
+function getArchivedPeriodsSafe() {
+  try {
+    var raw = localStorage.getItem('adora_archived_periods') || '[]';
+    var parsed = JSON.parse(raw);
+    return Array.isArray(parsed) ? parsed : [];
+  } catch (e) { return []; }
+}
+
 // Load admin tokens from localStorage
 function loadAdminTokens() {
   try {
     const saved = localStorage.getItem('adora_admin_tokens');
     if (saved) {
-      adminTokens = JSON.parse(saved);
+      var parsed = JSON.parse(saved);
+      adminTokens = (parsed && typeof parsed === 'object') ? parsed : {};
     }
   } catch (error) {
     console.error('❌ Error loading admin tokens:', error);
@@ -82,8 +92,14 @@ async function tryValidateAdminAccessFromFirebase(role, token, periodId) {
         const ref = st.ref('admin_tokens/' + periodId + '.json');
         const blob = await ref.getBlob();
         const text = await (typeof blob.text === 'function' ? blob.text() : new Promise(function(res, rej) { var r = new FileReader(); r.onload = function() { res(r.result); }; r.onerror = rej; r.readAsText(blob); }));
-        const data = JSON.parse(text);
-        const admin = data && data[role];
+        var data;
+        try {
+          data = JSON.parse(text);
+        } catch (parseErr) {
+          return false;
+        }
+        if (!data || typeof data !== 'object') return false;
+        const admin = data[role];
         if (!admin || admin.token !== token || admin.active === false) return false;
         if (!adminTokens[periodId]) adminTokens[periodId] = {};
         adminTokens[periodId][role] = admin;
@@ -182,8 +198,12 @@ function showAdminManagementModal() {
       } catch (_) {}
       if (hasData && typeof window.doSyncLivePeriodNow === 'function') {
         if (typeof showToast === 'function') showToast('جاري تحديث Firebase...', 'info');
-        await window.doSyncLivePeriodNow();
-        if (typeof showToast === 'function') showToast('تم تحديث البيانات النشطة — يمكنك نسخ الروابط للإداريين', 'success');
+        try {
+          await window.doSyncLivePeriodNow();
+          if (typeof showToast === 'function') showToast('تم تحديث البيانات النشطة — يمكنك نسخ الروابط للإداريين', 'success');
+        } catch (syncErr) {
+          if (typeof showToast === 'function') showToast('فشل تحديث Firebase — تحقق من الاتصال وجرّب فتح «إدارة الإداريين» مرة أخرى', 'error');
+        }
       }
     } catch (_) {}
     saveAdminTokens();
@@ -404,7 +424,8 @@ function logAdminAction(role, action, details) {
     let logs = [];
     const saved = localStorage.getItem('adora_admin_logs');
     if (saved) {
-      logs = JSON.parse(saved);
+      var parsed = JSON.parse(saved);
+      logs = Array.isArray(parsed) ? parsed : [];
     }
     logs.push(log);
     // Keep only last 1000 logs
@@ -510,7 +531,7 @@ async function confirmClosePeriod() {
         });
         
         // Fallback to localStorage
-        const archivedPeriods = JSON.parse(localStorage.getItem('adora_archived_periods') || '[]');
+        const archivedPeriods = getArchivedPeriodsSafe();
         const existingIndex = archivedPeriods.findIndex(p => p.periodId === periodId);
         if (existingIndex >= 0) {
           archivedPeriods[existingIndex] = periodData;
@@ -526,7 +547,7 @@ async function confirmClosePeriod() {
     } else {
       // Fallback: Save to localStorage
       console.warn('⚠️ Firebase Storage not available, using localStorage only');
-      const archivedPeriods = JSON.parse(localStorage.getItem('adora_archived_periods') || '[]');
+      const archivedPeriods = getArchivedPeriodsSafe();
       const existingIndex = archivedPeriods.findIndex(p => p.periodId === periodId);
       if (existingIndex >= 0) {
         archivedPeriods[existingIndex] = periodData;
@@ -1507,7 +1528,7 @@ window.addEventListener('load', () => {
     // If code exists, we're in employee mode - check code
     if (code) {
       await checkMobileEmployeeCode();
-    } else if (adminKey === 'ayman5255') {
+    } else if (typeof window.getAdminSecretKey === 'function' && adminKey === window.getAdminSecretKey()) {
       // Admin mode - let loadDataFromStorage handle it
       // (loadDataFromStorage already checks for admin mode)
     } else {

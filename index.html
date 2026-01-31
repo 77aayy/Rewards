@@ -67,7 +67,7 @@
                 </div>
             </div>
             <div class="flex flex-wrap gap-2 sm:gap-3 w-full sm:w-auto justify-end" id="actionBtns" style="display: none;">
-                <button onclick="showAdminManagementModal()"
+                <button id="adminManageBtn" onclick="showAdminManagementModal()"
                     class="btn-modern px-4 sm:px-5 md:px-6 py-2 sm:py-2.5 md:py-3 bg-gradient-to-r from-purple-500/80 to-purple-600/80 text-white rounded-xl text-xs sm:text-sm font-bold border border-purple-400/50 flex items-center gap-2 hover:shadow-lg hover:from-purple-500 hover:to-purple-600 transition-all backdrop-blur-sm" style="font-size: clamp(0.75rem, 2vw, 0.875rem);">
                     <span class="action-btn-icon" aria-hidden="true"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M22 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg></span>
                     <span class="hidden sm:inline">إدارة الإداريين</span>
@@ -1143,8 +1143,8 @@
     <!-- البنود الـ 55 للتعليمات/أنواع الخصم (قبل أي سكربت يحتاجها) -->
     <script src="/src/discount-clauses-55.js"></script>
     <!-- JavaScript: app-extensions أولاً لأن app.js يتحقق من الرابط (role/token/period) ويحتاج loadAdminTokens و validateAdminAccess -->
-    <script src="/src/app-extensions.js?v=path-redirect"></script>
-    <script src="/src/app.js?v=path-redirect"></script>
+    <script src="/src/app-extensions.js?v=firebase-first"></script>
+    <script src="/src/app.js?v=firebase-first"></script>
 </body>
 
 </html>

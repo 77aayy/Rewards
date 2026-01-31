@@ -9,6 +9,7 @@
     "storage-cors": "node scripts/set-storage-cors.js",
     "test:e2e": "playwright test e2e/e2e-full.spec.js --project=chromium",
     "deploy": "firebase use rewards-63e43 && firebase deploy --only hosting",
+    "deploy:full": "firebase use rewards-63e43 && firebase deploy --only hosting,storage",
     "deploy:test": "npm run deploy && npm run test:e2e"
   },
   "engines": {

@@ -1,6 +1,13 @@
 rules_version = '2';
+// قرار القراءة/الكتابة (توثيق — راجع ARCHITECTURE.md):
+// - القراءة مفتوحة (allow read: if true) عن قصد: التطبيق لا يستخدم Firebase Auth؛
+//   الوصول يُتحقق منه عبر روابط سرية (admin key، role+token+period، كود موظف).
+// - عند إضافة Auth لاحقاً يُفضّل تضييق القراءة (مثلاً حسب request.auth != null أو صلاحيات محددة).
 // تقييد الكتابة: حجم ≤ 5MB ونوع application/json فقط (التطبيق يرفع JSON فقط).
-// القراءة مفتوحة لأن التطبيق لا يستخدم Firebase Auth والوصول يُتحقق منه عبر الروابط (admin/role+token/code).
+// الكتابة غير مربوطة بهوية الطالب حالياً؛ يمكن ربطها بصلاحيات عند وجود Auth.
+//
+// مسارات periods/: live.json (آخر نسخة حية)، 2026_01.json (نسخة ثابتة للفترة)
+// المشرف و HR يستدعيان من periods/{periodId}.json على أجهزة جديدة — يجب أن تسمح القواعد بالقراءة.
 service firebase.storage {
   match /b/{bucket}/o {
     match /periods/{periodId} {
