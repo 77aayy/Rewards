@@ -9,9 +9,9 @@ set "APP=%ROOT%app"
 echo ========================================
 echo   Deploy: GitHub + Firebase
 echo ========================================
-echo.
-echo ظ‚ط¨ظ„ ط§ظ„ط±ظپط¹: ط±ط§ط¬ط¹ app\PRE-DEPLOY-STEPS.md (طھظ‚ظٹظٹط¯ API key + ط§ط®طھط¨ط§ط±).
-echo.
+echo(
+echo Before upload: check app\PRE-DEPLOY-STEPS.md (API key + test).
+echo(
 echo [1/3] Sync + Build + Firebase deploy (from app)...
 cd /d "%APP%"
 if not exist "package.json" (
@@ -26,20 +26,20 @@ if errorlevel 1 (
   pause
   exit /b 1
 )
-echo.
+echo(
 
 echo [2/3] Git add and commit...
 cd /d "%ROOT%"
 git rev-parse --is-inside-work-tree >nul 2>&1
 if errorlevel 1 (
-  echo WARN: ظ„ط§ ظٹظˆط¬ط¯ ظ…ط³طھظˆط¯ط¹ Git. ظ„طھظپط¹ظٹظ„ ط§ظ„ط±ظپط¹ ط¹ظ„ظ‰ GitHub:
+  echo WARN: No Git repo. To enable GitHub push:
   echo   git init
   echo   git add .
   echo   git commit -m "initial"
   echo   git remote add origin https://github.com/USER/REPO.git
-  echo   ط«ظ… ط´ط؛ظ‘ظ„ ظ‡ط°ط§ ط§ظ„ظ…ظ„ظپ ظ…ط±ط© ط£ط®ط±ظ‰.
-  echo.
-  echo طھط®ط·ظٹ ط§ظ„ط®ط·ظˆط© 2 ظˆ 3.
+  echo   Then run this script again.
+  echo(
+  echo Skipping steps 2 and 3.
   pause
   exit /b 0
 )
@@ -53,27 +53,27 @@ if errorlevel 1 (
 ) else (
   echo Commit done.
 )
-echo.
+echo(
 
 echo [3/3] Push to GitHub...
 git remote get-url origin >nul 2>&1
 if errorlevel 1 (
-  echo WARN: ظ„ظ… ظٹظڈط¶ظپ remote ط¨ط§ط³ظ… origin ط¨ط¹ط¯.
-  echo   ظ…ط±ط© ظˆط§ط­ط¯ط© ظ†ظپظ‘ط° ظ…ظ† ط¬ط°ط± ط§ظ„ظ…ط´ط±ظˆط¹:
+  echo WARN: No remote "origin" configured.
+  echo   Run once from project root:
   echo   git remote add origin https://github.com/USER/REPO.git
-  echo   ط«ظ… ط´ط؛ظ‘ظ„ ظ‡ط°ط§ ط§ظ„ظ…ظ„ظپ ظ…ط±ط© ط£ط®ط±ظ‰ ظ„ظ„ط±ظپط¹.
-  echo.
-  echo طھط®ط·ظٹ ط§ظ„ط®ط·ظˆط© 3. Firebase طھظ… ظ†ط´ط±ظ‡ ط¨ظ†ط¬ط§ط­.
+  echo   Then run this script again to push.
+  echo(
+  echo Skipping step 3. Firebase was deployed successfully.
   pause
   exit /b 0
 )
 git push origin HEAD
 if errorlevel 1 (
-  echo ERROR: Git push failed. طھط£ظƒط¯ ظ…ظ†: git remoteطŒ ط§ظ„ظپط±ط¹طŒ ظˆطھط³ط¬ظٹظ„ ط§ظ„ط¯ط®ظˆظ„ (token ط£ظˆ SSH).
+  echo ERROR: Git push failed. Check: git remote, branch, and login (token or SSH).
   pause
   exit /b 1
 )
 
-echo.
+echo(
 echo Done: Firebase and GitHub updated.
 pause
