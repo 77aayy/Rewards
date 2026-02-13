@@ -1,0 +1,35 @@
+# Cloud Build: build from app/ then deploy to Firebase Hosting
+# Use this file in your trigger (Config: cloudbuild.yaml) so the build runs in app/, not repo root.
+# Required: FIREBASE_TOKEN secret in Secret Manager, linked in the trigger.
+
+steps:
+  - name: node:20
+    id: npm-ci
+    dir: app
+    entrypoint: npm
+    args: ['ci']
+
+  - name: node:20
+    id: npm-build
+    dir: app
+    entrypoint: npm
+    args: ['run', 'build']
+    waitFor: ['npm-ci']
+
+  - name: us-docker.pkg.dev/firebase-cli/us/firebase
+    id: deploy
+    dir: app
+    entrypoint: bash
+    args:
+      - -c
+      - 'firebase deploy --only hosting --project rewards-63e43 --token "$FIREBASE_TOKEN"'
+    secretEnv: ['FIREBASE_TOKEN']
+    waitFor: ['npm-build']
+
+availableSecrets:
+  secretManager:
+    - versionName: projects/${PROJECT_ID}/secrets/FIREBASE_TOKEN/versions/latest
+      env: 'FIREBASE_TOKEN'
+
+options:
+  logging: CLOUD_LOGGING_ONLY
