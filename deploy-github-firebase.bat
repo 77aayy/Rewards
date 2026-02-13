@@ -10,7 +10,7 @@ echo ========================================
 echo   Deploy: GitHub + Firebase
 echo ========================================
 echo.
-echo قبل الرفع: راجع app\PRE-DEPLOY-STEPS.md (تقييد API key + اختبار).
+echo ظ‚ط¨ظ„ ط§ظ„ط±ظپط¹: ط±ط§ط¬ط¹ app\PRE-DEPLOY-STEPS.md (طھظ‚ظٹظٹط¯ API key + ط§ط®طھط¨ط§ط±).
 echo.
 echo [1/3] Sync + Build + Firebase deploy (from app)...
 cd /d "%APP%"
@@ -32,14 +32,14 @@ echo [2/3] Git add and commit...
 cd /d "%ROOT%"
 git rev-parse --is-inside-work-tree >nul 2>&1
 if errorlevel 1 (
-  echo WARN: لا يوجد مستودع Git. لتفعيل الرفع على GitHub:
+  echo WARN: ظ„ط§ ظٹظˆط¬ط¯ ظ…ط³طھظˆط¯ط¹ Git. ظ„طھظپط¹ظٹظ„ ط§ظ„ط±ظپط¹ ط¹ظ„ظ‰ GitHub:
   echo   git init
   echo   git add .
   echo   git commit -m "initial"
   echo   git remote add origin https://github.com/USER/REPO.git
-  echo   ثم شغّل هذا الملف مرة أخرى.
+  echo   ط«ظ… ط´ط؛ظ‘ظ„ ظ‡ط°ط§ ط§ظ„ظ…ظ„ظپ ظ…ط±ط© ط£ط®ط±ظ‰.
   echo.
-  echo تخطي الخطوة 2 و 3.
+  echo طھط®ط·ظٹ ط§ظ„ط®ط·ظˆط© 2 ظˆ 3.
   pause
   exit /b 0
 )
@@ -58,18 +58,18 @@ echo.
 echo [3/3] Push to GitHub...
 git remote get-url origin >nul 2>&1
 if errorlevel 1 (
-  echo WARN: لم يُضف remote باسم origin بعد.
-  echo   مرة واحدة نفّذ من جذر المشروع:
+  echo WARN: ظ„ظ… ظٹظڈط¶ظپ remote ط¨ط§ط³ظ… origin ط¨ط¹ط¯.
+  echo   ظ…ط±ط© ظˆط§ط­ط¯ط© ظ†ظپظ‘ط° ظ…ظ† ط¬ط°ط± ط§ظ„ظ…ط´ط±ظˆط¹:
   echo   git remote add origin https://github.com/USER/REPO.git
-  echo   ثم شغّل هذا الملف مرة أخرى للرفع.
+  echo   ط«ظ… ط´ط؛ظ‘ظ„ ظ‡ط°ط§ ط§ظ„ظ…ظ„ظپ ظ…ط±ط© ط£ط®ط±ظ‰ ظ„ظ„ط±ظپط¹.
   echo.
-  echo تخطي الخطوة 3. Firebase تم نشره بنجاح.
+  echo طھط®ط·ظٹ ط§ظ„ط®ط·ظˆط© 3. Firebase طھظ… ظ†ط´ط±ظ‡ ط¨ظ†ط¬ط§ط­.
   pause
   exit /b 0
 )
 git push origin HEAD
 if errorlevel 1 (
-  echo ERROR: Git push failed. تأكد من: git remote، الفرع، وتسجيل الدخول (token أو SSH).
+  echo ERROR: Git push failed. طھط£ظƒط¯ ظ…ظ†: git remoteطŒ ط§ظ„ظپط±ط¹طŒ ظˆطھط³ط¬ظٹظ„ ط§ظ„ط¯ط®ظˆظ„ (token ط£ظˆ SSH).
   pause
   exit /b 1
 )
