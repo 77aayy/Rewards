@@ -56,10 +56,20 @@ if errorlevel 1 (
 echo.
 
 echo [3/3] Push to GitHub...
-git remote get-url origin 2>nul
+git remote get-url origin >nul 2>&1
+if errorlevel 1 (
+  echo WARN: لم يُضف remote باسم origin بعد.
+  echo   مرة واحدة نفّذ من جذر المشروع:
+  echo   git remote add origin https://github.com/USER/REPO.git
+  echo   ثم شغّل هذا الملف مرة أخرى للرفع.
+  echo.
+  echo تخطي الخطوة 3. Firebase تم نشره بنجاح.
+  pause
+  exit /b 0
+)
 git push origin HEAD
 if errorlevel 1 (
-  echo ERROR: Git push failed. Check remote, branch, and login (token/SSH).
+  echo ERROR: Git push failed. تأكد من: git remote، الفرع، وتسجيل الدخول (token أو SSH).
   pause
   exit /b 1
 )
