@@ -1,0 +1,25 @@
+{
+  "hosting": {
+    "site": "rewards-63e43",
+    "public": "dist",
+    "ignore": [
+      "firebase.json",
+      "**/.*",
+      "**/node_modules/**"
+    ],
+    "rewrites": [
+      {
+        "source": "/rewards",
+        "destination": "/rewards/index.html"
+      },
+      {
+        "source": "/rewards/**",
+        "destination": "/rewards/index.html"
+      },
+      {
+        "source": "**",
+        "destination": "/index.html"
+      }
+    ]
+  }
+}

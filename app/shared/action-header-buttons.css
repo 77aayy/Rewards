@@ -1,0 +1,97 @@
+/* ====== مصدر واحد لأزرار الترويسة المشتركة ======
+   المستخدم: صفحة المكافآت (Rewards) + تطبيق التحليل (React).
+   تعديلك هنا يطبق على كل أزرار الترويسة في المشروع. */
+
+.action-header-btn {
+  display: inline-flex;
+  align-items: center;
+  position: relative;
+  overflow: hidden;
+  padding: clamp(0.4rem, 1vw, 0.625rem) clamp(0.6rem, 1.5vw, 1rem) !important;
+  font-size: clamp(0.65rem, 1.2vw, 0.875rem) !important;
+  font-weight: 500;
+  border-radius: clamp(0.5rem, 1vw, 0.75rem) !important;
+  gap: clamp(0.25rem, 0.5vw, 0.5rem) !important;
+  white-space: nowrap;
+  backdrop-filter: blur(8px);
+  transition: all 0.2s ease;
+  letter-spacing: 0.01em;
+  border: 1px solid rgba(255,255,255,0.2);
+  outline: none;
+}
+
+.action-header-btn-default,
+.action-header-btn.action-header-btn-default {
+  color: rgb(226 232 240);
+  background: rgba(255,255,255,0.07);
+}
+.action-header-btn-default:hover,
+.action-header-btn.action-header-btn-default:hover {
+  background: rgba(20, 184, 166, 0.2);
+  border-color: rgba(20, 184, 166, 0.5);
+  color: #fff;
+}
+.action-header-btn-default:focus-visible,
+.action-header-btn.action-header-btn-default:focus-visible {
+  box-shadow: 0 0 0 2px rgba(20, 184, 166, 0.5);
+}
+
+.action-header-btn--red { color: rgb(252 165 165); background: rgba(255,255,255,0.07); }
+.action-header-btn--red:hover { background: rgba(239, 68, 68, 0.15); border-color: rgba(248, 113, 113, 0.4); color: rgb(254 202 202); }
+.action-header-btn--red:focus-visible { box-shadow: 0 0 0 2px rgba(248, 113, 113, 0.5); }
+
+.action-header-btn--cyan { color: rgb(103 232 249); background: rgba(255,255,255,0.07); }
+.action-header-btn--cyan:hover { background: rgba(6, 182, 212, 0.15); border-color: rgba(34, 211, 238, 0.4); color: rgb(165 243 252); }
+.action-header-btn--cyan:focus-visible { box-shadow: 0 0 0 2px rgba(34, 211, 238, 0.5); }
+
+.action-header-btn--amber { color: rgb(253 230 138); background: rgba(255,255,255,0.07); }
+.action-header-btn--amber:hover { background: rgba(245, 158, 11, 0.15); border-color: rgba(251, 191, 36, 0.4); color: rgb(254 243 199); }
+
+.action-header-btn--violet { color: rgb(196 181 253); background: rgba(255,255,255,0.07); }
+.action-header-btn--violet:hover { background: rgba(139, 92, 246, 0.15); border-color: rgba(167, 139, 250, 0.4); color: rgb(221 214 254); }
+
+.action-header-btn--primary { color: #14b8a6; background: rgba(255,255,255,0.07); }
+.action-header-btn--primary:hover { background: rgba(20, 184, 166, 0.15); border-color: rgba(20, 184, 166, 0.4); color: #fff; }
+.action-header-btn--primary:focus-visible { box-shadow: 0 0 0 2px rgba(20, 184, 166, 0.5); }
+
+.action-header-btn::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: -100%;
+  width: 100%;
+  height: 100%;
+  background: linear-gradient(90deg, transparent, rgba(255,255,255,0.08), transparent);
+  transition: left 0.5s ease;
+  pointer-events: none;
+}
+.action-header-btn:hover::before {
+  left: 100%;
+}
+.action-header-btn:active {
+  transform: scale(0.97);
+}
+.action-header-btn:disabled {
+  opacity: 0.5;
+  pointer-events: none;
+}
+.action-header-btn svg {
+  width: clamp(0.75rem, 1.2vw, 1rem) !important;
+  height: clamp(0.75rem, 1.2vw, 1rem) !important;
+  flex-shrink: 0;
+}
+
+.action-header-btns-container {
+  gap: clamp(0.35rem, 0.8vw, 0.75rem) !important;
+}
+@media (max-width: 480px) {
+  .action-header-btn {
+    min-height: 36px !important;
+    min-width: 36px !important;
+  }
+}
+@media (min-width: 481px) and (max-width: 640px) {
+  .action-header-btn {
+    min-height: 38px !important;
+  }
+}

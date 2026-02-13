@@ -1,0 +1,72 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl"><head><meta charset="utf-8"><title>مسح الجلسة</title></head>
+<body><p>جاري تسجيل الخروج ومسح الجلسة...</p>
+<script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-auth-compat.js"></script>
+<script>
+(function() {
+  var config = {
+    apiKey: 'AIzaSyAKpUAnc_EJXxGrhPPfTAgnFB13Qvs_ogk',
+    authDomain: 'rewards-63e43.firebaseapp.com',
+    projectId: 'rewards-63e43',
+    storageBucket: 'rewards-63e43.firebasestorage.app',
+    messagingSenderId: '453256410249',
+    appId: '1:453256410249:web:b7edd6afe3922c3e738258'
+  };
+  try {
+    var app;
+    try { app = firebase.app('adora-admin-auth'); } catch (_) { app = firebase.initializeApp(config, 'adora-admin-auth'); }
+    var auth = firebase.auth(app);
+    // مسح الجلسة وبيانات التحليل/الفترة فقط — لا نمسح: الخصومات، التقييمات السلبية (إدخالات المشرف/HR)، الإعدادات
+    function clearSessionAndAnalysisOnly() {
+      try {
+        localStorage.removeItem('adora_admin_auth_session');
+        localStorage.removeItem('adora_current_role');
+        localStorage.removeItem('adora_current_token');
+        localStorage.removeItem('adora_current_period');
+        localStorage.removeItem('adora_admin_just_logged_out');
+        localStorage.removeItem('adora_rewards_db');
+        localStorage.removeItem('adora_rewards_branches');
+        localStorage.removeItem('adora_rewards_evalRate');
+        localStorage.removeItem('adora_rewards_startDate');
+        localStorage.removeItem('adora_rewards_periodText');
+        localStorage.removeItem('adora_analysis_data');
+        localStorage.removeItem('adora_analysis_staffList');
+        localStorage.removeItem('adora_analysis_dateRange');
+        localStorage.removeItem('adora_analysis_analyzed');
+        localStorage.removeItem('adora_transfer_payload');
+      } catch (e) {}
+    }
+    var params = typeof window !== 'undefined' && window.location && window.location.search ? new URLSearchParams(window.location.search) : null;
+    var adminParam = params && params.get('admin') ? params.get('admin') : '';
+    var redirectTo = window.location.origin + (adminParam ? '/?admin=' + encodeURIComponent(adminParam) : '/');
+    auth.signOut().then(function() {
+      clearSessionAndAnalysisOnly();
+      window.location.replace(redirectTo);
+    }).catch(function() {
+      clearSessionAndAnalysisOnly();
+      window.location.replace(redirectTo);
+    });
+  } catch (e) {
+    (function() {
+      try {
+        localStorage.removeItem('adora_admin_auth_session');
+        localStorage.removeItem('adora_rewards_db');
+        localStorage.removeItem('adora_rewards_branches');
+        localStorage.removeItem('adora_current_role');
+        localStorage.removeItem('adora_current_token');
+        localStorage.removeItem('adora_current_period');
+        localStorage.removeItem('adora_analysis_data');
+        localStorage.removeItem('adora_analysis_staffList');
+        localStorage.removeItem('adora_analysis_dateRange');
+        localStorage.removeItem('adora_analysis_analyzed');
+        localStorage.removeItem('adora_transfer_payload');
+      } catch (e2) {}
+    })();
+    var params = typeof window !== 'undefined' && window.location && window.location.search ? new URLSearchParams(window.location.search) : null;
+    var adminParam = params && params.get('admin') ? params.get('admin') : '';
+    window.location.replace(window.location.origin + (adminParam ? '/?admin=' + encodeURIComponent(adminParam) : '/'));
+  }
+})();
+</script>
+</body></html>

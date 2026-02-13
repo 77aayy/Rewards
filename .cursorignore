@@ -1,0 +1,23 @@
+﻿# الحشو اللي بيعمي الـ AI
+node_modules/
+.git/
+dist/
+build/
+.next/
+out/
+.vercel/
+*.log
+*.tmp
+*.temp
+
+# ملفات الميديا التقيلة
+*.mp4
+*.wav
+*.mp3
+*.zip
+*.pdf
+
+# الـ Cache بتاع البرمجة
+.eslintcache
+.stylelintcache
+.prettiercache

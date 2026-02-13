@@ -1,0 +1,34 @@
+{
+  "name": "rewards",
+  "version": "1.0.0",
+  "private": true,
+  "description": "نظام مكافآت فندق إليت - موقع ستاتيك",
+  "scripts": {
+    "build": "node scripts/build.js",
+    "dev": "npm run predeploy && npx serve -s public -l 8080",
+    "dev:watch": "node scripts/watch-and-predeploy.js",
+    "start": "npx serve -s dist -l 8080",
+    "storage-cors": "node scripts/set-storage-cors.js",
+    "test:e2e": "playwright test e2e/e2e-full.spec.js --project=chromium",
+    "test:e2e:online": "playwright test e2e/e2e-full.spec.js --project=chromium",
+    "test:e2e:online:report": "node scripts/run-e2e-online.js",
+    "predeploy": "node scripts/prepare-deploy.js",
+    "deploy": "node scripts/prepare-deploy-with-login.js && firebase use rewards-63e43 && firebase deploy --only hosting",
+    "deploy:full": "firebase use rewards-63e43 && firebase deploy --only hosting,storage",
+    "deploy:test": "npm run deploy && npm run test:e2e"
+  },
+  "engines": {
+    "node": ">=18"
+  },
+  "devDependencies": {
+    "@playwright/test": "^1.58.0",
+    "tailwindcss": "^3.4.1"
+  },
+  "dependencies": {
+    "@google-cloud/storage": "^7.14.0",
+    "serve": "^14.2.0"
+  },
+  "overrides": {
+    "fast-xml-parser": "5.3.4"
+  }
+}

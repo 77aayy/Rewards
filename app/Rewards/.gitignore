@@ -1,0 +1,47 @@
+# Firebase
+.firebase/
+firebase
+firebase-debug.log
+firestore-debug.log
+ui-debug.log
+
+# Environment variables (if using)
+.env
+.env.local
+
+# OS
+.DS_Store
+Thumbs.db
+$null
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# Logs
+*.log
+npm-debug.log*
+
+# Dependencies (if using npm)
+node_modules/
+
+# Build files (if using build tools)
+dist/
+build/
+public/
+
+# Playwright / E2E
+test-results/
+playwright-report/
+playwright/.cache/
+e2e-output.txt
+e2e-run.txt
+
+# مستودع التنظيف — غير ضروري للمشروع
+Downloads/
+UserStatisticsReport_Ar.xlsx
+*.xlsx
+fix-push.bat
+sync-and-push.bat

@@ -1,0 +1,4 @@
+{"storage":{"rules":"storage.rules"},"hosting":{"site":"rewards-63e43","public":"public","ignore":["firebase.json","**/.*","**/node_modules/**","Downloads/**","e2e/**",".github/**","scripts/**","**/*.md","package.json","package-lock.json","playwright.config.js","tailwind.config.js","UserStatisticsReport_Ar.xlsx",".cursorrules",".cursorignore"],"rewrites":[
+      {"source":"/rewards/**","destination":"/rewards/index.html"},
+      {"source":"**","destination":"/index.html"}
+    ]}}
