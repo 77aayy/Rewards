@@ -448,7 +448,43 @@ export default function App() {
     if (typeof window === 'undefined') return '';
     return new URLSearchParams(window.location.search).get('admin') || '';
   }, []);
+  const allowedRoles = useMemo(() => ['supervisor', 'hr', 'accounting', 'manager'] as const, []);
+  const shouldRedirectToRewards = useMemo(() => {
+    if (typeof window === 'undefined' || !window.location) return false;
+    const pathname = window.location.pathname || '';
+    const search = window.location.search || '';
+    const params = new URLSearchParams(search);
+    const roleFromPath = pathname.match(/^\/(supervisor|hr|accounting|manager)\/([^/]+)\/([^/]+)\/?$/);
+    if (roleFromPath) return true;
+    const role = params.get('role') || '';
+    const token = params.get('token') || '';
+    const period = params.get('period') || '';
+    if (pathname.includes('/rewards')) return false;
+    return allowedRoles.includes(role as (typeof allowedRoles)[number]) && token.length > 0 && period.length > 0;
+  }, [allowedRoles]);
   const isAdminLink = adminKeyFromUrl === ADMIN_SECRET_KEY;
+
+  useEffect(() => {
+    if (!shouldRedirectToRewards || typeof window === 'undefined') return;
+    const pathname = window.location.pathname || '';
+    const params = new URLSearchParams(window.location.search || '');
+    let role = '';
+    let token = '';
+    let period = '';
+    const roleFromPath = pathname.match(/^\/(supervisor|hr|accounting|manager)\/([^/]+)\/([^/]+)\/?$/);
+    if (roleFromPath) {
+      role = roleFromPath[1];
+      token = roleFromPath[2];
+      period = roleFromPath[3];
+    } else {
+      role = params.get('role') || '';
+      token = params.get('token') || '';
+      period = params.get('period') || '';
+    }
+    if (!role || !token || !period) return;
+    const q = `?role=${encodeURIComponent(role)}&token=${encodeURIComponent(token)}&period=${encodeURIComponent(period)}`;
+    window.location.replace(window.location.origin + '/rewards/' + q);
+  }, [shouldRedirectToRewards]);
 
   useEffect(() => {
     if (!isAdminLink) {
@@ -926,6 +962,17 @@ export default function App() {
     url.searchParams.set('admin', key);
     window.location.href = url.pathname + url.search;
   }, [gateKey]);
+
+  if (shouldRedirectToRewards) {
+    return (
+      <div dir="rtl" className="min-h-screen text-slate-100 flex items-center justify-center px-4">
+        <div className="glass rounded-2xl border border-white/15 p-6 max-w-md w-full text-center">
+          <h2 className="text-xl font-black text-turquoise mb-2">جاري التحويل</h2>
+          <p className="text-sm text-slate-300">يتم فتح صفحتك المخصصة...</p>
+        </div>
+      </div>
+    );
+  }
 
   return (
     adminKeyFromUrl === '' ? (
@@ -2818,8 +2865,19 @@ function EmployeeBreakdown({ staffList, data, config, dateRange }: {
     // Short delay so localStorage write is committed before navigation
     setTransferDone(true);
     setTimeout(() => setTransferDone(false), 3000);
-    const adminKey = typeof window !== 'undefined' ? new URLSearchParams(window.location.search).get('admin') || '' : '';
-    const rewardsQuery = adminKey ? `?admin=${encodeURIComponent(adminKey)}&transfer=1&t=${Date.now()}` : `?transfer=1&t=${Date.now()}`;
+    const params = typeof window !== 'undefined' ? new URLSearchParams(window.location.search) : new URLSearchParams();
+    const adminKey = params.get('admin') || '';
+    const role = params.get('role') || '';
+    const token = params.get('token') || '';
+    const period = params.get('period') || '';
+    const q = new URLSearchParams();
+    if (adminKey) q.set('admin', adminKey);
+    if (role) q.set('role', role);
+    if (token) q.set('token', token);
+    if (period) q.set('period', period);
+    q.set('transfer', '1');
+    q.set('t', String(Date.now()));
+    const rewardsQuery = '?' + q.toString();
     setTimeout(() => {
       window.location.href = '/rewards/' + rewardsQuery;
     }, 150);

@@ -1,14 +1,35 @@
-# Cloud Build (Google Cloud)
+# Cloud Build & Firebase App Hosting
 
 إذا ظهرت أخطاء البناء مثل:
 
 - `fail: google.nodejs.runtime` — "neither package.json nor any .js files found"
 - `fail: google.config.entrypoint` — "GOOGLE_ENTRYPOINT not set"
 - `No buildpack groups passed detection`
+- `ERROR: build step 3 ... nodejs ... failed: step exited with non-zero status: 21`
 
-فالسبب أن الـ trigger يبني من **جذر المستودع** بينما التطبيق (و`package.json`) داخل مجلد **`app/`**.
+فالسبب أن البناء يعمل من **جذر المستودع** بينما التطبيق (و`package.json`) داخل مجلد **`app/`**.
 
-## الحل: استخدام ملف cloudbuild.yaml
+---
+
+## إذا كان البناء من Firebase App Hosting (FAH)
+
+لو السجلات تحتوي على وسوم مثل `fah` أو `p-fah` أو اسم الـ step هو "build" مع صورة `nodejs_...`، فالبناء من **Firebase App Hosting** وليس من Cloud Build trigger عادي.
+
+**الحل:** ضبط **Root directory** لمجلد التطبيق في Firebase:
+
+1. ادخل [Firebase Console](https://console.firebase.google.com/project/rewards-63e43) → **App Hosting**.
+2. افتح الـ **Backend** المرتبط بالمستودع (مثلاً `rewards-app`).
+3. من إعدادات الـ Backend ابحث عن **Deployment settings** أو **Root directory** (المسار النسبي من جذر المستودع لتطبيقك).
+4. عيّن **Root directory** إلى: **`app`** (بدون شرطة مائلة في البداية).
+5. احفظ وأعد تشغيل البناء (أو ادفع commit جديد).
+
+بعد ذلك سيبني App Hosting من مجلد `app/` حيث يوجد `package.json` ولن تظهر أخطاء "package.json not found".
+
+راجع أيضاً: [Use monorepos with App Hosting](https://firebase.google.com/docs/app-hosting/monorepos).
+
+---
+
+## إذا كان البناء من Cloud Build trigger عادي: استخدام cloudbuild.yaml
 
 تم إضافة **`cloudbuild.yaml`** في جذر المستودع. هذا الملف يوجّه Cloud Build إلى:
 

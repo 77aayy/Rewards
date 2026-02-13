@@ -2,24 +2,17 @@
   "hosting": {
     "site": "rewards-63e43",
     "public": "dist",
-    "ignore": [
-      "firebase.json",
-      "**/.*",
-      "**/node_modules/**"
+    "ignore": ["firebase.json", "**/.*", "**/node_modules/**"],
+    "redirects": [
+      { "source": "/supervisor/:token/:period", "destination": "/rewards/?role=supervisor&token=:token&period=:period", "type": 302 },
+      { "source": "/hr/:token/:period", "destination": "/rewards/?role=hr&token=:token&period=:period", "type": 302 },
+      { "source": "/accounting/:token/:period", "destination": "/rewards/?role=accounting&token=:token&period=:period", "type": 302 },
+      { "source": "/manager/:token/:period", "destination": "/rewards/?role=manager&token=:token&period=:period", "type": 302 }
     ],
     "rewrites": [
-      {
-        "source": "/rewards",
-        "destination": "/rewards/index.html"
-      },
-      {
-        "source": "/rewards/**",
-        "destination": "/rewards/index.html"
-      },
-      {
-        "source": "**",
-        "destination": "/index.html"
-      }
+      { "source": "/rewards", "destination": "/rewards/index.html" },
+      { "source": "/rewards/**", "destination": "/rewards/index.html" },
+      { "source": "**", "destination": "/index.html" }
     ]
   }
 }
