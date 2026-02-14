@@ -2,20 +2,13 @@
  * Firebase Storage integration for persisting AppConfig across devices.
  * Uses the same Firebase project as the Rewards app (rewards-63e43).
  * Config is saved to: config/settings.json
+ *
+ * مصدر الحقيقة: adminConfig.ts (يدعم .env). راجع SECURITY.md.
  */
 import { initializeApp, type FirebaseApp } from 'firebase/app';
 import { getStorage, ref, uploadBytes, getBlob, type FirebaseStorage } from 'firebase/storage';
 import type { AppConfig } from './config';
-
-// ── Firebase config (same project as Rewards app) ──
-const firebaseConfig = {
-  apiKey: 'AIzaSyAKpUAnc_EJXxGrhPPfTAgnFB13Qvs_ogk',
-  authDomain: 'rewards-63e43.firebaseapp.com',
-  projectId: 'rewards-63e43',
-  storageBucket: 'rewards-63e43.firebasestorage.app',
-  messagingSenderId: '453256410249',
-  appId: '1:453256410249:web:b7edd6afe3922c3e738258',
-};
+import { FIREBASE_CONFIG } from './adminConfig';
 
 const CONFIG_PATH = 'config/settings.json';
 const FIREBASE_CONFIG_SAVED_KEY = 'adora_firebase_config_saved';
@@ -25,7 +18,7 @@ let storage: FirebaseStorage | null = null;
 
 function getFirebaseStorage(): FirebaseStorage {
   if (!storage) {
-    app = initializeApp(firebaseConfig, 'adora-config');
+    app = initializeApp(FIREBASE_CONFIG, 'adora-config');
     storage = getStorage(app);
   }
   return storage;

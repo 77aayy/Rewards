@@ -1,4 +1,13 @@
 import * as XLSX from 'xlsx';
+
+/** حد أقصى لحجم ملف Excel (10MB) — تخفيف من ReDoS/استهلاك الموارد. الحزمة: SheetJS من CDN الرسمي (xlsx-0.20.3). تقييد الحجم والنوع في App.tsx قبل القراءة. */
+export const MAX_FILE_SIZE_BYTES = 10 * 1024 * 1024;
+
+function assertFileSize(buffer: ArrayBuffer): void {
+  if (buffer.byteLength > MAX_FILE_SIZE_BYTES) {
+    throw new Error('الملف أكبر من الحد المسموح (10 ميجابايت)');
+  }
+}
 import type {
   ShiftType,
   BookingSource,
@@ -257,6 +266,7 @@ export function getFileTypeIcon(baseType: string): { color: string; bg: string }
 }
 
 export function detectFileType(buffer: ArrayBuffer): FileDetectionResult {
+  assertFileSize(buffer);
   const wb = XLSX.read(buffer, { type: 'array' });
   const sheetName = wb.SheetNames[0] || '';
   const rows = XLSX.utils.sheet_to_json<unknown[]>(wb.Sheets[sheetName], {
@@ -340,6 +350,7 @@ export function extractRoomNumber(roomUnit: string): string {
 }
 
 function readSheet(buffer: ArrayBuffer) {
+  assertFileSize(buffer);
   const wb = XLSX.read(buffer, { type: 'array' });
   return XLSX.utils.sheet_to_json<unknown[]>(wb.Sheets[wb.SheetNames[0]], {
     header: 1, defval: '',

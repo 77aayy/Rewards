@@ -283,7 +283,7 @@ function initializeAdminTokensForPeriod() {
   }
 }
 
-// Show admin management modal — عند الفتح: تحديث فوري لـ Firebase (الفترة الحية + التوكنات) حتى يعرف أن هناك فترة مفتوحة وملف مُرفع فيسمح للإداريين برؤية خانات الإدخال
+// Show admin management modal — النافذة تفتح فوراً؛ المزامنة مع Firebase تتم في الخلفية بعد الفتح
 function showAdminManagementModal() {
   const modal = document.getElementById('adminManagementModal');
   if (!modal) return;
@@ -292,34 +292,40 @@ function showAdminManagementModal() {
   initializeAdminTokensForPeriod();
   saveAdminTokens();
 
+  var hasData = false;
+  try {
+    var savedDb = localStorage.getItem('adora_rewards_db');
+    if (savedDb) {
+      var parsed = JSON.parse(savedDb);
+      hasData = Array.isArray(parsed) && parsed.length > 0;
+    }
+  } catch (_) {}
+
+  populateAdminManagementModal(hasData);
+  modal.classList.remove('hidden');
+  modal.style.display = 'flex';
+
+  if (!hasData) {
+    if (typeof showToast === 'function') showToast('يجب رفع ملف الفترة أولاً ثم فتح هذه النافذة لتفعيل الروابط للإداريين', 'error');
+    return;
+  }
+
   (async function () {
     try {
-      var hasData = false;
-      try {
-        var savedDb = localStorage.getItem('adora_rewards_db');
-        if (savedDb) {
-          var parsed = JSON.parse(savedDb);
-          hasData = Array.isArray(parsed) && parsed.length > 0;
-        }
-      } catch (_) {}
-      if (hasData && typeof window.doSyncLivePeriodNow === 'function') {
+      if (typeof window.doSyncLivePeriodNow === 'function') {
         if (typeof showToast === 'function') showToast('جاري تحديث Firebase...', 'info');
         try {
           await window.doSyncLivePeriodNow();
-          if (typeof showToast === 'function') showToast('تم تحديث البيانات النشطة — يمكنك نسخ الروابط للإداريين', 'success');
+          if (typeof showToast === 'function') showToast('تمت المزامنة مع Firebase. يمكنك الآن إرسال الروابط للإداريين — لا ترسل الرابط قبل ظهور هذه الرسالة.', 'success');
         } catch (syncErr) {
-          if (typeof showToast === 'function') showToast('فشل تحديث Firebase — تحقق من الاتصال وجرّب فتح «إدارة الإداريين» مرة أخرى', 'error');
+          var msg = (syncErr && syncErr.message) ? String(syncErr.message) : 'فشل تحديث Firebase — تحقق من الاتصال وجرّب فتح «إدارة الإداريين» مرة أخرى';
+          if (typeof showToast === 'function') showToast(msg, 'error');
         }
-      } else if (!hasData) {
-        if (typeof showToast === 'function') showToast('يجب رفع ملف الفترة أولاً ثم فتح هذه النافذة لتفعيل الروابط للإداريين', 'error');
       }
     } catch (_) {}
     saveAdminTokens();
     setTimeout(saveAdminTokens, 2000);
     setTimeout(saveAdminTokens, 5000);
-    populateAdminManagementModal(hasData);
-    modal.classList.remove('hidden');
-    modal.style.display = 'flex';
   })();
 }
 
@@ -339,12 +345,15 @@ function populateAdminManagementModal(hasData) {
   if (!container) return;
   
   const periodId = getCurrentPeriodId();
-  const tokens = adminTokens[periodId] || {};
+  if (!adminTokens[periodId]) adminTokens[periodId] = {};
+  const tokens = adminTokens[periodId];
   const periodTextAdminMgmt = (document.getElementById('headerPeriodRange') && document.getElementById('headerPeriodRange').innerText) ? document.getElementById('headerPeriodRange').innerText : 'غير محدد';
   
   var html = '';
   if (hasData === false) {
     html += '<div class="mb-6 p-4 rounded-xl border-2 border-amber-500/50 bg-amber-500/10 text-amber-200" role="alert"><p class="font-bold mb-1">⚠️ يجب رفع ملف الفترة أولاً</p><p class="text-sm text-gray-300">الروابط أدناه لن تعمل للمشرف و HR حتى ترفع ملف الإكسيل ثم تفتح «إدارة الإداريين» مرة أخرى لتحديث Firebase.</p></div>';
+  } else {
+    html += '<div class="mb-4 p-3 rounded-xl border border-cyan-500/40 bg-cyan-500/10 text-cyan-200" role="status"><p class="text-sm"><strong>💡 قبل إرسال الرابط للمشرف أو HR:</strong> انتظر ظهور «تمت المزامنة» في أعلى الصفحة (بعد النقل من التحليل أو رفع الملف). إن أرسلت الرابط قبل المزامنة، لن يستطيع الإداري تحميل أسماء الموظفين.</p></div>';
   }
   
   const roles = [
@@ -358,7 +367,8 @@ function populateAdminManagementModal(hasData) {
   
   const savedNames = loadAdminNames();
   roles.forEach(role => {
-    const admin = tokens[role.key] || { token: generateAdminToken(), name: savedNames[role.key] || '', createdAt: new Date().toISOString(), active: true };
+    if (!tokens[role.key]) tokens[role.key] = { token: generateAdminToken(), name: savedNames[role.key] || '', createdAt: new Date().toISOString(), active: true };
+    const admin = tokens[role.key];
     const baseUrl = window.location.origin;
     const link = baseUrl + '/' + role.key + '/' + admin.token + '/' + periodId;
     const displayName = (admin.name || savedNames[role.key] || '').trim();
@@ -413,7 +423,7 @@ function populateAdminManagementModal(hasData) {
       </div>
     `;
   });
-  
+  saveAdminTokens();
   html += '</div>';
   container.innerHTML = html;
 }
@@ -485,10 +495,26 @@ function regenerateAdminToken(role) {
 function testAdminLink(role) {
   const periodId = getCurrentPeriodId();
   const admin = adminTokens[periodId]?.[role];
-  if (!admin) return;
-  const baseUrl = window.location.origin;
-  const link = baseUrl + '/' + role + '/' + admin.token + '/' + periodId;
-  window.open(link, '_blank');
+  let link = null;
+  if (admin && admin.token) {
+    const baseUrl = window.location.origin;
+    const isDev = (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1');
+    if (isDev) {
+      link = baseUrl + '/rewards/?role=' + encodeURIComponent(role) + '&token=' + encodeURIComponent(admin.token) + '&period=' + encodeURIComponent(periodId);
+    } else {
+      link = baseUrl + '/' + role + '/' + admin.token + '/' + periodId;
+    }
+  }
+  if (!link) {
+    const input = document.getElementById('adminLink_' + role);
+    if (input && input.value) link = input.value;
+  }
+  if (!link) {
+    if (typeof showToast === 'function') showToast('لا يوجد رابط لهذا الدور — جرّب إعادة توليد الرابط', 'error');
+    return;
+  }
+  const w = window.open(link, '_blank', 'noopener');
+  if (typeof showToast === 'function') showToast(w ? 'تم فتح الرابط في نافذة جديدة' : 'اسمح بفتح النوافذ المنبثقة للموقع', w ? 'success' : 'info');
 }
 
 // Deactivate all tokens for a period (when closing period)
@@ -2813,15 +2839,12 @@ function loadCurrentPeriodStats() {
     uniqueEmployees.get(key).push(emp);
   });
   
-  // Per-employee aggregates for "أوائل" cards — صافي مطابق للجدول الإداري: مجموع صافي الفروع (بدون خصم) + حافز التميز 50 + حافز الالتزام 50 - getTotalDiscountForEmployee مرة واحدة
+  // Per-employee aggregates for "أوائل" cards — الصافي من نفس مصدر الجدول (calculateEmployeeReport / calculateAggregatedEmployeeReport) ليتطابق الكارت مع الجدول
   const employeeAggregates = [];
   uniqueEmployees.forEach((employees, name) => {
     let totalCount = 0;
     let totalEvalBooking = 0;
     let totalEvalGoogle = 0;
-    let totalNetFromBranches = 0;
-    let hasExcellence = false;
-    let hasCommitment = false;
     let hasAttendance26 = false;
     
     employees.forEach(emp => {
@@ -2829,25 +2852,14 @@ function loadCurrentPeriodStats() {
       totalEvalBooking += emp.evaluationsBooking || 0;
       totalEvalGoogle += emp.evaluationsGoogle || 0;
       if (emp.attendance26Days === true) hasAttendance26 = true;
-      
-      const rate = emp.count > 100 ? 3 : (emp.count > 50 ? 2 : 1);
-      const evBooking = emp.evaluationsBooking || 0;
-      const evGoogle = emp.evaluationsGoogle || 0;
-      const gross = (emp.count * rate) + (evBooking * 20) + (evGoogle * 10);
-      const fund = gross * 0.15;
-      let branchNet = gross - fund;
-      const attendance26Days = emp.attendance26Days === true;
-      branchNet = branchNet + (attendance26Days ? branchNet * 0.25 : 0);
-      totalNetFromBranches += branchNet;
-      
-      const bw = branchWinners[emp.branch];
-      if (bw && bw.book.ids.includes(emp.id) && bw.eval.ids.includes(emp.id) && bw.book.val > 0 && bw.eval.val > 0) hasExcellence = true;
-      if (bw && attendance26Days && bw.attendance.ids.includes(emp.id) && ((bw.eval.ids.includes(emp.id) && bw.eval.val > 0) || (bw.book.ids.includes(emp.id) && bw.book.val > 0))) hasCommitment = true;
     });
     
-    let totalNet = totalNetFromBranches + (hasExcellence ? 50 : 0) + (hasCommitment ? 50 : 0);
-    if (typeof getTotalDiscountForEmployee === 'function') {
-      totalNet = Math.max(0, totalNet - getTotalDiscountForEmployee(name));
+    let totalNet = 0;
+    if (typeof calculateAggregatedEmployeeReport === 'function' && typeof calculateEmployeeReport === 'function') {
+      const report = employees.length > 1
+        ? calculateAggregatedEmployeeReport(name)
+        : calculateEmployeeReport(employees[0].id);
+      totalNet = (report && report.finalNet != null) ? report.finalNet : 0;
     }
     
     employeeAggregates.push({
@@ -2892,12 +2904,17 @@ function loadCurrentPeriodStats() {
   const byRating = (a, b) => ((b.rating || 0) !== (a.rating || 0) ? (b.rating || 0) - (a.rating || 0) : (b.totalNet || 0) - (a.totalNet || 0));
   const byNet = (a, b) => (b.totalNet !== a.totalNet ? b.totalNet - a.totalNet : (b.rating || 0) - (a.rating || 0));
 
-  const topBookings = employeeAggregates.length ? employeeAggregates.slice().sort(byBookings)[0] : null;
-  const topEvalBooking = employeeAggregates.length ? employeeAggregates.slice().sort(byEvalBooking)[0] : null;
-  const topEvalGoogle = employeeAggregates.length ? employeeAggregates.slice().sort(byEvalGoogle)[0] : null;
+  const _topBookings = employeeAggregates.length ? employeeAggregates.slice().sort(byBookings)[0] : null;
+  const _topEvalBooking = employeeAggregates.length ? employeeAggregates.slice().sort(byEvalBooking)[0] : null;
+  const _topEvalGoogle = employeeAggregates.length ? employeeAggregates.slice().sort(byEvalGoogle)[0] : null;
   const with26 = employeeAggregates.filter(e => e.hasAttendance26);
   const topAttendance26 = with26.length ? with26.slice().sort(byRating)[0] : null;
-  const topNet = employeeAggregates.length ? employeeAggregates.slice().sort(byNet)[0] : null;
+  const _topNet = employeeAggregates.length ? employeeAggregates.slice().sort(byNet)[0] : null;
+  // لا نعرض اسماً في الكروت عندما القيمة = 0 (المفترض أكبر من 0 فقط)
+  const topBookings = (_topBookings && (_topBookings.totalCount || 0) > 0) ? _topBookings : null;
+  const topEvalBooking = (_topEvalBooking && (_topEvalBooking.totalEvalBooking || 0) > 0) ? _topEvalBooking : null;
+  const topEvalGoogle = (_topEvalGoogle && (_topEvalGoogle.totalEvalGoogle || 0) > 0) ? _topEvalGoogle : null;
+  const topNet = (_topNet && (_topNet.totalNet || 0) > 0) ? _topNet : null;
   
   // أكثر الموظفين خصومات (من window.discounts)
   let topDiscountsName = null;
@@ -2919,22 +2936,27 @@ function loadCurrentPeriodStats() {
   const discountNameEsc = topDiscountsName ? String(topDiscountsName).replace(/\\/g, '\\\\').replace(/'/g, "\\'") : '';
   const discountCardOnclick = topDiscountsName ? `onclick="showMostDiscountsDetail('${discountNameEsc}')"` : '';
   const discountCardClass = 'glass p-4 rounded-xl border border-turquoise/30' + (topDiscountsName ? ' cursor-pointer hover:border-red-400/50 hover:bg-white/5 transition-all' : '');
+  // عرض الاسم والرقم فقط عندما القيمة > 0 (لا نعرض 0 في الكروت)
+  const showBookings = topBookings && (Number(topBookings.totalCount) || 0) > 0;
+  const showEvalB = topEvalBooking && (Number(topEvalBooking.totalEvalBooking) || 0) > 0;
+  const showEvalG = topEvalGoogle && (Number(topEvalGoogle.totalEvalGoogle) || 0) > 0;
+  const showNet = topNet && (Number(topNet.totalNet) || 0) > 0;
   
   container.innerHTML = `
     <div class="glass p-4 rounded-xl border border-turquoise/30">
       <div class="text-sm text-gray-400 mb-1">أكثر الموظفين حجوزات</div>
-      <div class="text-lg font-black text-turquoise">${topBookings ? topBookings.name : '—'}</div>
-      <div class="text-sm text-gray-300">${topBookings ? fmt(topBookings.totalCount) + ' حجز' : ''}</div>
+      <div class="text-lg font-black text-turquoise">${showBookings ? topBookings.name : '—'}</div>
+      <div class="text-sm text-gray-300">${showBookings ? fmt(topBookings.totalCount) + ' حجز' : ''}</div>
     </div>
     <div class="glass p-4 rounded-xl border border-turquoise/30">
       <div class="text-sm text-gray-400 mb-1">أكثرهم تقييمات بوكينج</div>
-      <div class="text-lg font-black text-turquoise">${topEvalBooking ? topEvalBooking.name : '—'}</div>
-      <div class="text-sm text-gray-300">${topEvalBooking ? fmt(topEvalBooking.totalEvalBooking) + ' تقييم' : ''}</div>
+      <div class="text-lg font-black text-turquoise">${showEvalB ? topEvalBooking.name : '—'}</div>
+      <div class="text-sm text-gray-300">${showEvalB ? fmt(topEvalBooking.totalEvalBooking) + ' تقييم' : ''}</div>
     </div>
     <div class="glass p-4 rounded-xl border border-turquoise/30">
       <div class="text-sm text-gray-400 mb-1">أكثرهم تقييمات خرائط</div>
-      <div class="text-lg font-black text-turquoise">${topEvalGoogle ? topEvalGoogle.name : '—'}</div>
-      <div class="text-sm text-gray-300">${topEvalGoogle ? fmt(topEvalGoogle.totalEvalGoogle) + ' تقييم' : ''}</div>
+      <div class="text-lg font-black text-turquoise">${showEvalG ? topEvalGoogle.name : '—'}</div>
+      <div class="text-sm text-gray-300">${showEvalG ? fmt(topEvalGoogle.totalEvalGoogle) + ' تقييم' : ''}</div>
     </div>
     <div class="glass p-4 rounded-xl border border-turquoise/30">
       <div class="text-sm text-gray-400 mb-1">أكثرهم التزاماً في الحضور (26 يوم+)</div>
@@ -2942,8 +2964,8 @@ function loadCurrentPeriodStats() {
     </div>
     <div class="glass p-4 rounded-xl border border-turquoise/30">
       <div class="text-sm text-gray-400 mb-1">أكثرهم حصولاً على صافي</div>
-      <div class="text-lg font-black text-turquoise">${topNet ? topNet.name : '—'}</div>
-      <div class="text-sm text-green-400">${topNet ? fmt(topNet.totalNet) + ' ريال' : ''}</div>
+      <div class="text-lg font-black text-turquoise">${showNet ? topNet.name : '—'}</div>
+      <div class="text-sm text-green-400">${showNet ? (Number(topNet.totalNet).toFixed(2)) + ' ريال' : ''}</div>
     </div>
     <div class="${discountCardClass}" ${discountCardOnclick} title="${topDiscountsName ? 'اضغط لرؤية أسباب الخصومات وتواريخها وقيمها' : ''}">
       <div class="text-sm text-gray-400 mb-1">أكثر الموظفين خصومات</div>
@@ -3161,6 +3183,38 @@ function getEmployeePointsBalanceForPeriodDb(db) {
     out[name] = totalNet + totalFund;
   });
   return out;
+}
+
+/** عرض أسباب تجميع رصيد النقاط (إجمالي − 15% = صافي + 15% = نقاط) عند الضغط على الرقم في جدول الإحصائيات */
+function showPointsBreakdownPopup(empName, reportEmpId, isDuplicate) {
+  var report = isDuplicate && typeof calculateAggregatedEmployeeReport === 'function'
+    ? calculateAggregatedEmployeeReport(empName)
+    : (typeof calculateEmployeeReport === 'function' ? calculateEmployeeReport(reportEmpId) : null);
+  if (!report) return;
+  var gross = report.gross != null ? report.gross : 0;
+  var fund = report.fund != null ? report.fund : 0;
+  var net = report.finalNet != null ? report.finalNet : 0;
+  var points = net + fund;
+  var unit = (report.pointsMode || (typeof window !== 'undefined' && window.adoraRewardsPointsMode)) ? 'نقطة' : 'ريال';
+  var html = '<div class="p-4 text-right space-y-2 text-sm">' +
+    '<div class="font-bold text-turquoise border-b border-turquoise/30 pb-2 mb-2">أسباب تجميع الرقم — ' + (empName || '').replace(/</g, '&lt;') + '</div>' +
+    '<div class="flex justify-between text-gray-300"><span>إجمالي المكافآت (حجوزات + تقييمات):</span><span class="font-bold text-white">' + gross.toFixed(2) + ' ' + unit + '</span></div>' +
+    '<div class="flex justify-between text-gray-300"><span>− مساهمة شركاء النجاح (15%):</span><span class="font-bold text-orange-400">−' + fund.toFixed(2) + ' ' + unit + '</span></div>' +
+    '<div class="flex justify-between text-gray-300 border-t border-white/10 pt-2"><span>= الصافي المستحق:</span><span class="font-bold text-green-400">' + net.toFixed(2) + ' ' + unit + '</span></div>' +
+    '<div class="flex justify-between text-gray-300"><span>+ مساهمة 15% (نقاط):</span><span class="font-bold text-turquoise">+' + fund.toFixed(2) + ' نقطة</span></div>' +
+    '<div class="flex justify-between text-turquoise font-bold border-t border-turquoise/30 pt-2 mt-2"><span>= رصيد النقاط من الفترة:</span><span>' + points.toFixed(2) + ' نقطة</span></div>' +
+    '</div>';
+  var overlay = document.createElement('div');
+  overlay.id = 'pointsBreakdownOverlay';
+  overlay.className = 'fixed inset-0 z-[10000] flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm';
+  overlay.setAttribute('role', 'dialog');
+  overlay.setAttribute('aria-label', 'أسباب تجميع الرقم');
+  overlay.innerHTML = '<div class="glass rounded-xl border-2 border-turquoise/40 max-w-md w-full shadow-xl animate-in" role="document">' +
+    '<div class="flex justify-between items-center p-3 border-b border-white/10"><span class="text-turquoise font-bold">تفاصيل الرصيد</span><button type="button" class="text-white/70 hover:text-white p-1 rounded" onclick="document.getElementById(\'pointsBreakdownOverlay\') && document.getElementById(\'pointsBreakdownOverlay\').remove()" aria-label="إغلاق">✕</button></div>' +
+    html +
+    '</div>';
+  overlay.onclick = function (e) { if (e.target === overlay) overlay.remove(); };
+  document.body.appendChild(overlay);
 }
 
 function populateEmployeePerformanceTable() {
@@ -3410,7 +3464,7 @@ function populateEmployeePerformanceTable() {
         <td class="p-3 text-center font-bold text-green-400">${emp.net.toFixed(2)} ريال</td>
         <td class="p-3 text-center">
           <div class="flex flex-col items-center gap-0.5">
-            <span class="font-bold text-turquoise tabular-nums" title="رصيد النقاط من الفترة (صافي + مساهمة 15%). للتفاصيل اضغط على الاسم.">${(emp.pointsBalance != null ? emp.pointsBalance : emp.net).toFixed(2)} نقطة</span>
+            <span class="font-bold text-turquoise tabular-nums cursor-pointer hover:text-turquoise/80 transition-colors" title="رصيد النقاط من الفترة (صافي + مساهمة 15%). اضغط لرؤية أسباب تجميع الرقم." onclick="typeof showPointsBreakdownPopup === 'function' && showPointsBreakdownPopup('${nameEsc}','${idEsc}',${!!emp.isDuplicate})">${(emp.pointsBalance != null ? emp.pointsBalance : emp.net).toFixed(2)} نقطة</span>
             <div class="text-xs text-gray-400">مستوى الأداء: ${emp.level}</div>
           </div>
         </td>

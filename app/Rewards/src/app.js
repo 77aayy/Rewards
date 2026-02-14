@@ -1,3 +1,4 @@
+// مصدر هذا الملف: app/Rewards/. لا تعدّل النسخة في public/rewards يدوياً — عدّل هنا ثم npm run sync:rewards من مجلد app.
 // === Verbose logging: تفصيلي في التطوير فقط، إيقاف في الإنتاج ===
 function logVerbose() {
   try {
@@ -7,26 +8,7 @@ function logVerbose() {
 }
 
 // === Role-Based Access Control (RBAC) ===
-// تحويل رابط المسار إلى query: /supervisor/TOKEN/2026_01 → ?role=supervisor&token=TOKEN&period=2026_01 (إعادة تحميل لقراءة الـ params)
-(function () {
-  if (typeof window === 'undefined' || !window.location || !window.location.pathname) return;
-  var pathname = window.location.pathname;
-  // تحديد base path: في بيئة التطوير (Vite) المكافآت على /rewards/، في الإنتاج على /
-  var isDevServer = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1';
-  var basePath = isDevServer ? '/rewards/' : '/';
-  var m = pathname.match(/^\/(supervisor|hr|accounting|manager)\/([^/]+)\/([^/]+)\/?$/);
-  if (m) {
-    var q = '?role=' + encodeURIComponent(m[1]) + '&token=' + encodeURIComponent(m[2]) + '&period=' + encodeURIComponent(m[3]);
-    var newUrl = window.location.origin + basePath + q;
-    if (window.location.href !== newUrl) window.location.replace(newUrl);
-    return;
-  }
-  // /e/كود الموظف → ?code=كود
-  var parts = pathname.split('/').filter(Boolean);
-  if (parts.length === 2 && parts[0] === 'e' && parts[1]) {
-    window.location.replace(window.location.origin + basePath + '?code=' + encodeURIComponent(parts[1]));
-  }
-})();
+// تحويل المسار إلى query يتم في rewards-rbac.js (يُحمّل قبل هذا الملف).
 const urlParams = new URLSearchParams(window.location.search);
 const role = urlParams.get('role');
 const token = urlParams.get('token');
@@ -50,6 +32,7 @@ if (typeof window !== 'undefined') {
 }
 let branches = new Set();
 let currentFilter = 'الكل';
+if (typeof window !== 'undefined') window.currentFilter = 'الكل';
 let currentEvalRate = 20;
 let reportStartDate = null; // Store the start date for report month name
 let employeeCodesMap = {}; // Map employee names to codes
@@ -65,6 +48,12 @@ if (typeof window !== 'undefined') {
 }
 const LOCAL_REWARDS_EDIT_TS_KEY = 'adora_rewards_last_local_edit_ts';
 const LOCAL_REWARDS_DIRTY_KEY = 'adora_rewards_local_dirty';
+// REWARDS_PRICING_STORAGE_KEY معرّف في rewards-firebase.js ويُعرّض على window — نستخدمه من هنا.
+// Capture transfer payload at script start so doRbacThenInit can use it even if something clears localStorage
+(function () {
+  if (typeof window === 'undefined' || !window.location || window.location.search.indexOf('transfer=1') < 0) return;
+  try { window._adoraTransferPayloadCapture = localStorage.getItem('adora_transfer_payload'); } catch (_) {}
+})();
 function markLocalRewardsDirty() {
   try {
     var ts = Date.now();
@@ -108,7 +97,9 @@ function buildActionButtonsFromConfig() {
   var container = typeof document !== 'undefined' ? document.getElementById('actionBtns') : null;
   if (!container) return;
   var base = (typeof window !== 'undefined' && window.location && window.location.origin) ? window.location.origin : '';
-  var configUrl = base + '/shared/headerButtonsConfig.json';
+  var pathname = (typeof window !== 'undefined' && window.location && window.location.pathname) ? window.location.pathname : '';
+  var configPath = pathname.indexOf('/rewards') >= 0 ? '/rewards/shared/headerButtonsConfig.json' : '/shared/headerButtonsConfig.json';
+  var configUrl = base + configPath;
   fetch(configUrl).then(function (res) { return res.ok ? res.json() : null; }).then(function (data) {
     if (!data || !Array.isArray(data.buttons)) return;
     var buttons = data.buttons.filter(function (b) {
@@ -126,8 +117,12 @@ function buildActionButtonsFromConfig() {
       var style = b.hidden ? ' style="display:none;"' : (b.id === 'returnToUpload' ? ' style="display:none;"' : '');
       return '<button type="button"' + idAttr + ' class="' + cls + '"' + titleAttr + onclickAttr + style + '>' + icon + '<span class="hidden sm:inline">' + label + '</span><span class="sm:hidden">' + labelShort + '</span></button>';
     }).join('');
-    html += '<button type="button" id="btnLogoutRewards" onclick="returnToUpload()" class="action-header-btn action-header-btn--red" title="خروج — تسجيل الخروج والعودة لصفحة الدخول" aria-label="خروج">' + (REWARDS_HEADER_ICONS['log-out'] || '') + '<span>خروج</span></button>';
+    html += '<button type="button" id="btnLogoutRewards" onclick="returnToUpload(false, true)" class="action-header-btn action-header-btn--red" title="خروج — تسجيل الخروج والعودة لصفحة الدخول" aria-label="خروج">' + (REWARDS_HEADER_ICONS['log-out'] || '') + '<span>خروج</span></button>';
     container.innerHTML = html;
+    // إعادة تطبيق صلاحيات الدور: الأدمن يرى كل الأزرار؛ المشرف/HR/الحسابات/المدير يرون شروط المكافآت فقط. الرابط أولاً: وجود admin= يعني أدمن حتى بعد رفرش.
+    var urlParams = typeof window !== 'undefined' && window.location ? new URLSearchParams(window.location.search) : null;
+    var role = (urlParams && urlParams.get('role')) || (urlParams && urlParams.get('admin') ? 'admin' : null) || (typeof localStorage !== 'undefined' && localStorage.getItem('adora_current_role')) || '';
+    if (typeof initializeRoleBasedUI === 'function') initializeRoleBasedUI(role || 'admin');
   }).catch(function () {});
 }
 
@@ -210,7 +205,7 @@ function getPricingConfig() {
   }
   // 2. From localStorage
   try {
-    var saved = localStorage.getItem('adora_rewards_pricing');
+    var saved = localStorage.getItem((typeof window !== 'undefined' && window.REWARDS_PRICING_STORAGE_KEY) || 'adora_rewards_pricing');
     if (saved) {
       var p2 = JSON.parse(saved);
       return {
@@ -298,14 +293,19 @@ function getDisplayRate(count) {
  * Called by both localStorage (primary) and postMessage (fallback) paths.
  */
 function _processAdoraTransferPayload(payload) {
+  if (!payload || !Array.isArray(payload.rows)) {
+    if (typeof logVerbose === 'function') logVerbose('⚠️ _processAdoraTransferPayload: invalid payload (no rows array)');
+    return;
+  }
   window.adoraTransferMode = true;
   window.adoraRawBookings = payload.rawBookings || [];
   window.adoraConfig = payload.config || {};
   window.adoraActiveVipRooms = payload.activeVipRooms || [];
 
-  // Set period dates
+  // Set period dates (وضع reportStartDate على window لاستخدامه في _adoraBackgroundFirebaseSync)
   if (payload.period) {
     reportStartDate = payload.period.from || null;
+    if (typeof window !== 'undefined') window.reportStartDate = reportStartDate;
     var periodText = payload.period.from && payload.period.to
       ? payload.period.from + ' → ' + payload.period.to
       : '';
@@ -406,7 +406,7 @@ function _processAdoraTransferPayload(payload) {
     if (window.adoraConfig) localStorage.setItem('adora_rewards_config', JSON.stringify(window.adoraConfig));
     // Cache reward pricing separately for fast access
     if (window.adoraConfig && window.adoraConfig.rewardPricing) {
-      localStorage.setItem('adora_rewards_pricing', JSON.stringify(window.adoraConfig.rewardPricing));
+      localStorage.setItem((typeof window !== 'undefined' && window.REWARDS_PRICING_STORAGE_KEY) || 'adora_rewards_pricing', JSON.stringify(window.adoraConfig.rewardPricing));
     }
     // Cache raw bookings for breakdown drilldown on refresh
     if (window.adoraRawBookings && window.adoraRawBookings.length > 0) {
@@ -428,46 +428,13 @@ function _processAdoraTransferPayload(payload) {
     logVerbose('✅ ADORA_TRANSFER initial render done:', db.length, 'employees');
 
     // ======================================================================
-    // PHASE 2: BACKGROUND FIREBASE SYNC — fetch + merge + re-render silently
+    // PHASE 2: BACKGROUND FIREBASE SYNC — جلب أدخالات المشرف/HR من Firebase ودمجها وإعادة الرسم
+    // (لا نعتمد على انتظار Firebase قبل الرسم؛ نرسم فوراً ثم المزامنة في الخلفية حتى تظهر التقييمات والحضور وبطل التحدي عند الجاهزية)
     // ======================================================================
     _adoraBackgroundFirebaseSync(payload, { uploadAfterMerge: true });
   }
 
-  // If no local cache exists (fresh tab/device), do a quick Firebase hydration
-  // before the first render to avoid showing temporary zero/old values.
-  var hasLocalCache = Array.isArray(localOldDb) && localOldDb.length > 0;
-  if (!hasLocalCache) {
-    (async function quickHydrateBeforeFirstRender() {
-      try {
-        if (typeof initializeFirebase === 'function') initializeFirebase();
-        var waitStart = Date.now();
-        while (!(typeof window !== 'undefined' && window.storage) && (Date.now() - waitStart) < 3500) {
-          await new Promise(function(r) { setTimeout(r, 150); });
-        }
-
-        var remoteData = null;
-        var periodId = (typeof reportStartDate === 'string' && /^\d{4}-\d{2}-\d{2}/.test(reportStartDate))
-          ? reportStartDate.substring(0, 7).replace('-', '_')
-          : null;
-        if (periodId && typeof fetchPeriodFromFirebase === 'function') {
-          remoteData = await fetchPeriodFromFirebase(periodId);
-        }
-        if ((!remoteData || !Array.isArray(remoteData.db) || remoteData.db.length === 0) && typeof fetchLivePeriodFromFirebase === 'function') {
-          remoteData = await fetchLivePeriodFromFirebase();
-        }
-        if (typeof mergeFirebaseInputsIntoCurrentDb === 'function') {
-          var mergedFields = mergeFirebaseInputsIntoCurrentDb(remoteData);
-          if (mergedFields > 0) {
-            try { localStorage.setItem('adora_rewards_db', JSON.stringify(db)); } catch (_) {}
-            logVerbose('✅ Quick hydrate merged', mergedFields, 'fields before first render');
-          }
-        }
-      } catch (_) {}
-      finalizeTransferRender();
-    })();
-    return;
-  }
-
+  // عرض الجدول فوراً ثم المزامنة مع Firebase في الخلفية (نفس المسار مع أو بدون cache)
   finalizeTransferRender();
 }
 
@@ -481,190 +448,6 @@ window.addEventListener('message', function(evt) {
     try { evt.source.postMessage({ type: 'ADORA_TRANSFER_ACK' }, evt.origin || '*'); } catch (_) {}
   }
 });
-
-/** Merge Firebase-owned fields (HR/supervisor/discounts) into current db. Returns number of changed fields. */
-function mergeFirebaseInputsIntoCurrentDb(data) {
-  if (!data || !Array.isArray(data.db) || !Array.isArray(db) || db.length === 0) return 0;
-
-  // Restore negative ratings, discounts, discountTypes from Firebase payload
-  if (data.negativeRatingsCount && typeof data.negativeRatingsCount === 'object') {
-    try {
-      branchNegativeRatingsCount = data.negativeRatingsCount;
-      if (typeof window !== 'undefined') window.branchNegativeRatingsCount = branchNegativeRatingsCount;
-      localStorage.setItem('adora_rewards_negativeRatingsCount', JSON.stringify(branchNegativeRatingsCount));
-    } catch (_) {}
-  }
-  if (Array.isArray(data.discounts)) {
-    try {
-      localStorage.setItem('adora_rewards_discounts', JSON.stringify(data.discounts));
-      discounts = data.discounts;
-      if (typeof window !== 'undefined') window.discounts = discounts;
-    } catch (_) {}
-  }
-  if (Array.isArray(data.discountTypes)) {
-    try {
-      localStorage.setItem('adora_rewards_discountTypes', JSON.stringify(data.discountTypes));
-      discountTypes = data.discountTypes;
-      if (typeof window !== 'undefined') window.discountTypes = discountTypes;
-    } catch (_) {}
-  }
-
-  var firebaseMap = new Map();
-  data.db.forEach(function(emp) {
-    firebaseMap.set(emp.name + '|' + emp.branch, emp);
-  });
-
-  var changesFound = 0;
-  db.forEach(function(emp) {
-    var fbEmp = firebaseMap.get(emp.name + '|' + emp.branch);
-    if (!fbEmp) return;
-    // Fields owned by Firebase side and must survive transfer payload rebuild.
-    var fbFields = [
-      'evaluations', 'evaluationsBooking', 'evaluationsGoogle',
-      'totalAttendanceDays', 'attendance26Days', 'attendanceDaysPerBranch',
-      'doneStatus', 'doneCheckmark', 'repeaterDays', 'repeaterNotes'
-    ];
-    fbFields.forEach(function(f) {
-      if (fbEmp[f] === undefined || fbEmp[f] === null) return;
-      var oldVal = JSON.stringify(emp[f]);
-      var newVal = JSON.stringify(fbEmp[f]);
-      if (oldVal !== newVal) {
-        emp[f] = fbEmp[f];
-        changesFound++;
-      }
-    });
-  });
-
-  if (typeof window !== 'undefined') window.db = db;
-  return changesFound;
-}
-
-/** Background Firebase sync: fetches period data, merges evaluations/attendance/discounts, re-renders if changes found */
-function _adoraBackgroundFirebaseSync(payload, options) {
-  var shouldUploadAfterMerge = !!(options && options.uploadAfterMerge === true);
-  // Show sync indicator in header
-  var syncBadge = document.createElement('div');
-  syncBadge.id = 'adoraFirebaseSyncBadge';
-  syncBadge.innerHTML = '<div style="display:flex;align-items:center;gap:6px;padding:4px 14px;border-radius:20px;background:rgba(20,184,166,0.15);border:1px solid rgba(20,184,166,0.3);backdrop-filter:blur(8px);font-size:12px;color:#5eead4;animation:adoraPulseSync 1.5s ease-in-out infinite;">'
-    + '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" style="animation:adoraSpin 1s linear infinite;"><path d="M21 12a9 9 0 1 1-6.219-8.56"/></svg>'
-    + '<span>جاري المزامنة مع Firebase...</span>'
-    + '</div>';
-  syncBadge.style.cssText = 'position:fixed;top:12px;left:50%;transform:translateX(-50%);z-index:9999;transition:opacity 0.5s;';
-
-  // Add animation keyframes if not already present
-  if (!document.getElementById('adoraSyncAnimStyle')) {
-    var styleEl = document.createElement('style');
-    styleEl.id = 'adoraSyncAnimStyle';
-    styleEl.textContent = '@keyframes adoraSpin{from{transform:rotate(0deg)}to{transform:rotate(360deg)}}@keyframes adoraPulseSync{0%,100%{opacity:1}50%{opacity:0.6}}';
-    document.head.appendChild(styleEl);
-  }
-  document.body.appendChild(syncBadge);
-
-  // Run Firebase fetch in background (async IIFE)
-  (async function() {
-    var firebaseOldDb = [];
-    var syncSuccess = false;
-    try {
-      var startDate = (typeof reportStartDate === 'string' && reportStartDate && /^\d{4}-\d{2}-\d{2}/.test(reportStartDate))
-        ? reportStartDate
-        : (localStorage.getItem('adora_rewards_startDate') || '').trim();
-      if (!startDate || !/^\d{4}-\d{2}-\d{2}/.test(startDate)) {
-        syncSuccess = true;
-      } else {
-      reportStartDate = startDate;
-
-      // Initialize Firebase
-      if (typeof initializeFirebase === 'function') initializeFirebase();
-      var waitStart = Date.now();
-      while (!(typeof window !== 'undefined' && window.storage) && (Date.now() - waitStart) < 8000) {
-        await new Promise(function(r) { setTimeout(r, 200); });
-      }
-
-      var periodId = reportStartDate.substring(0, 7).replace('-', '_');
-      var data = null;
-
-      // Try period file first, then live
-      if (typeof fetchPeriodFromFirebase === 'function') data = await fetchPeriodFromFirebase(periodId);
-      if (!data || !Array.isArray(data.db) || data.db.length === 0) {
-        if (typeof fetchLivePeriodFromFirebase === 'function') data = await fetchLivePeriodFromFirebase();
-      }
-
-      if (data && Array.isArray(data.db) && data.db.length > 0) {
-        firebaseOldDb = data.db;
-        logVerbose('🔄 Firebase data fetched in background:', firebaseOldDb.length, 'employees');
-        var remoteModified = Number(data.lastModified) || 0;
-        var localEditTs = getLocalRewardsEditTs();
-        var localDirty = isLocalRewardsDirty();
-        // في refresh fast-path: لا نسمح لقراءة Firebase أقدم أن تمسح آخر تعديل محلي غير مرفوع.
-        if (!shouldUploadAfterMerge && localDirty && (remoteModified === 0 || remoteModified <= localEditTs)) {
-          logVerbose('⏭️ Skip Firebase merge: local edits are newer/unsynced', { remoteModified: remoteModified, localEditTs: localEditTs });
-          syncSuccess = true;
-        } else {
-          var changesFound = mergeFirebaseInputsIntoCurrentDb(data);
-
-          if (changesFound > 0) {
-            logVerbose('✅ Firebase background merge: updated', changesFound, 'fields from Firebase');
-            // Save updated db and re-render
-            try {
-              localStorage.setItem('adora_rewards_db', JSON.stringify(db));
-            } catch (_) {}
-            // Re-render to reflect Firebase data
-            var currentTab = typeof window !== 'undefined' && window.currentBranch ? window.currentBranch : 'الكل';
-            renderUI(currentTab);
-          } else {
-            logVerbose('✅ Firebase background check: no new evaluations/attendance to merge');
-          }
-          if (remoteModified > 0) clearLocalRewardsDirty(remoteModified);
-          syncSuccess = true;
-        }
-      } else {
-        logVerbose('ℹ️ No existing period in Firebase — first transfer for this period');
-        syncSuccess = true; // Not an error, just no data yet
-      }
-
-      // Upload to Firebase only when transfer payload is freshly received from analysis
-      if (shouldUploadAfterMerge && typeof syncLivePeriodToFirebase === 'function') {
-        logVerbose('📤 Syncing updated data to Firebase...');
-        syncLivePeriodToFirebase();
-      }
-      }
-    } catch (e) {
-      if (e.message && e.message.indexOf('reportStartDate') === -1) {
-        console.warn('⚠️ Background Firebase sync failed:', e.message || e);
-      }
-    }
-
-    // Update badge to show result, then fade out
-    var badge = document.getElementById('adoraFirebaseSyncBadge');
-    if (badge) {
-      var hasData = (typeof db !== 'undefined' && db && db.length > 0);
-      if (syncSuccess) {
-        badge.innerHTML = '<div style="display:flex;align-items:center;gap:6px;padding:4px 14px;border-radius:20px;background:rgba(16,185,129,0.15);border:1px solid rgba(16,185,129,0.3);backdrop-filter:blur(8px);font-size:12px;color:#6ee7b7;">'
-          + '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>'
-          + '<span>تمت المزامنة ✓</span>'
-          + '</div>';
-      } else if (hasData) {
-        // البيانات ظهرت من النقل المحلي — لا نعرض فشل، نعرض أن البيانات جاهزة
-        badge.innerHTML = '<div style="display:flex;align-items:center;gap:6px;padding:4px 14px;border-radius:20px;background:rgba(16,185,129,0.15);border:1px solid rgba(16,185,129,0.3);backdrop-filter:blur(8px);font-size:12px;color:#6ee7b7;">'
-          + '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>'
-          + '<span>البيانات جاهزة ✓</span>'
-          + '</div>';
-      } else {
-        badge.innerHTML = '<div style="display:flex;align-items:center;gap:6px;padding:4px 14px;border-radius:20px;background:rgba(239,68,68,0.15);border:1px solid rgba(239,68,68,0.3);backdrop-filter:blur(8px);font-size:12px;color:#fca5a5;">'
-          + '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><line x1="15" y1="9" x2="9" y2="15"/><line x1="9" y1="9" x2="15" y2="15"/></svg>'
-          + '<span>فشلت المزامنة — البيانات محلية</span>'
-          + '</div>';
-      }
-      // Fade out after 3 seconds
-      setTimeout(function() {
-        if (badge && badge.parentNode) {
-          badge.style.opacity = '0';
-          setTimeout(function() { if (badge.parentNode) badge.parentNode.removeChild(badge); }, 500);
-        }
-      }, 3000);
-    }
-  })();
-}
 
 // Respond to PING from Project 1 with READY immediately (lightweight handshake)
 window.addEventListener('message', function(evt) {
@@ -869,6 +652,11 @@ function openBreakdownDrilldown(empName, empBranch, filterType, filterValue) {
       : 'border-white/10 bg-white/5 hover:bg-white/10';
 
     var badges = '';
+    if (b.branch) {
+      badges += '<span class="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] font-bold bg-[#14b8a6]/15 text-[#5eead4] border border-[#14b8a6]/20" title="الفرع">' +
+        '<svg xmlns="http://www.w3.org/2000/svg" width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" class="shrink-0"><path d="M20 10c0 6-8 12-8 12s-8-6-8-12a8 8 0 0 1 16 0Z"/><circle cx="12" cy="10" r="3"/></svg>' +
+        (b.branch) + '</span>';
+    }
     if (b.bookingSource === 'استقبال') badges += '<span class="px-1.5 py-0.5 rounded text-[10px] font-bold bg-green-500/15 text-green-400 border border-green-500/20">استقبال</span>';
     else if (b.bookingSource === 'بوكينج') badges += '<span class="px-1.5 py-0.5 rounded text-[10px] font-bold bg-orange-500/15 text-orange-400 border border-orange-500/20">بوكينج</span>';
     if (b.shift === 'صباح') badges += '<span class="px-1.5 py-0.5 rounded text-[10px] font-bold bg-amber-500/15 text-amber-400 border border-amber-500/20">صباح</span>';
@@ -1064,42 +852,14 @@ function loadEmployeeCodesMap() {
 }
 
 // === Security: Admin Secret Key ===
-// غيّر هذا المفتاح قبل النشر — راجع SECURITY.md (قسم "مفتاح الأدمن")
-const ADMIN_SECRET_KEY = 'ayman5255'; // Change before production — see SECURITY.md
-const ADMIN_AUTH_SESSION_KEY = 'adora_admin_auth_session';
-const ADMIN_SESSION_MAX_AGE_MS = 1000 * 60 * 60 * 24; // 24h
+// مفتاح الأدمن: غيّر القيمة قبل النشر إلى الإنتاج. مصدر الحقيقة لبوابة الأدمن: app/src/adminConfig.ts (يجب أن تتطابق القيمتان). راجع SECURITY.md. لا تضع المفتاح في ريبو عام.
+const ADMIN_SECRET_KEY = 'ayman5255';
+// ADMIN_AUTH_SESSION_KEY و ADMIN_SESSION_MAX_AGE_MS معرّفان في rewards-rbac.js — لا تُعرّفهما هنا لتجنّب "already been declared"
 if (typeof window !== 'undefined') {
   window.getAdminSecretKey = function () { return ADMIN_SECRET_KEY; };
 }
 
-// === Security: Check if user is in employee mode ===
-function isEmployeeMode() {
-  const urlParams = new URLSearchParams(window.location.search);
-  return urlParams.has('code');
-}
-
-// === Security: Check if user is admin ===
-function isAdminMode() {
-  const urlParams = new URLSearchParams(window.location.search);
-  const adminKey = urlParams.get('admin');
-  if (adminKey !== ADMIN_SECRET_KEY) return false;
-  try {
-    var raw = localStorage.getItem(ADMIN_AUTH_SESSION_KEY);
-    if (!raw) return false;
-    var parsed = JSON.parse(raw);
-    if (!parsed || typeof parsed !== 'object') return false;
-    var ts = Number(parsed.ts || 0);
-    var email = String(parsed.email || '').trim().toLowerCase();
-    if (!email || !ts) return false;
-    if ((Date.now() - ts) > ADMIN_SESSION_MAX_AGE_MS) {
-      localStorage.removeItem(ADMIN_AUTH_SESSION_KEY);
-      return false;
-    }
-    return true;
-  } catch (_) {
-    return false;
-  }
-}
+// isEmployeeMode و isAdminMode معرّفتان في rewards-rbac.js
 
 // Load data from localStorage on page load
 function loadDataFromStorage() {
@@ -1227,25 +987,24 @@ if (typeof window !== 'undefined') { window.db = db; }
 // clearPeriodData: true = إغلاق الفترة (مسح كل بيانات الفترة)، false = خروج فقط
 // Navigate back to Project 1 (Analysis system)
 function returnToAnalysis() {
-  // Navigate to Project 1 root (same origin via Vite proxy)
-  // Preserve admin key and request analysis view explicitly (no auto-redirect to rewards).
   var nextUrl = '/';
   try {
     var urlParams = new URLSearchParams(window.location.search || '');
     var adminKey = urlParams.get('admin');
-    if (adminKey && adminKey === ADMIN_SECRET_KEY) {
+    if (adminKey) {
       nextUrl = '/?admin=' + encodeURIComponent(adminKey) + '&analysis=1&t=' + Date.now();
     }
   } catch (_) {}
   window.location.href = nextUrl;
 }
 
-function returnToUpload(clearPeriodData) {
-// In transfer mode, don't allow going back to upload page
-if (window.adoraTransferMode) {
+function returnToUpload(clearPeriodData, forceLogout) {
+// In transfer mode, don't allow going back to upload page — إلا عند الخروج النهائي (زر خروج)
+if (window.adoraTransferMode && !forceLogout) {
   logVerbose('🚫 returnToUpload blocked — transfer mode active');
   return;
 }
+if (forceLogout) window.adoraTransferMode = false;
 (async function doReturnToUpload() {
 try {
 var isAdmin = (typeof window !== 'undefined' && window.location && window.location.search) && new URLSearchParams(window.location.search).get('admin') === ADMIN_SECRET_KEY;
@@ -1256,16 +1015,19 @@ if (isAdmin && ((typeof db !== 'undefined' && db && db.length > 0) || (typeof br
     await Promise.race([doSyncLivePeriodToFirebase(), new Promise(function (r) { setTimeout(r, 4500); })]);
   }
 }
+// ── مسح الجلسة: ما يُمسح وما يُترك (راجع التعليقات أدناه) ──
+// دائماً: adora_current_role، adora_current_token، adora_current_period.
+// عند إغلاق الفترة (clearPeriodData): كل بيانات الفترة + negativeRatingsCount، discounts، discountTypes.
+// عند خروج الأدمن فقط: جلسة الأدمن + بيانات الفترة؛ لا نمسح negativeRatingsCount/discounts/discountTypes ولا adora_rewards_cumulativePoints ولا adora_rewards_pricing/employeeCodes.
 // قراءة الجلسة الحالية قبل المسح (لإزالة توكنها من adora_admin_tokens)
 var r = localStorage.getItem('adora_current_role');
 var p = localStorage.getItem('adora_current_period');
-// مسح جلسة الإداري دائماً
 localStorage.removeItem('adora_current_role');
 localStorage.removeItem('adora_current_token');
 localStorage.removeItem('adora_current_period');
 if (clearPeriodData) {
-  // إغلاق الفترة فقط: تصفية كل النتائج لبدء فترة جديدة (ملف جديد، إدخالات جديدة، روابط مشرف/HR جاهزة)
-  // ملاحظة: adora_rewards_cumulativePoints لا يُمسح — الرصيد التراكمي من النقاط يبقى عبر الفترات
+  // إغلاق الفترة: تصفية كل النتائج لبدء فترة جديدة
+  // ملاحظة: adora_rewards_cumulativePoints لا يُمسح (مستخدم في app-extensions.js للرصيد التراكمي) — يبقى عبر الفترات
   localStorage.removeItem('adora_rewards_db');
   localStorage.removeItem('adora_rewards_branches');
   localStorage.removeItem('adora_rewards_evalRate');
@@ -1277,14 +1039,14 @@ if (clearPeriodData) {
   branchNegativeRatingsCount = {};
   if (typeof window !== 'undefined') window.branchNegativeRatingsCount = branchNegativeRatingsCount;
 } else if (isAdmin) {
-  // خروج الأدمن: مسح جلسة الدخول + بيانات الفترة فقط — لا نمسح الخصومات ولا التقييمات السلبية (إدخالات المشرف/HR) ولا الإعدادات
+  // خروج الأدمن: مسح جلسة الدخول + بيانات الفترة فقط
   try { localStorage.removeItem(ADMIN_AUTH_SESSION_KEY); } catch (e) {}
   localStorage.removeItem('adora_rewards_db');
   localStorage.removeItem('adora_rewards_branches');
   localStorage.removeItem('adora_rewards_evalRate');
   localStorage.removeItem('adora_rewards_startDate');
   localStorage.removeItem('adora_rewards_periodText');
-  // لا نمسح: adora_rewards_negativeRatingsCount، adora_rewards_discounts، adora_rewards_discountTypes
+  // لا نمسح: adora_rewards_negativeRatingsCount، adora_rewards_discounts، adora_rewards_discountTypes (إعدادات/إدخالات سابقة)
   branchNegativeRatingsCount = {};
   if (typeof window !== 'undefined') window.branchNegativeRatingsCount = branchNegativeRatingsCount;
   try { localStorage.setItem('adora_admin_just_logged_out', '1'); } catch (e) {}
@@ -1384,13 +1146,15 @@ async function doAppInit() {
       var loadingWrap = document.createElement('div');
       loadingWrap.id = 'adminLinkLoadingWrap';
       loadingWrap.setAttribute('aria-live', 'polite');
-      loadingWrap.className = 'flex flex-col items-center justify-center gap-3 py-12 px-4 text-white/90';
-      loadingWrap.innerHTML = '<div class="w-full max-w-[280px] rounded-full overflow-hidden relative" style="height:6px;"><div style="position:absolute;inset:0;background:#4b5563;"></div><div class="admin-link-progress-fill" style="position:absolute;left:0;top:0;height:100%;background:linear-gradient(90deg,#ef4444 0%,#f97316 25%,#eab308 50%,#84cc16 75%,#22c55e 100%);"></div></div><span class="text-sm font-bold text-white/80 mt-2 block">جاري تحميل بيانات الفترة من الخادم...</span>';
-      var tbody = document.getElementById('mainTable');
-      if (tbody && tbody.parentNode) tbody.parentNode.insertBefore(loadingWrap, tbody);
+      loadingWrap.className = 'flex flex-col items-center justify-center gap-4 w-full min-h-[200px] py-12 px-6 text-white/90 rounded-xl bg-white/5 border border-turquoise/20';
+      loadingWrap.style.minWidth = '100%';
+      loadingWrap.innerHTML = '<div class="w-full max-w-[320px] rounded-full overflow-hidden relative" style="height:8px;"><div style="position:absolute;inset:0;background:#4b5563;"></div><div class="admin-link-progress-fill" style="position:absolute;left:0;top:0;height:100%;background:linear-gradient(90deg,#ef4444 0%,#f97316 25%,#eab308 50%,#84cc16 75%,#22c55e 100%);"></div></div><span class="text-base font-bold text-white/90 text-center">جاري تحميل بيانات الفترة من الخادم...</span>';
+      var tableEl = tableContainer.querySelector('#targetTable') || document.getElementById('mainTable');
+      if (tableEl && tableEl.parentNode) tableEl.parentNode.insertBefore(loadingWrap, tableEl);
     }
     (async function fetchAndApplyLivePeriod() {
       var el = document.getElementById('adminLinkLoadingWrap');
+      var firebaseUnavailable = false;
       try {
         if (typeof initializeFirebase === 'function') initializeFirebase();
         var waitStart = Date.now();
@@ -1399,27 +1163,33 @@ async function doAppInit() {
           await new Promise(function (r) { setTimeout(r, 200); });
         }
         if (typeof window !== 'undefined' && window.storage) { storage = window.storage; }
+        if (!(typeof window !== 'undefined' && window.storage)) {
+          firebaseUnavailable = true;
+          if (typeof logVerbose === 'function') logVerbose('⚠️ Admin link: Firebase Storage غير متصل بعد الانتظار');
+        }
         var live = null;
-        // عند وجود period في الرابط: جرب periods/periodId.json أولاً (تخفيف ضغط 429 على live.json)
-        if (urlPeriod && typeof fetchPeriodFromFirebase === 'function') {
-          for (var attemptPeriod = 0; attemptPeriod < 3 && (!live || !live.db || live.db.length === 0); attemptPeriod++) {
-            live = await fetchPeriodFromFirebase(urlPeriod);
-            if (live && Array.isArray(live.db) && live.db.length > 0) break;
-            if (attemptPeriod < 2) await new Promise(function (r) { setTimeout(r, 2500); });
+        if (!firebaseUnavailable) {
+          // عند وجود period في الرابط: جرب periods/periodId.json أولاً (تخفيف ضغط 429 على live.json)
+          if (urlPeriod && typeof fetchPeriodFromFirebase === 'function') {
+            for (var attemptPeriod = 0; attemptPeriod < 3 && (!live || !live.db || live.db.length === 0); attemptPeriod++) {
+              live = await fetchPeriodFromFirebase(urlPeriod);
+              if (live && Array.isArray(live.db) && live.db.length > 0) break;
+              if (attemptPeriod < 2) await new Promise(function (r) { setTimeout(r, 2500); });
+            }
           }
-        }
-        // إن لم يُحمّل: جلب live.json (عدد محاولات أقل + تأخير أطول لتجنّب 429)
-        var maxLiveAttempts = 4;
-        var retryDelayMs = 3500;
-        for (var attemptLive = 0; attemptLive < maxLiveAttempts && (!live || !live.db || live.db.length === 0); attemptLive++) {
-          if (typeof fetchLivePeriodFromFirebase === 'function') live = await fetchLivePeriodFromFirebase();
-          if (live && Array.isArray(live.db) && live.db.length > 0) break;
-          if (attemptLive < maxLiveAttempts - 1) await new Promise(function (r) { setTimeout(r, retryDelayMs); });
-        }
-        // احتياطي أخير: periodId ثم live (مرة واحدة)
-        if (!live || !Array.isArray(live.db) || live.db.length === 0) {
-          if (urlPeriod && typeof fetchPeriodFromFirebase === 'function') live = await fetchPeriodFromFirebase(urlPeriod);
-          if ((!live || !live.db || live.db.length === 0) && typeof fetchLivePeriodFromFirebase === 'function') live = await fetchLivePeriodFromFirebase();
+          // إن لم يُحمّل: جلب live.json (عدد محاولات أقل + تأخير أطول لتجنّب 429)
+          var maxLiveAttempts = 4;
+          var retryDelayMs = 3500;
+          for (var attemptLive = 0; attemptLive < maxLiveAttempts && (!live || !live.db || live.db.length === 0); attemptLive++) {
+            if (typeof fetchLivePeriodFromFirebase === 'function') live = await fetchLivePeriodFromFirebase();
+            if (live && Array.isArray(live.db) && live.db.length > 0) break;
+            if (attemptLive < maxLiveAttempts - 1) await new Promise(function (r) { setTimeout(r, retryDelayMs); });
+          }
+          // احتياطي أخير: periodId ثم live (مرة واحدة)
+          if (!live || !Array.isArray(live.db) || live.db.length === 0) {
+            if (urlPeriod && typeof fetchPeriodFromFirebase === 'function') live = await fetchPeriodFromFirebase(urlPeriod);
+            if ((!live || !live.db || live.db.length === 0) && typeof fetchLivePeriodFromFirebase === 'function') live = await fetchLivePeriodFromFirebase();
+          }
         }
         if (!isEmployeeMode() && live && Array.isArray(live.db) && live.db.length > 0 && typeof applyLivePeriod === 'function') {
           applyLivePeriod(live);
@@ -1437,8 +1207,12 @@ async function doAppInit() {
           if (typeof updatePrintButtonText === 'function') updatePrintButtonText();
           if (typeof renderUI === 'function') renderUI('الكل');
         } else {
+          var errTitle = firebaseUnavailable ? 'Firebase غير متصل' : 'تعذّر تحميل بيانات الفترة';
+          var errDesc = firebaseUnavailable
+            ? 'تحقق من الاتصال بالإنترنت وإعدادات Firebase. ثم أعد المحاولة.'
+            : 'البيانات غير موجودة في Firebase (ملف الفترة أو live.json). يجب على الأدمن تنفيذ «الانتقال إلى حساب المكافآت» من نظام التحليل ثم انتظار ظهور «تمت المزامنة» قبل فتح رابط المشرف.';
           if (el) {
-            el.innerHTML = '<div class="text-center"><p class="font-bold text-amber-400 mb-2">تعذّر تحميل بيانات الفترة</p><p class="text-sm text-gray-400 mb-4">تحقق من الاتصال بالإنترنت. تأكد أن الأدمن رفع ملف الفترة وفتح «إدارة الإداريين» لتفعيل الرابط.</p><button type="button" id="retryPeriodBtn" onclick="location.reload()" class="px-4 py-2 rounded-xl font-bold focus:outline-none focus:ring-2 focus:ring-[#14b8a6] focus:ring-offset-2 focus:ring-offset-[#0f172a]" style="background:rgba(20,184,166,0.2);color:#14b8a6;border:1px solid rgba(20,184,166,0.5);">إعادة المحاولة</button></div>';
+            el.innerHTML = '<div class="text-center"><p class="font-bold text-amber-400 mb-2">' + errTitle + '</p><p class="text-sm text-gray-400 mb-4">' + errDesc + '</p><button type="button" id="retryPeriodBtn" onclick="location.reload()" class="px-4 py-2 rounded-xl font-bold focus:outline-none focus:ring-2 focus:ring-[#14b8a6] focus:ring-offset-2 focus:ring-offset-[#0f172a]" style="background:rgba(20,184,166,0.2);color:#14b8a6;border:1px solid rgba(20,184,166,0.5);">إعادة المحاولة</button></div>';
             el.classList.remove('flex', 'flex-col', 'items-center', 'justify-center', 'gap-3', 'py-12', 'px-4', 'text-white/90');
             el.classList.add('text-center', 'py-8', 'px-4');
             setTimeout(function () {
@@ -1559,14 +1333,7 @@ async function doAppInit() {
   }
 }
 
-function isAdminLinkSubmitted() {
-  try {
-    var r = localStorage.getItem('adora_current_role');
-    var p = localStorage.getItem('adora_current_period');
-    if (!r || !p) return false;
-    return !!localStorage.getItem('adora_admin_submitted_' + p + '_' + r);
-  } catch (e) { return false; }
-}
+// isAdminLinkSubmitted معرّفة في rewards-rbac.js
 
 function doRbacThenInit() {
   // If opened for transfer from Project 1, try localStorage first (same-origin via Vite proxy),
@@ -1593,19 +1360,19 @@ function doRbacThenInit() {
     // ──────────────────────────────────────────────────────────────
     var lsPayloadRaw = null;
     try { lsPayloadRaw = localStorage.getItem('adora_transfer_payload'); } catch (_) {}
+    if (!lsPayloadRaw && typeof window._adoraTransferPayloadCapture !== 'undefined' && window._adoraTransferPayloadCapture)
+      lsPayloadRaw = window._adoraTransferPayloadCapture;
 
     if (lsPayloadRaw) {
       try {
         var lsPayload = JSON.parse(lsPayloadRaw);
-        // Remove the key immediately to avoid stale re-reads
-        localStorage.removeItem('adora_transfer_payload');
         logVerbose('✅ NEW transfer payload found — processing (settings & bookings refreshed)');
         _processAdoraTransferPayload(lsPayload);
+        try { localStorage.removeItem('adora_transfer_payload'); } catch (_) {}
         return; // Done — fresh data processed with latest pricing
       } catch (e) {
-        logVerbose('⚠️ Failed to parse localStorage payload:', e);
-        localStorage.removeItem('adora_transfer_payload');
-        // Fall through to fast-path or postMessage fallback
+        logVerbose('⚠️ Failed to parse or process localStorage payload:', e);
+        // Do NOT remove payload so user can retry or refresh
       }
     }
 
@@ -1717,7 +1484,9 @@ function doRbacThenInit() {
         }, 520);
         if (typeof updateFooterSummaryColspans === 'function') setTimeout(updateFooterSummaryColspans, 80);
         if (typeof initializeRoleBasedUI === 'function') {
-          var _role = localStorage.getItem('adora_current_role');
+          var _urlAdmin = typeof window !== 'undefined' && window.location && new URLSearchParams(window.location.search).get('admin');
+          var _role = _urlAdmin ? 'admin' : (localStorage.getItem('adora_current_role') || '');
+          if (_urlAdmin) try { localStorage.setItem('adora_current_role', 'admin'); } catch (_) {}
           if (_role) initializeRoleBasedUI(_role);
         }
         logVerbose('✅ Refresh fast-path complete — ' + db.length + ' employees loaded');
@@ -2341,6 +2110,28 @@ if (Array.isArray(data.discounts)) {
 if (Array.isArray(data.discountTypes)) {
   try { localStorage.setItem('adora_rewards_discountTypes', JSON.stringify(data.discountTypes)); } catch (_) {}
 }
+// طوال ما الفترة مفتوحة: إدخالات الإداريين (تقييمات، حضور، خصومات، سلبية) من live.json — نستكمل بها دائماً عند رفع ملف جديد
+if (oldDb.length > 0 && typeof window.fetchLivePeriodFromFirebase === 'function') {
+  try {
+    var liveData = await window.fetchLivePeriodFromFirebase();
+    if (liveData && Array.isArray(liveData.db) && liveData.db.length > 0) {
+      if (typeof window.mergeEvaluationsFromSourceIntoDb === 'function') {
+        var enriched = window.mergeEvaluationsFromSourceIntoDb(oldDb, liveData.db);
+        if (enriched > 0) logVerbose('✅ تم استكمال إدخالات الإداريين من live.json للدمج مع الإكسيل:', enriched, 'حقل');
+      }
+      if (!(branchNegativeRatingsCount && Object.keys(branchNegativeRatingsCount).length > 0) && liveData.negativeRatingsCount && typeof liveData.negativeRatingsCount === 'object') {
+        branchNegativeRatingsCount = liveData.negativeRatingsCount;
+        if (typeof window !== 'undefined') window.branchNegativeRatingsCount = branchNegativeRatingsCount;
+      }
+      if (Array.isArray(liveData.discounts) && (!data.discounts || data.discounts.length === 0)) {
+        try { localStorage.setItem('adora_rewards_discounts', JSON.stringify(liveData.discounts)); } catch (_) {}
+      }
+      if (Array.isArray(liveData.discountTypes) && (!data.discountTypes || data.discountTypes.length === 0)) {
+        try { localStorage.setItem('adora_rewards_discountTypes', JSON.stringify(liveData.discountTypes)); } catch (_) {}
+      }
+    }
+  } catch (_) {}
+}
 logVerbose('✅ تم جلب البيانات الحالية من Firebase:', oldDb.length, 'موظف (سيتم دمج: تحديث count فقط، الباقي يبقى)');
 }
 } catch (e) {
@@ -2527,14 +2318,13 @@ console.error('❌ Verification failed: localStorage is empty after save!');
 }
 } catch (error) {
 console.error('❌ Error saving to localStorage:', error);
-// Check if localStorage is available
+// التحقق من توفر localStorage دون كتابة مفاتيح (لا تلويث التخزين)
 try {
-localStorage.setItem('test', 'test');
-localStorage.removeItem('test');
-logVerbose('✅ localStorage is available and working');
+  void localStorage.length;
+  logVerbose('✅ localStorage is available and working');
 } catch (storageError) {
-console.error('❌ localStorage is not available:', storageError);
-alert('⚠️ تحذير: لا يمكن حفظ البيانات. يرجى التحقق من إعدادات المتصفح (قد يكون في وضع التصفح الخاص أو محظور localStorage)');
+  console.error('❌ localStorage is not available:', storageError);
+  alert('⚠️ تحذير: لا يمكن حفظ البيانات. يرجى التحقق من إعدادات المتصفح (قد يكون في وضع التصفح الخاص أو محظور localStorage)');
 }
 }
 // إظهار اللوحة فقط عند وجود بيانات (لا نُخفِي الرفع بعد خروج الأدمن — adora_admin_just_logged_out أو عدم وجود adora_rewards_db)
@@ -2774,273 +2564,10 @@ function getFooterTotals() {
   return { statEmployees, statBookings, totalFund, totalNet, totalEval, totalNetNoEval, finalTotal };
 }
 
-function updateFooterTotals() {
-  const t = getFooterTotals();
-  const footEvalCountEl = document.getElementById('footEvalCount');
-  const footBookingCountEl = document.getElementById('footBookingCount');
-  const footFundEl = document.getElementById('footFund');
-  const footNetEl = document.getElementById('footNet');
-  const footNetNoEvalEl = document.getElementById('footNetNoEval');
-  const footTotalNetEl = document.getElementById('footTotalNet');
-  const statEmployeesEl = document.getElementById('statEmployees');
-  const statBookingsEl = document.getElementById('statBookings');
-  const statTotalEl = document.getElementById('statTotal');
-  if (footEvalCountEl) footEvalCountEl.innerText = t.totalEval;
-  if (footBookingCountEl) footBookingCountEl.innerText = t.statBookings;
-  if (footFundEl) footFundEl.innerText = t.totalFund.toFixed(1);
-  if (footNetEl) footNetEl.innerText = t.totalNet.toFixed(2);
-  if (footNetNoEvalEl) footNetNoEvalEl.innerText = t.totalNetNoEval.toFixed(2);
-  const footTotalFundEl = document.getElementById('footTotalFund');
-  if (footTotalFundEl) footTotalFundEl.innerText = '';
-  if (footTotalNetEl) footTotalNetEl.innerText = t.finalTotal.toFixed(2);
-  if (statEmployeesEl) statEmployeesEl.innerText = t.statEmployees;
-  if (statBookingsEl) statBookingsEl.innerText = t.statBookings;
-  if (statTotalEl) statTotalEl.innerText = isNaN(t.finalTotal) || !isFinite(t.finalTotal) ? '0' : t.finalTotal.toFixed(0);
-  updateCommitmentBonusRow();
-  if (typeof loadCurrentPeriodStats === 'function') {
-    const reportsPage = document.getElementById('reportsPage');
-    const statisticsContent = document.getElementById('statisticsReportsContent');
-    if (reportsPage && !reportsPage.classList.contains('hidden') && statisticsContent && !statisticsContent.classList.contains('hidden')) {
-      loadCurrentPeriodStats();
-      if (typeof populateEmployeePerformanceTable === 'function') populateEmployeePerformanceTable();
-    }
-  }
+// updateFooterTotals، updateBreakdownFooterTotals، updateFooterSummaryColspans معرّفات في rewards-table.js
 
-  // Update breakdown footer totals if in transfer mode
-  if (window.adoraTransferMode) {
-    updateBreakdownFooterTotals();
-  }
+// updateEvalBooking و updateEvalGoogle معرّفتان في rewards-table.js
 
-  // تحديث colspan الـ footer بعد أي تغيير في الأعمدة
-  setTimeout(updateFooterSummaryColspans, 50);
-
-  return;
-}
-
-function updateBreakdownFooterTotals() {
-  if (!window.adoraTransferMode || !db || db.length === 0) return;
-
-  var filter = typeof currentFilter !== 'undefined' ? currentFilter : 'الكل';
-  var filtered = db;
-  if (filter !== 'الكل') {
-    filtered = db.filter(function(e) { return e.branch === filter; });
-  }
-
-  // Track unique names for duplicate aggregation
-  var processedNames = {};
-  var totals = { staffCount: 0, counted: 0, reception: 0, booking: 0, morning: 0, evening: 0, night: 0, alertCount: 0, alertTotal: 0, vipRooms: {} };
-
-  filtered.forEach(function(emp) {
-    if (filter === 'الكل') {
-      // For "الكل" view: aggregate duplicates
-      if (processedNames[emp.name]) return;
-      processedNames[emp.name] = true;
-      var allBranches = db.filter(function(e) { return e.name === emp.name; });
-      allBranches.forEach(function(e) {
-        totals.staffCount += e._staffCount || 0;
-        totals.counted += e._counted || 0;
-        totals.reception += e._reception || 0;
-        totals.booking += e._booking || 0;
-        totals.morning += e._morning || 0;
-        totals.evening += e._evening || 0;
-        totals.night += e._night || 0;
-        totals.alertCount += e._alertCount || 0;
-        totals.alertTotal += e._alertTotal || 0;
-        if (e._vipRooms) {
-          Object.keys(e._vipRooms).forEach(function(k) {
-            totals.vipRooms[k] = (totals.vipRooms[k] || 0) + (e._vipRooms[k] || 0);
-          });
-        }
-      });
-    } else {
-      totals.staffCount += emp._staffCount || 0;
-      totals.counted += emp._counted || 0;
-      totals.reception += emp._reception || 0;
-      totals.booking += emp._booking || 0;
-      totals.morning += emp._morning || 0;
-      totals.evening += emp._evening || 0;
-      totals.night += emp._night || 0;
-      totals.alertCount += emp._alertCount || 0;
-      totals.alertTotal += emp._alertTotal || 0;
-      if (emp._vipRooms) {
-        Object.keys(emp._vipRooms).forEach(function(k) {
-          totals.vipRooms[k] = (totals.vipRooms[k] || 0) + (emp._vipRooms[k] || 0);
-        });
-      }
-    }
-  });
-
-  // Update footer elements
-  var el;
-  el = document.getElementById('footStaffCount'); if (el) el.innerText = totals.staffCount;
-  el = document.getElementById('footReception'); if (el) el.innerText = totals.reception;
-  el = document.getElementById('footBooking'); if (el) el.innerText = totals.booking;
-  el = document.getElementById('footMorning'); if (el) el.innerText = totals.morning;
-  el = document.getElementById('footEvening'); if (el) el.innerText = totals.evening;
-  el = document.getElementById('footNight'); if (el) el.innerText = totals.night;
-  el = document.getElementById('footAlertCount'); if (el) el.innerText = totals.alertCount;
-  el = document.getElementById('footAlertTotal'); if (el) el.innerText = totals.alertTotal > 0 ? Math.round(totals.alertTotal).toLocaleString('en-SA') : '—';
-
-  // VIP rooms total
-  var vipTotal = 0;
-  Object.values(totals.vipRooms).forEach(function(v) { vipTotal += v; });
-  el = document.getElementById('footVipRooms'); if (el) el.innerText = vipTotal || '—';
-
-  // Show breakdown footer cells (VIP cell only when we have VIP columns)
-  document.querySelectorAll('#footStaffCount, #footReception, #footBooking, #footMorning, #footEvening, #footNight, #footAlertCount, #footAlertTotal').forEach(function(el) {
-    el.style.display = '';
-  });
-  var footVip = document.getElementById('footVipRooms');
-  if (footVip) {
-    var hasVipCols = window.adoraTransferMode && window.adoraActiveVipRooms && window.adoraActiveVipRooms.length > 0;
-    footVip.style.display = hasVipCols ? '' : 'none';
-    if (hasVipCols) footVip.setAttribute('colspan', String(window.adoraActiveVipRooms.length));
-  }
-  // Hide single bookings footer in transfer mode
-  var singleFoot = document.getElementById('footBookingCount');
-  if (singleFoot) singleFoot.style.display = window.adoraTransferMode ? 'none' : '';
-}
-
-/** حساب colspan للـ footer ديناميكياً — يتطابق مع عدد الأعمدة المرئية */
-function updateFooterSummaryColspans() {
-  var mainRow = document.querySelector('.main-header-row');
-  if (!mainRow) return;
-  var visibleCols = 0;
-  mainRow.querySelectorAll('th').forEach(function(th) {
-    if (th.offsetParent !== null && window.getComputedStyle(th).display !== 'none') visibleCols++;
-  });
-  // label spans all columns except fund(1) + net(1)
-  var labelColspan = Math.max(1, visibleCols - 2);
-  var totalLabel = document.getElementById('footerTotalLabel');
-  var finalLabel = document.getElementById('footerFinalLabel');
-  if (totalLabel) totalLabel.setAttribute('colspan', String(labelColspan));
-  if (finalLabel) finalLabel.setAttribute('colspan', String(labelColspan));
-}
-
-function updateEvalBooking(id, val, inputEl, shouldRender = false) {
-const item = db.find(i => i.id === id);
-if (!item) return;
-// Check role permissions
-const currentRole = localStorage.getItem('adora_current_role');
-if (currentRole && currentRole !== 'supervisor' && currentRole !== 'admin') {
-  showToast('❌ غير مصرح لك بتعديل التقييمات', 'error');
-  if (inputEl) inputEl.value = item.evaluationsBooking || 0;
-  return;
-}
-// الكل للعرض والتجميع فقط — لا تعديل لأي أحد (بما فيه الأدمن)، التعديل في الفروع
-if (typeof currentFilter !== 'undefined' && currentFilter === 'الكل') {
-  showToast('❌ التعديل في الفروع فقط — الكل للعرض والتجميع', 'error');
-  if (inputEl) inputEl.value = item.evaluationsBooking || 0;
-  return;
-}
-// Ensure valid number
-const newVal = parseInt(val) || 0;
-const oldVal = item.evaluationsBooking || 0;
-// Update ALL rows for same employee (same name) so duplicates stay in sync for admin table
-const empName = item.name;
-db.filter(i => i.name === empName).forEach(row => { row.evaluationsBooking = newVal; });
-markLocalRewardsDirty();
-// Log admin action
-if (typeof logAdminAction === 'function' && currentRole) {
-  logAdminAction(currentRole, 'update_eval_booking', {
-    employeeName: item.name,
-    employeeId: id,
-    branch: item.branch,
-    oldValue: oldVal,
-    newValue: newVal
-  });
-}
-// Save to localStorage
-try {
-localStorage.setItem('adora_rewards_db', JSON.stringify(db));
-if (typeof syncLivePeriodToFirebase === 'function') syncLivePeriodToFirebase();
-} catch (error) {
-console.error('❌ Error saving to localStorage:', error);
-}
-// Keep excellence/commitment blocks and badges aligned while typing (no full render).
-if (!shouldRender && typeof _scheduleLiveEvalIndicatorsRefresh === 'function') {
-  _scheduleLiveEvalIndicatorsRefresh();
-}
-// On blur: if navigating (Tab/Enter/Arrow), skip heavy DOM rebuild
-if (shouldRender) {
-  if (window._evalNavActive) {
-    // Navigation mode: skip renderUI entirely, schedule deferred refresh
-    window._evalNavActive = false;
-    _scheduleDeferredEvalRefresh();
-  } else if (_tableEditSessionActive) {
-    // User is still editing inside table: defer sorting/re-render until leaving table.
-    _markPendingTableRefreshAfterEdit();
-  } else {
-    // Normal blur (click away, etc): full refresh
-    updateBadges();
-    if (typeof renderUI === 'function' && typeof currentFilter !== 'undefined') renderUI(currentFilter);
-  }
-}
-}
-function updateEvalGoogle(id, val, inputEl, shouldRender = false) {
-const item = db.find(i => i.id === id);
-if (!item) return;
-// Check role permissions
-const currentRole = localStorage.getItem('adora_current_role');
-if (currentRole && currentRole !== 'supervisor' && currentRole !== 'admin') {
-  showToast('❌ غير مصرح لك بتعديل التقييمات', 'error');
-  if (inputEl) inputEl.value = item.evaluationsGoogle || 0;
-  return;
-}
-// الكل للعرض والتجميع فقط — لا تعديل لأي أحد (بما فيه الأدمن)، التعديل في الفروع
-if (typeof currentFilter !== 'undefined' && currentFilter === 'الكل') {
-  showToast('❌ التعديل في الفروع فقط — الكل للعرض والتجميع', 'error');
-  if (inputEl) inputEl.value = item.evaluationsGoogle || 0;
-  return;
-}
-// Ensure valid number
-const newVal = parseInt(val) || 0;
-const oldVal = item.evaluationsGoogle || 0;
-// Update ALL rows for same employee (same name) so duplicates stay in sync for admin table
-const empName = item.name;
-db.filter(i => i.name === empName).forEach(row => { row.evaluationsGoogle = newVal; });
-markLocalRewardsDirty();
-// Log admin action
-if (typeof logAdminAction === 'function' && currentRole) {
-  logAdminAction(currentRole, 'update_eval_google', {
-    employeeName: item.name,
-    employeeId: id,
-    branch: item.branch,
-    oldValue: oldVal,
-    newValue: newVal
-  });
-}
-// Save to localStorage immediately (always save, even during typing)
-try {
-localStorage.setItem('adora_rewards_db', JSON.stringify(db));
-if (typeof syncLivePeriodToFirebase === 'function') syncLivePeriodToFirebase();
-} catch (error) {
-console.error('❌ Error saving to localStorage:', error);
-}
-// Update window.db after db modification
-if (typeof window !== 'undefined') {
-  window.db = db;
-}
-// Keep excellence/commitment blocks and badges aligned while typing (no full render).
-if (!shouldRender && typeof _scheduleLiveEvalIndicatorsRefresh === 'function') {
-  _scheduleLiveEvalIndicatorsRefresh();
-}
-// On blur: if navigating (Tab/Enter/Arrow), skip heavy DOM rebuild
-if (shouldRender) {
-  if (window._evalNavActive) {
-    // Navigation mode: skip renderUI entirely, schedule deferred refresh
-    window._evalNavActive = false;
-    _scheduleDeferredEvalRefresh();
-  } else if (_tableEditSessionActive) {
-    // User is still editing inside table: defer sorting/re-render until leaving table.
-    _markPendingTableRefreshAfterEdit();
-  } else {
-    // Normal blur (click away, etc): full refresh
-    updateBadges();
-    if (typeof renderUI === 'function' && typeof currentFilter !== 'undefined') renderUI(currentFilter);
-  }
-}
-}
 // تطبيع أيام الحضور للموظف المتكرر بعد التحميل: كائن واحد مشترك لكل الاسم حتى لا يبقى كل صف له كائن منفصل
 function normalizeDuplicateAttendance(dataDb) {
   if (!Array.isArray(dataDb)) return;
@@ -3142,66 +2669,8 @@ function patchAttendanceRowDisplay(inputElement, empName) {
     totalDiv.textContent = 'المجموع: ' + totalDays;
   }
 }
-function updateAttendanceDaysForBranch(empName, branchName, days, shouldRender = true) {
-var currentRole = localStorage.getItem('adora_current_role');
-if (currentRole && currentRole !== 'hr' && currentRole !== 'admin') {
-  if (shouldRender) showToast('❌ غير مصرح لك بتعديل أيام الحضور', 'error');
-  return;
-}
-// الكل للعرض فقط — إدخال أيام الحضور من الفروع فقط (المشرف وHR يدخلون في الفرع)
-if (typeof currentFilter !== 'undefined' && currentFilter === 'الكل') {
-  if (shouldRender) showToast('❌ التعديل في الفروع فقط — الكل للعرض والتجميع', 'error');
-  return;
-}
-// Ensure days is a valid positive number (accepts any number: odd, even, single-digit, multi-digit)
-days = Math.max(0, parseInt(days) || 0);
-// No restriction on odd/even numbers - accept 8, 22, 30, 15, etc.
-// Get all employees with this name (موظف متكرر = نفس الاسم في أكثر من فرع)
-const employeesWithSameName = db.filter(emp => emp.name === empName);
-// Build ONE shared map for all branches so كل الصفوف بنفس الاسم تشير لنفس الكائن
-let sharedMap = {};
-employeesWithSameName.forEach((emp) => {
-  if (emp.attendanceDaysPerBranch && typeof emp.attendanceDaysPerBranch === 'object') {
-    Object.keys(emp.attendanceDaysPerBranch).forEach((b) => {
-      sharedMap[b] = emp.attendanceDaysPerBranch[b];
-    });
-  }
-});
-// Get old value for logging
-const oldValue = sharedMap[branchName] !== undefined ? (parseInt(sharedMap[branchName], 10) || 0) : 0;
-// Update the specific branch in the shared map
-sharedMap[branchName] = days;
-const totalDays = Object.values(sharedMap).reduce((sum, d) => sum + (parseInt(d, 10) || 0), 0);
-// Assign the SAME reference to ALL rows with this name + sync totalAttendanceDays و attendance26Days
-employeesWithSameName.forEach((emp) => {
-  emp.attendanceDaysPerBranch = sharedMap;
-  emp.totalAttendanceDays = totalDays;
-  emp.attendance26Days = totalDays >= 26;
-});
-// Log admin action
-if (typeof logAdminAction === 'function' && currentRole && shouldRender) {
-  logAdminAction(currentRole, 'update_attendance_days', {
-    employeeName: empName,
-    branch: branchName,
-    oldValue: oldValue,
-    newValue: days
-  });
-}
-// Save to localStorage
-try {
-localStorage.setItem('adora_rewards_db', JSON.stringify(db));
-if (typeof window !== 'undefined') {
-  window.db = db;
-}
-if (typeof syncLivePeriodToFirebase === 'function') syncLivePeriodToFirebase();
-} catch (error) {
-console.error('❌ Error saving to localStorage:', error);
-}
-// Re-render UI only if shouldRender is true (to avoid losing focus during typing)
-if (shouldRender) {
-renderUI(currentFilter);
-}
-}
+// updateAttendanceDaysForBranch معرّفة في rewards-table.js
+
 // ── Eval-input navigation: data-driven (survives renderUI DOM rebuilds) ──
 // Instead of saving DOM references (which die on re-render), we save {empId, evalType}
 // and locate the fresh input element after renderUI completes.
@@ -3609,6 +3078,26 @@ viewLosers.evalGoogle.ids.push(emp.id);
 if (emp.count > 0 && emp.count < viewLosers.book.val) { viewLosers.book.val = emp.count; viewLosers.book.ids = [emp.id]; }
 else if (emp.count > 0 && emp.count === viewLosers.book.val) { viewLosers.book.ids.push(emp.id); }
 });
+// عند «الكل»: استبدال بطل الحجوزات وبطل التقييم بالمُجمّع (مجموع كل الفروع) وليس أعلى صف
+if (activeFilter === 'الكل') {
+  const seenAgg = new Set();
+  let bestEval = -1, bestEvalId = null;
+  let bestBook = -1, bestBookId = null;
+  db.forEach(function (emp) {
+    if (seenAgg.has(emp.name)) return;
+    seenAgg.add(emp.name);
+    const allBr = db.filter(function (e) { return e.name === emp.name; });
+    let sumEval = 0, sumBook = 0;
+    allBr.forEach(function (b) {
+      sumEval += (b.evaluationsBooking || 0);
+      sumBook += (b.count || 0);
+    });
+    if (sumEval > bestEval) { bestEval = sumEval; bestEvalId = allBr[0].id; }
+    if (sumBook > bestBook) { bestBook = sumBook; bestBookId = allBr[0].id; }
+  });
+  if (bestEvalId != null) { viewWinners.eval.val = bestEval; viewWinners.eval.ids = [bestEvalId]; }
+  if (bestBookId != null) { viewWinners.book.val = bestBook; viewWinners.book.ids = [bestBookId]; }
+}
 // Update badges in all rows (including badges-row)
 // First, find all employee rows and ensure they have badges-rows
 const employeeRows = document.querySelectorAll('#mainTable tr[data-name]:not(.badges-row)');
@@ -3638,7 +3127,10 @@ badgesRow.className = 'badges-row';
 badgesRow.setAttribute('data-emp-id', emp.id);
 badgesRow.setAttribute('data-branch', emp.branch);
 const td = document.createElement('td');
-td.setAttribute('colspan', '99');
+var visibleCols = 0;
+var mainRow = document.querySelector('.main-header-row');
+if (mainRow) mainRow.querySelectorAll('th').forEach(function(th) { if (th.offsetParent !== null && window.getComputedStyle(th).display !== 'none') visibleCols++; });
+td.setAttribute('colspan', String(visibleCols > 0 ? visibleCols : 99));
 const badgeWrap = document.createElement('div');
 badgeWrap.className = 'badges-wrapper';
 td.appendChild(badgeWrap);
@@ -3928,10 +3420,13 @@ totalNet += s.net + excellenceBonus + commitmentBonus; // Include all bonuses
 totalFund += s.fund; // Add fund for total calculation
 totalBookings += s.count;
 // viewWinners.net يُحدَّث لاحقاً من نفس مصدر الجدول (getDisplayNetForEmployee) ليكون الرقم مرآة لأعلى صافي في الجدول
-if (s.ev > viewWinners.eval.val) { viewWinners.eval.val = s.ev; viewWinners.eval.ids = [s.id]; }
-else if (s.ev === viewWinners.eval.val) { viewWinners.eval.ids.push(s.id); }
-if (s.count > viewWinners.book.val) { viewWinners.book.val = s.count; viewWinners.book.ids = [s.id]; }
-else if (s.count === viewWinners.book.val) { viewWinners.book.ids.push(s.id); }
+// عند «الكل» لا نحدّث eval/book من الصفوف — نعتمد على التجميع (مجموع الحجوزات/التقييم لكل شخص) فقط
+if (currentFilter !== 'الكل') {
+  if (s.ev > viewWinners.eval.val) { viewWinners.eval.val = s.ev; viewWinners.eval.ids = [s.id]; }
+  else if (s.ev === viewWinners.eval.val) { viewWinners.eval.ids.push(s.id); }
+  if (s.count > viewWinners.book.val) { viewWinners.book.val = s.count; viewWinners.book.ids = [s.id]; }
+  else if (s.count === viewWinners.book.val) { viewWinners.book.ids.push(s.id); }
+}
 });
 // كروت إحصائية عادلة: من إجماليات «الكل» المُجمّعة (متكرر + غير متكرر) وليس من الفروع فقط
 const seenNames = new Set();
@@ -4021,11 +3516,11 @@ if (topEarnerNameEl) topEarnerNameEl.innerText = getWinnerName(viewWinners.net);
 if (topEarnerValueEl) topEarnerValueEl.innerText = viewWinners.net.val > 0 ? viewWinners.net.val.toFixed(2) + ' ريال' : '-';
 const topRatedNameEl = document.getElementById('topRatedName');
 const topRatedValueEl = document.getElementById('topRatedValue');
-if (topRatedNameEl) topRatedNameEl.innerText = bestAggEvalName != null ? bestAggEvalName : getWinnerName(viewWinners.eval);
+if (topRatedNameEl) topRatedNameEl.innerText = viewWinners.eval.val > 0 ? (bestAggEvalName != null ? bestAggEvalName : getWinnerName(viewWinners.eval)) : '-';
 if (topRatedValueEl) topRatedValueEl.innerText = viewWinners.eval.val > 0 ? viewWinners.eval.val + ' تقييم' : '-';
 const topBookerNameEl = document.getElementById('topBookerName');
 const topBookerValueEl = document.getElementById('topBookerValue');
-if (topBookerNameEl) topBookerNameEl.innerText = bestAggBookName != null ? bestAggBookName : getWinnerName(viewWinners.book);
+if (topBookerNameEl) topBookerNameEl.innerText = viewWinners.book.val > 0 ? (bestAggBookName != null ? bestAggBookName : getWinnerName(viewWinners.book)) : '-';
 if (topBookerValueEl) topBookerValueEl.innerText = viewWinners.book.val > 0 ? viewWinners.book.val + ' حجز' : '-';
 // 4. Update Bonus Stat Cards
 updateCommitmentBonusRow();
@@ -4242,8 +3737,9 @@ return `<div class="rounded-md bg-white/[0.04] border border-white/10 px-2 py-1.
 }).join('');
 }
 function renderUI(filter) {
-// Update currentFilter to match the filter parameter
+// Update currentFilter to match the filter parameter (واحدّث window حتى rewards-table.js وغيره يقرؤونه)
 currentFilter = filter;
+if (typeof window !== 'undefined') window.currentFilter = filter;
 // Cache pricing config once per render cycle
 var _pricingRenderUI = getPricingConfig();
 
@@ -4251,7 +3747,8 @@ var _pricingRenderUI = getPricingConfig();
 const currentRole = localStorage.getItem('adora_current_role');
 // المشرف: الكل عرض فقط، التقييمات في الفروع. HR: الكل عرض فقط، تم/لم يتم وعدد الأيام للمتكرر في الفروع فقط — لا نفرض "الكل" على HR.
 
-document.getElementById('selectAll').checked = false;
+var selectAllEl = document.getElementById('selectAll');
+if (selectAllEl) selectAllEl.checked = false;
 const tbody = document.getElementById('mainTable');
 tbody.innerHTML = '';
 // evalRateInput removed - replaced with separate Booking and Google Maps columns with fixed rates
@@ -4692,6 +4189,16 @@ const displayedNames = new Set();
 let displayIndex = 0;
 var rowHtmls = [];
 var evalTabIndex = 0; // ترتيب Tab للمشرف بين خانات التقييم (مثل HR)
+// عدد الأعمدة المرئية في الترويسة لتمديد صف الشارات حتى نهاية الجدول (مطابق للـ footer)
+var tableColCount = (function() {
+  var mainRow = document.querySelector('.main-header-row');
+  if (!mainRow) return 99;
+  var n = 0;
+  mainRow.querySelectorAll('th').forEach(function(th) {
+    if (th.offsetParent !== null && window.getComputedStyle(th).display !== 'none') n++;
+  });
+  return n > 0 ? n : 99;
+})();
 
 // Ensure we process ALL employees in "الكل" view
 filtered.forEach((emp, index) => {
@@ -5517,7 +5024,7 @@ badgesHtml += `<span class="text-turquoise-500 text-xs print:text-turquoise-700 
 }
 // Only show badges row if there are badges (string concat to avoid nested template closing outer)
 if (badgesHtml) {
-return '<tr class="badges-row" data-emp-id="' + (emp.id || '').replace(/"/g, '&quot;') + '" data-branch="' + (emp.branch || '').replace(/"/g, '&quot;') + '"><td colspan="99"><div class="badges-wrapper">' + badgesHtml + '</div></td></tr>';
+return '<tr class="badges-row" data-emp-id="' + (emp.id || '').replace(/"/g, '&quot;') + '" data-branch="' + (emp.branch || '').replace(/"/g, '&quot;') + '"><td colspan="' + tableColCount + '"><div class="badges-wrapper">' + badgesHtml + '</div></td></tr>';
 }
 return '';
 })()}
@@ -6801,185 +6308,205 @@ function hideLoadingOverlay() {
   var el = document.getElementById('loadingOverlay');
   if (el) el.remove();
 }
-// Conditions Modal Functions
+// Conditions Modal — مصدر واحد: shared/conditions-content.json + getPricingConfig()
+var conditionsContentSchemaCache = null;
+
+function getConditionsContentSchema(callback) {
+  if (conditionsContentSchemaCache) {
+    callback(conditionsContentSchemaCache);
+    return;
+  }
+  var url = 'shared/conditions-content.json';
+  fetch(url).then(function(r) { return r.ok ? r.json() : Promise.reject(new Error('Not ok')); }).then(function(data) {
+    conditionsContentSchemaCache = data;
+    callback(data);
+  }).catch(function() {
+    callback(null);
+  });
+}
+
+function conditionsReplaceTemplates(str, pricing) {
+  if (!str || !pricing) return str;
+  return String(str)
+    .replace(/\{\{rateMorning\}\}/g, pricing.rateMorning)
+    .replace(/\{\{rateEvening\}\}/g, pricing.rateEvening)
+    .replace(/\{\{rateNight\}\}/g, pricing.rateNight)
+    .replace(/\{\{rateBooking\}\}/g, pricing.rateBooking)
+    .replace(/\{\{rateEvalBooking\}\}/g, pricing.rateEvalBooking)
+    .replace(/\{\{rateEvalGoogle\}\}/g, pricing.rateEvalGoogle);
+}
+
+// مطابق لـ THEME_CLASSES في React (App.tsx ConditionsPopup) — لون التوركواز الموحد #14b8a6
+var CONDITIONS_THEME_CLASSES = {
+  turquoise: { wrap: 'bg-[#14b8a6]/10 rounded-xl p-4 border border-[#14b8a6]/30', title: 'text-[#14b8a6]', bullet: 'text-[#14b8a6]' },
+  amber: { wrap: 'bg-amber-500/10 rounded-xl p-4 border border-amber-500/30', title: 'text-amber-400', bullet: 'text-amber-400' },
+  yellow: { wrap: 'bg-yellow-500/10 rounded-xl p-4 border border-yellow-500/30', title: 'text-yellow-400', bullet: 'text-yellow-400' },
+  green: { wrap: 'bg-green-500/10 rounded-xl p-4 border border-green-500/30', title: 'text-green-400', bullet: 'text-green-400' },
+  orange: { wrap: 'bg-orange-500/10 rounded-xl p-4 border border-orange-500/30', title: 'text-orange-400', bullet: 'text-orange-400' },
+  red: { wrap: 'bg-red-500/10 rounded-xl p-4 border border-red-500/30', title: 'text-red-400', bullet: 'text-red-400' }
+};
+
+function buildConditionsModalHtml(pricing, schema) {
+  if (!schema || !schema.sections || !pricing) return '';
+  var _rp = pricing;
+  var vipByBranch = _rp.rateVipByBranch || {};
+  var vipDefault = _rp.rateVipDefault || { reception: 0, booking: 0 };
+  var html = '';
+  var themeClasses = CONDITIONS_THEME_CLASSES;
+
+  schema.sections.forEach(function(sec) {
+    var theme = themeClasses[sec.theme] || themeClasses.turquoise;
+    if (sec.id === 'vip') {
+      var branchNames = Object.keys(vipByBranch);
+      if (branchNames.length === 0 && !(vipDefault.reception > 0 || vipDefault.booking > 0)) return;
+      html += '<div class="' + theme.wrap + '"><h4 class="text-base font-bold ' + theme.title + ' mb-3 flex items-center gap-2"><span>' + (sec.icon || '') + '</span><span>' + escHtml(sec.title) + '</span></h4><ul class="space-y-2 list-none text-sm text-gray-300">';
+      branchNames.forEach(function(branch) {
+        var rooms = vipByBranch[branch];
+        var roomNums = Object.keys(rooms);
+        if (roomNums.length === 0) return;
+        var roomParts = [];
+        roomNums.forEach(function(room) {
+          var r = rooms[room];
+          roomParts.push('غرفة ' + escHtml(room) + ' (استقبال: ' + (r.reception || 0) + ' ريال، بوكينج: ' + (r.booking || 0) + ' ريال)');
+        });
+        html += '<li class="flex items-start gap-2"><span class="' + theme.bullet + ' font-bold">•</span><span class="text-amber-200/90"><strong class="text-amber-300">' + escHtml(branch) + ':</strong> ' + roomParts.join(' — ') + '</span></li>';
+      });
+      if (vipDefault.reception > 0 || vipDefault.booking > 0) {
+        html += '<li class="flex items-start gap-2"><span class="' + theme.bullet + ' font-bold">•</span><span class="text-amber-200/90"><strong class="text-amber-300">VIP افتراضي:</strong> استقبال: ' + vipDefault.reception + ' ريال، بوكينج: ' + vipDefault.booking + ' ريال لكل حجز</span></li>';
+      }
+      html += '</ul></div>';
+      return;
+    }
+
+    var isPointsSection = sec.id === 'points';
+    var ulClass = 'space-y-2 list-none text-sm text-gray-300' + (isPointsSection ? ' grid grid-cols-1 sm:grid-cols-2 gap-x-6 gap-y-2' : '');
+    html += '<div class="' + theme.wrap + '"><h4 class="text-base font-bold ' + theme.title + ' mb-3 flex items-center gap-2"><span>' + (sec.icon || '') + '</span><span>' + escHtml(sec.title) + '</span></h4><ul class="' + ulClass + '">';
+    (sec.items || []).forEach(function(item) {
+      if (item.placeholder === 'instructionsButton') {
+        html += '<li class="flex items-start gap-2 flex-wrap items-center"><span class="' + theme.bullet + ' font-bold">•</span><span class="text-gray-400">' + escHtml(item.staticBefore || '') + '</span>';
+        html += '<button type="button" onclick="event.stopPropagation(); showInstructionsModal();" class="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg text-xs font-bold text-[#14b8a6] bg-[#14b8a6]/20 border border-[#14b8a6]/40 hover:bg-[#14b8a6]/30 transition-colors mt-1 sm:mt-0"><span>او اضغط هنا</span></button></li>';
+        return;
+      }
+      var raw = item.template ? conditionsReplaceTemplates(item.template, _rp) : (item.static || '');
+      var text = escHtml(raw);
+      if (item.template && item.template.indexOf('ريال') !== -1) text = '<strong class="text-white">' + text + '</strong>';
+      html += '<li class="flex items-start gap-2"><span class="' + theme.bullet + ' font-bold">•</span><span>' + text + '</span></li>';
+    });
+    html += '</ul></div>';
+  });
+
+  return html;
+}
+
+function buildConditionsPrintDocument(pricing, schema) {
+  if (!schema || !schema.sections || !pricing) return '<p>تعذر تحميل المحتوى.</p>';
+  var _rp = pricing;
+  var vipByBranch = _rp.rateVipByBranch || {};
+  var vipDefault = _rp.rateVipDefault || { reception: 0, booking: 0 };
+  var title = schema.modalTitle || 'شروط الحصول على المكافآت';
+  var body = '<h1>' + escHtml(title) + '</h1>';
+
+  var sectionClass = {
+    turquoise: 'section contracts',
+    amber: 'section',
+    yellow: 'section evaluations',
+    green: 'section attendance',
+    orange: 'section',
+    red: 'section discounts'
+  };
+  var sectionStyle = {
+    orange: 'background-color: rgba(245, 158, 11, 0.08); border-color: rgba(245, 158, 11, 0.4); border-right: 5px solid rgba(245, 158, 11, 0.6);',
+    amber: 'background-color: rgba(245, 158, 11, 0.06); border-color: rgba(245, 158, 11, 0.35); border-right: 5px solid rgba(245, 158, 11, 0.5);'
+  };
+
+  schema.sections.forEach(function(sec) {
+    if (sec.id === 'vip') {
+      var branchNames = Object.keys(vipByBranch);
+      if (branchNames.length === 0 && !(vipDefault.reception > 0 || vipDefault.booking > 0)) return;
+      body += '<div class="section" style="background-color: rgba(245, 158, 11, 0.08); border-color: rgba(245, 158, 11, 0.4); border-right: 5px solid rgba(245, 158, 11, 0.6);"><h2>' + (sec.icon || '') + ' ' + escHtml(sec.title) + '</h2><ul>';
+      branchNames.forEach(function(branch) {
+        var rooms = vipByBranch[branch];
+        var roomNums = Object.keys(rooms);
+        if (roomNums.length === 0) return;
+        var roomParts = [];
+        roomNums.forEach(function(room) {
+          var r = rooms[room];
+          roomParts.push('غرفة ' + escHtml(room) + ' (استقبال: ' + (r.reception || 0) + ' ريال، بوكينج: ' + (r.booking || 0) + ' ريال)');
+        });
+        body += '<li><strong>' + escHtml(branch) + ':</strong> ' + roomParts.join(' — ') + '</li>';
+      });
+      if (vipDefault.reception > 0 || vipDefault.booking > 0) {
+        body += '<li><strong>VIP افتراضي:</strong> استقبال: ' + vipDefault.reception + ' ريال، بوكينج: ' + vipDefault.booking + ' ريال لكل حجز</li>';
+      }
+      body += '</ul></div>';
+      return;
+    }
+
+    var cls = sectionClass[sec.theme] || 'section';
+    var style = sectionStyle[sec.theme] ? ' style="' + sectionStyle[sec.theme] + '"' : '';
+    body += '<div class="' + cls + '"' + style + '><h2>' + (sec.icon || '') + ' ' + escHtml(sec.title) + '</h2><ul>';
+    (sec.items || []).forEach(function(item) {
+      if (item.placeholder === 'instructionsButton') {
+        body += '<li>' + escHtml(item.staticBefore || '') + '.</li>';
+        return;
+      }
+      var text = item.template ? conditionsReplaceTemplates(item.template, _rp) : (item.static || '');
+      body += '<li>' + (item.template && item.template.indexOf('ريال') !== -1 ? '<strong>' + escHtml(text) + '</strong>' : escHtml(text)) + '</li>';
+    });
+    body += '</ul></div>';
+  });
+
+  return '<!DOCTYPE html><html dir="rtl" lang="ar"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0">' +
+    '<title>' + escHtml(title) + '</title>' +
+    '<style>@page { size: A4 portrait; margin: 6mm; } * { margin: 0; padding: 0; box-sizing: border-box; } body { font-family: "Arial", "Segoe UI", "Tahoma", sans-serif; padding: 4px 8px; background: #fff; color: #000; line-height: 1.25; direction: rtl; font-size: 9px; } h1 { font-size: 14px; font-weight: 900; color: #000; margin-bottom: 4px; text-align: center; border-bottom: 1.5px solid #14b8a6; padding-bottom: 3px; } .section { margin-bottom: 3px; padding: 3px 6px; border-radius: 3px; border: 0.5px solid #ddd; page-break-inside: avoid; } .section.contracts { background-color: rgba(59, 130, 246, 0.06); border-color: rgba(59, 130, 246, 0.3); border-right: 3px solid rgba(59, 130, 246, 0.5); } .section.evaluations { background-color: rgba(234, 179, 8, 0.06); border-color: rgba(234, 179, 8, 0.3); border-right: 3px solid rgba(234, 179, 8, 0.5); } .section.attendance { background-color: rgba(16, 185, 129, 0.06); border-color: rgba(16, 185, 129, 0.3); border-right: 3px solid rgba(16, 185, 129, 0.5); } .section.discounts { background-color: rgba(239, 68, 68, 0.06); border-color: rgba(239, 68, 68, 0.3); border-right: 3px solid rgba(239, 68, 68, 0.5); } h2 { font-size: 10px; font-weight: 800; color: #000; margin: 0 0 2px 0; } ul { list-style: none; padding: 0; margin: 0; } li { font-size: 8.5px; font-weight: 600; color: #000; margin: 1.5px 0; padding-right: 12px; position: relative; line-height: 1.3; text-align: right; } li::before { content: "•"; position: absolute; right: 0; top: 0; font-weight: 900; } @media print { body { padding: 2px 6px; } .conditions-one-page { page-break-after: avoid; page-break-inside: avoid; } }</style></head><body><div class="conditions-one-page">' +
+    body +
+    '</div></body></html>';
+}
+
 /**
- * Populate the conditions modal with DYNAMIC pricing from getPricingConfig().
+ * Populate the conditions modal from shared/conditions-content.json + getPricingConfig().
  * Called every time the modal is opened so it always reflects current settings.
  */
 function populateConditionsModalContent() {
   var container = document.getElementById('conditionsModalContent');
   if (!container) return;
-  var _rp = getPricingConfig();
-
-  // Build VIP pricing summary
-  var vipHtml = '';
-  var vipByBranch = _rp.rateVipByBranch || {};
-  var vipDefault = _rp.rateVipDefault || { reception: 0, booking: 0 };
-  var branchNames = Object.keys(vipByBranch);
-  if (branchNames.length > 0) {
-    branchNames.forEach(function(branch) {
-      var rooms = vipByBranch[branch];
-      var roomNums = Object.keys(rooms);
-      if (roomNums.length === 0) return;
-      vipHtml += '<li class="flex items-start gap-3"><span class="text-amber-400 font-bold mt-0.5">•</span><span class="text-amber-200/90"><strong class="text-amber-300">' + escHtml(branch) + ':</strong> ';
-      var roomParts = [];
-      roomNums.forEach(function(room) {
-        var r = rooms[room];
-        roomParts.push('غرفة ' + escHtml(room) + ' (استقبال: ' + (r.reception || 0) + ' ريال، بوكينج: ' + (r.booking || 0) + ' ريال)');
-      });
-      vipHtml += roomParts.join(' — ') + '</span></li>';
-    });
-  }
-  if (vipDefault.reception > 0 || vipDefault.booking > 0) {
-    vipHtml += '<li class="flex items-start gap-3"><span class="text-amber-400 font-bold mt-0.5">•</span><span class="text-amber-200/90"><strong class="text-amber-300">VIP افتراضي:</strong> استقبال: ' + vipDefault.reception + ' ريال، بوكينج: ' + vipDefault.booking + ' ريال لكل حجز</span></li>';
-  }
-
-  container.innerHTML = '' +
-    // === مكافآت الحجوزات (استقبال حسب الشفت + بوكينج سعر ثابت + VIP) ===
-    '<div class="bg-turquoise/10 rounded-xl p-4 border border-turquoise/30">' +
-      '<h3 class="text-lg font-bold text-turquoise mb-3 flex items-center gap-2"><span>📊</span><span>مكافآت الحجوزات</span></h3>' +
-      '<ul class="space-y-3 text-sm text-gray-300">' +
-        '<li class="flex items-start gap-3"><span class="text-turquoise font-bold mt-0.5">•</span><span><strong class="text-emerald-300">استقبال</strong> شفت صباحي: <strong class="text-white">' + _rp.rateMorning + ' ريال</strong> لكل حجز</span></li>' +
-        '<li class="flex items-start gap-3"><span class="text-turquoise font-bold mt-0.5">•</span><span><strong class="text-emerald-300">استقبال</strong> شفت مسائي: <strong class="text-white">' + _rp.rateEvening + ' ريال</strong> لكل حجز</span></li>' +
-        '<li class="flex items-start gap-3"><span class="text-turquoise font-bold mt-0.5">•</span><span><strong class="text-emerald-300">استقبال</strong> شفت ليلي: <strong class="text-white">' + _rp.rateNight + ' ريال</strong> لكل حجز</span></li>' +
-        '<li class="flex items-start gap-3"><span class="text-turquoise font-bold mt-0.5">•</span><span><strong class="text-orange-300">بوكينج عادي</strong> (غير VIP): <strong class="text-white">' + _rp.rateBooking + ' ريال</strong> لكل حجز (سعر ثابت)</span></li>' +
-        '<li class="flex items-start gap-3"><span class="text-turquoise font-bold mt-0.5">•</span><span class="text-turquoise/80 font-medium">حجوزات <strong>VIP</strong> — تُسعّر من خانات VIP (استقبال/بوكينج لكل غرفة)</span></li>' +
-      '</ul>' +
-    '</div>' +
-
-    // === أسعار غرف VIP (إن وُجدت) ===
-    (vipHtml ? (
-    '<div class="bg-amber-500/10 rounded-xl p-4 border border-amber-500/30">' +
-      '<h3 class="text-lg font-bold text-amber-400 mb-3 flex items-center gap-2"><span>👑</span><span>أسعار غرف VIP</span></h3>' +
-      '<ul class="space-y-3 text-sm text-gray-300">' + vipHtml + '</ul>' +
-    '</div>'
-    ) : '') +
-
-    // === مكافآت التقييمات ===
-    '<div class="bg-yellow-500/10 rounded-xl p-4 border border-yellow-500/30">' +
-      '<h3 class="text-lg font-bold text-yellow-400 mb-3 flex items-center gap-2"><span>⭐</span><span>مكافآت التقييمات</span></h3>' +
-      '<ul class="space-y-3 text-sm text-gray-300">' +
-        '<li class="flex items-start gap-3"><span class="text-yellow-400 font-bold mt-0.5">•</span><span><strong class="text-white">' + _rp.rateEvalBooking + ' ريال</strong> لكل تقييم Booking</span></li>' +
-        '<li class="flex items-start gap-3"><span class="text-yellow-400 font-bold mt-0.5">•</span><span><strong class="text-white">' + _rp.rateEvalGoogle + ' ريال</strong> لكل تقييم Google Maps</span></li>' +
-        '<li class="flex items-start gap-3"><span class="text-yellow-400 font-bold mt-0.5">•</span><span class="text-yellow-200/90 font-medium">تُحتسب المكافآت أعلاه على أن يكون التقييم <strong>مساوٍ أو أعلى</strong> من التقييم الحالي للفندق.</span></li>' +
-      '</ul>' +
-    '</div>' +
-
-    // === حوافز تحدي الظروف ===
-    '<div class="bg-green-500/10 rounded-xl p-4 border border-green-500/30">' +
-      '<h3 class="text-lg font-bold text-green-400 mb-3 flex items-center gap-2"><span>✓</span><span>حوافز تحدي الظروف</span></h3>' +
-      '<ul class="space-y-3 text-sm text-gray-300">' +
-        '<li class="flex items-start gap-3"><span class="text-green-400 font-bold mt-0.5">•</span><span class="text-green-300">مكافأة 25% إضافية للموظفين الذين أتموا 26 يوماً وأكثر من العطاء (بطل تحدي الظروف) - يتم تفعيلها يدوياً من قبل المستخدم عند إتمام الموظف 26 يوماً وأكثر من العطاء (يتم التطبيق بناء على بصمه الحضور والانصراف)</span></li>' +
-      '</ul>' +
-    '</div>' +
-
-    // === الحوافز الإضافية ===
-    '<div class="bg-turquoise/10 rounded-xl p-4 border border-turquoise/30">' +
-      '<h3 class="text-lg font-bold text-turquoise mb-3 flex items-center gap-2"><span>🏆</span><span>الحوافز الإضافية</span></h3>' +
-      '<ul class="space-y-3 text-sm text-gray-300">' +
-        '<li class="flex items-start gap-3"><span class="text-turquoise font-bold mt-0.5">•</span><span>50 ريال خبير إرضاء العميل في الفرع (الأكثر تقييماً + الأكثر حجوزات)</span></li>' +
-        '<li class="flex items-start gap-3"><span class="text-turquoise font-bold mt-0.5">•</span><span>50 ريال حافز الالتزام والانجاز، وتُعرض كـ "حافز الالتزام ورضاء العميل" عند تميز الموظف بالتقييمات، مضافاً إلى الـ 25% لمن أتم 26 يوم دوام</span></li>' +
-      '</ul>' +
-    '</div>' +
-
-    // === مساهمة شركاء النجاح (15%) ===
-    '<div class="bg-orange-500/10 rounded-xl p-4 border border-orange-500/30">' +
-      '<h3 class="text-lg font-bold text-orange-400 mb-3 flex items-center gap-2"><span>📌</span><span>مساهمة شركاء النجاح (15%) ورصيد النقاط</span></h3>' +
-      '<ul class="space-y-3 text-sm text-gray-300">' +
-        '<li class="flex items-start gap-3"><span class="text-orange-400 font-bold mt-0.5">•</span><span><strong class="text-orange-300">بالريال (الجدول والتقرير العادي):</strong> يُخصم 15% من إجمالي المكافآت (حجوزات + تقييمات) كمساهمة شركاء النجاح، ويُعرض <strong>الصافي المستحق</strong> بالريال بعد هذا الخصم.</span></li>' +
-        '<li class="flex items-start gap-3"><span class="text-orange-400 font-bold mt-0.5">•</span><span><strong class="text-amber-300">رصيد النقاط (تقرير النقاط):</strong> من صفحة <strong>التقارير → الإحصائيات</strong> عند الضغط على اسم الموظف يُعرض <strong>تقرير النقاط</strong>؛ نفس الأرقام بالمسميات «نقطة»، والـ 15% تظهر كـ <strong class="text-amber-400">+ مساهمة شركاء النجاح في نقاطك</strong> (تُضاف لرصيدك ولا تُخصم). رصيد النقاط من الفترة = صافي المستحق (ريال) + مساهمة شركاء النجاح (15%).</span></li>' +
-      '</ul>' +
-    '</div>' +
-
-    // === خصومات التقصير ===
-    '<div class="bg-red-500/10 rounded-xl p-4 border border-red-500/30">' +
-      '<h3 class="text-lg font-bold text-red-400 mb-3 flex items-center gap-2"><span>💰</span><span>خصومات التقصير</span></h3>' +
-      '<ul class="space-y-3 text-sm text-gray-300">' +
-        '<li class="flex items-start gap-3"><span class="text-turquoise font-bold mt-0.5">💎</span><span>الحفاظ علي معايير الجودة والأداء 💎</span></li>' +
-        '<li class="flex items-start gap-3"><span class="text-red-400 font-bold mt-0.5">•</span><span><strong>خصم على فريق العمل كامل في حال وصول تقييم أقل من تقييم الفندق، أو فقدان فرص حجز نتيجة المكالمات التي لم يتم الرد عليها.</strong> <strong>قيمة الخصم:</strong> 10 ريال × عدد التقييمات السلبية للفرع، تُخصم من صافي كل موظف في ذلك الفرع. ويُخصم حد أقصى 10 نقاط من نقاط تقييم الموظف.</span></li>' +
-        '<li class="flex items-start gap-3"><span class="text-red-400 font-bold mt-0.5">•</span><span class="text-red-300 font-semibold">تطبق إدارة التشغيل خصومات تتراوح بين 15% إلى 50% من صافي المستحق في حالات تقصير الموظفين وعدم اتباع التعليمات</span></li>' +
-        '<li class="flex items-start gap-3 flex-wrap items-center"><span class="text-red-400 font-bold mt-0.5">•</span><span class="text-gray-400">( فى حال عدم استلامك نسخه من التعليمات اطلب نسختك المطبوعه الان )</span>' +
-          '<button type="button" onclick="event.stopPropagation(); showInstructionsModal();" class="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg text-xs font-bold text-turquoise bg-turquoise/20 border border-turquoise/40 hover:bg-turquoise/30 transition-colors mt-1 sm:mt-0"><span>او اضغط هنا</span></button></li>' +
-        '<li class="flex items-start gap-3"><span class="text-red-400 font-bold mt-0.5">•</span><span>تُحدد نسبة الخصم بناءً على جسامة التأثير على جودة الخدمة، وتُسجل رسمياً في سجل وأرشيف الموظف وتؤثر على تقييم اداءه.</span></li>' +
-        '<li class="flex items-start gap-3"><span class="text-red-400 font-bold mt-0.5">•</span><span>هدفنا الالتزام بالتعليمات لضمان استمرار تميز "إليت" وتجنب أي إجراءات تؤثر على مبلغ المكافأة النهائي.</span></li>' +
-      '</ul>' +
-    '</div>' +
-
-    // === النقاط التراكمية ===
-    '<div class="bg-amber-500/10 rounded-xl p-4 border border-amber-500/30">' +
-      '<h3 class="text-lg font-bold text-amber-400 mb-3 flex items-center gap-2"><span>💰</span><span>النقاط التراكمية</span></h3>' +
-      '<ul class="space-y-3 text-sm text-gray-300">' +
-        '<li class="flex items-start gap-3"><span class="text-amber-400 font-bold mt-0.5">•</span><span><strong>رصيد النقاط من الفترة</strong> = صافي المستحق بعد 15% معروض كنقاط (نفس الرقم في عمود «النقاط» في الجدول وفي التقرير). يُحسب لكل موظف <strong>رصيد تراكمي</strong> = مجموع هذا الرصيد عند كل <strong>إغلاق فترة</strong>.</span></li>' +
-        '<li class="flex items-start gap-3"><span class="text-amber-400 font-bold mt-0.5">•</span><span>المكافأة الكبرى: عند وصول الموظف إلى 100,000 نقطة تراكمية، يستحق "باكيج" التميز: قسيمة مشتريات بقيمة 1,500 ريال من أسواق ومخابز الحمراء؛ إقامة فاخرة (ليلة مجانية في جناح VIP للموظف أو لأحد ضيوفه)؛ وجبة عشاء فاخر متكامل. نظام النقاط: تُحتسب وتُضاف النقاط للموظفين دورياً مع كل إغلاق فترة.</span></li>' +
-        '<li class="flex items-start gap-3"><span class="text-amber-400 font-bold mt-0.5">•</span><span>يمكن متابعة الرصيد التراكمي من صفحة <strong>التقارير → الإحصائيات</strong> (قسم «الرصيد التراكمي من النقاط»).</span></li>' +
-      '</ul>' +
-    '</div>';
+  container.innerHTML = '<p class="text-gray-400 py-4 text-center">جاري تحميل الشروط...</p>';
+  getConditionsContentSchema(function(schema) {
+    if (!container) return;
+    if (!schema) {
+      container.innerHTML = '<p class="text-red-400/90 py-4 text-center">تعذر تحميل محتوى الشروط. تأكد من توفر ملف shared/conditions-content.json.</p>';
+      return;
+    }
+    var pricing = getPricingConfig();
+    container.innerHTML = buildConditionsModalHtml(pricing, schema);
+  });
 }
 
 /**
  * Populate the INLINE print-conditions section (visible only during browser Ctrl+P print).
- * Uses inline styles since Tailwind classes don't work in print context.
+ * Uses same source: conditions-content.json + getPricingConfig().
  */
 function populatePrintConditionsInline() {
   var container = document.getElementById('printConditionsInlineContent');
   if (!container) return;
-  var _rp = getPricingConfig();
-
-  var liStyle = 'font-size: 11px; font-weight: 600; color: #000; margin: 8px 0; padding-right: 20px; position: relative;';
-  var bulletStyle = 'position: absolute; right: 0; top: 0; font-weight: 900;';
-  var spanStyle = 'display: block; padding-right: 15px;';
-
-  function li(text, bullet) {
-    return '<li style="' + liStyle + '"><span style="' + bulletStyle + '">' + (bullet || '•') + '</span><span style="' + spanStyle + '">' + text + '</span></li>';
-  }
-  function section(color, title, items) {
-    return '<div style="margin-bottom: 18px; padding: 12px 15px; border-radius: 8px; background-color: rgba(' + color + ', 0.08); border: 2px solid rgba(' + color + ', 0.4); border-right: 5px solid rgba(' + color + ', 0.6);">' +
-      '<h4 style="font-size: 13px; font-weight: 800; color: #000; margin: 0 0 10px 0; text-align: right; direction: rtl;">' + title + '</h4>' +
-      '<ul style="list-style: none; padding: 0; margin: 0; text-align: right; direction: rtl;">' + items + '</ul></div>';
-  }
-
-  var html = '<h3 style="font-size: 16px; font-weight: 900; color: #000; margin: 0 0 20px 0; text-align: center; direction: rtl; border-bottom: 2px solid #40E0D0; padding-bottom: 10px;">شروط الحصول على المكافآت</h3>';
-
-  // مكافآت الحجوزات
-  html += section('59, 130, 246', '📊 مكافآت الحجوزات',
-    li('<strong>استقبال</strong> شفت صباحي: <strong>' + _rp.rateMorning + ' ريال</strong> لكل حجز') +
-    li('<strong>استقبال</strong> شفت مسائي: <strong>' + _rp.rateEvening + ' ريال</strong> لكل حجز') +
-    li('<strong>استقبال</strong> شفت ليلي: <strong>' + _rp.rateNight + ' ريال</strong> لكل حجز') +
-    li('<strong>بوكينج عادي</strong> (غير VIP): <strong>' + _rp.rateBooking + ' ريال</strong> لكل حجز (سعر ثابت)') +
-    li('حجوزات <strong>VIP</strong> — تُسعّر من خانات VIP (استقبال/بوكينج لكل غرفة)')
-  );
-
-  // مكافآت التقييمات
-  html += section('234, 179, 8', '⭐ مكافآت التقييمات',
-    li('<strong>' + _rp.rateEvalBooking + ' ريال</strong> لكل تقييم Booking') +
-    li('<strong>' + _rp.rateEvalGoogle + ' ريال</strong> لكل تقييم Google Maps')
-  );
-
-  // حوافز تحدي الظروف
-  html += section('16, 185, 129', '✓ حوافز تحدي الظروف',
-    '<li style="font-size: 11px; font-weight: 700; color: #10b981; margin: 8px 0; padding: 8px 12px; background-color: rgba(16, 185, 129, 0.05); border-radius: 5px; border-right: 3px solid #10b981; position: relative;"><span style="' + bulletStyle + '">•</span><span style="' + spanStyle + '">مكافأة 25% إضافية للموظفين الذين أتموا 26 يوماً وأكثر من العطاء (بطل تحدي الظروف)</span></li>'
-  );
-
-  // الحوافز الإضافية
-  html += section('20, 184, 166', '🏆 الحوافز الإضافية',
-    li('50 ريال خبير إرضاء العميل في الفرع (الأكثر تقييماً + الأكثر حجوزات)') +
-    li('50 ريال حافز الالتزام والانجاز، وتُعرض كـ "حافز الالتزام ورضاء العميل" عند تميز الموظف بالتقييمات، مضافاً إلى الـ 25% لمن أتم 26 يوم دوام')
-  );
-
-  // مساهمة شركاء النجاح
-  html += section('245, 158, 11', '📌 مساهمة شركاء النجاح (15%)',
-    li('<strong>بالريال:</strong> يُخصم 15% من إجمالي المكافآت كمساهمة شركاء النجاح، ويُعرض الصافي المستحق بالريال.') +
-    li('<strong>رصيد النقاط:</strong> الـ 15% تظهر كـ + مساهمة شركاء النجاح في نقاطك (تُضاف لرصيدك ولا تُخصم).')
-  );
-
-  // خصومات التقصير
-  html += section('239, 68, 68', '💰 خصومات التقصير',
-    li('الحفاظ علي معايير الجودة والأداء 💎', '💎') +
-    li('<strong>خصم على فريق العمل كامل في حال وصول تقييم أقل من تقييم الفندق، أو فقدان فرص حجز نتيجة المكالمات التي لم يتم الرد عليها.</strong> قيمة الخصم: 10 ريال × عدد التقييمات السلبية للفرع.') +
-    li('تطبق إدارة التشغيل خصومات تتراوح بين 15% إلى 50% من صافي المستحق في حالات تقصير الموظفين.')
-  );
-
-  container.innerHTML = html;
+  container.innerHTML = '<p style="text-align:right;direction:rtl;">جاري التحميل...</p>';
+  getConditionsContentSchema(function(schema) {
+    if (!container) return;
+    if (!schema) {
+      container.innerHTML = '<p style="text-align:right;direction:rtl;color:#999;">تعذر تحميل محتوى الشروط.</p>';
+      return;
+    }
+    var pricing = getPricingConfig();
+    var doc = buildConditionsPrintDocument(pricing, schema);
+    var start = doc.indexOf('<div class="conditions-one-page">');
+    var end = doc.indexOf('</div></body>');
+    if (start !== -1 && end !== -1) {
+      var inner = doc.substring(start + 31, end);
+      container.innerHTML = '<h3 style="font-size: 16px; font-weight: 900; color: #000; margin: 0 0 20px 0; text-align: center; direction: rtl; border-bottom: 2px solid #40E0D0; padding-bottom: 10px;">' + (schema.modalTitle || 'شروط الحصول على المكافآت') + '</h3>' + inner;
+    } else {
+      container.innerHTML = '<p style="text-align:right;direction:rtl;">تعذر تحميل محتوى الشروط.</p>';
+    }
+  });
 }
 
 // Auto-populate print conditions before browser print (Ctrl+P)
@@ -7718,7 +7245,7 @@ function showEmployeeReportAggregated(empName, options) {
   var unit = pointsMode ? 'نقطة' : 'ريال';
   var mainTotal = pointsMode ? (report.finalNet + fund) : report.finalNet;
   var periodText = document.getElementById('headerPeriodRange') ? document.getElementById('headerPeriodRange').innerText : '-';
-  var reportDate = new Date().toLocaleDateString('ar-SA');
+  var reportDate = getReportDateGregorian();
   var branchReports = report.branchReports || [];
   var esc = function (s) { return String(s || '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;'); };
   title.innerText = pointsMode ? ('تقرير النقاط — ' + esc(emp.name)) : ('تقرير ' + esc(emp.name) + ' - ' + (branchReports.length > 1 ? 'جميع الفروع' : esc(emp.branch)));
@@ -7738,6 +7265,9 @@ function normalizeBonusNamingText(html) {
     .replaceAll('حافز الجمع بين الحضور والأكثر تميز (الأكثر حجوزات أو الأفضل تقييم)', 'حافز الالتزام والانجاز')
     .replaceAll('حافز الجمع بين الحضور والأكثر تميز', 'حافز الالتزام والانجاز');
 }
+function getReportDateGregorian() {
+  return new Date().toLocaleDateString('en-GB', { day: '2-digit', month: '2-digit', year: 'numeric' });
+}
 function buildEmployeeReportModalHTML(report, opts) {
   if (report.branchReports && report.branchReports.length > 1) {
     return buildEmployeeReportModalHTMLMultiBranch(report, opts);
@@ -7745,7 +7275,7 @@ function buildEmployeeReportModalHTML(report, opts) {
   opts = opts || {};
   var _rp = getPricingConfig();
   var periodText = opts.periodText || '-';
-  var reportDate = opts.reportDate || new Date().toLocaleDateString('ar-SA');
+  var reportDate = opts.reportDate || getReportDateGregorian();
   var pointsMode = !!opts.pointsMode;
   var emp = report.emp;
   var rate = report.rate;
@@ -7770,7 +7300,10 @@ function buildEmployeeReportModalHTML(report, opts) {
   var attendance26Days = report.attendance26Days;
   var maxEvalCount = report.maxEvalCount || 0;
   var maxBookCount = report.maxBookCount || 0;
+  var isMostEval = report.isMostEval;
+  var isMostBook = report.isMostBook;
   function esc(s) { return String(s || '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;'); }
+  var commitmentExplain = hasCommitmentBonus ? ('الأكثر التزاماً (26+ يوم)' + (isMostEval && isMostBook ? ' + الأعلى تقييماً بـ ' + maxEvalCount + ' تقييم والأكثر حجوزات ' + maxBookCount + ' حجز' : isMostEval ? ' + الأعلى تقييماً بـ ' + maxEvalCount + ' تقييم' : isMostBook ? ' + الأكثر حجوزات ' + maxBookCount + ' حجز' : '') + ' في فرع ' + esc(emp.branch)) : '';
   var breakdownBlock = '';
   if (report.breakdown || report.breakdownText) {
     var _bd = report.breakdownText || report.breakdown;
@@ -7819,7 +7352,7 @@ function buildEmployeeReportModalHTML(report, opts) {
     return '<div class="bg-red-500/5 p-3 rounded-lg border border-red-500/20"><div class="flex justify-between items-center mb-1"><span class="text-gray-300">' + esc(label) + ':</span><span class="font-bold text-red-400">-' + amt.toFixed(2) + ' ' + unit + '</span></div><p class="text-xs text-gray-400 mt-1">' + (discount.isHotelRating ? discount.discountType : 'تم خصم ' + discount.discountPercentage + '% بسبب ' + discount.discountType) + (eventDate ? ' - تاريخ الحدث: ' + eventDate : '') + '</p>' + (discount.isHotelRating ? '' : '<p class="text-xs text-gray-500 mt-0.5">مطبق من: ' + (discount.appliedBy || 'الأدمن') + '</p>') + '</div>';
   }).join('') + '</div></div>') : '';
   // كل الأرقام من الـ payload = جدول "ملخص المكافآت لكل موظف" (مصدر موثّق واحد)
-  return normalizeBonusNamingText('<div class="space-y-4"><div class="bg-gradient-to-r from-turquoise/20 to-transparent p-4 rounded-xl border border-turquoise/30"><h3 class="text-xl font-black text-turquoise mb-2">' + esc(emp.name) + '</h3><p class="text-sm text-gray-300">الفرع: <span class="text-turquoise font-bold">' + esc(emp.branch) + '</span></p><p class="text-sm text-gray-300">الفترة: <span class="text-turquoise font-bold">' + esc(periodText) + '</span></p><p class="text-sm text-gray-300">تاريخ التقرير: <span class="text-turquoise font-bold">' + reportDate + '</span></p></div><div class="bg-gradient-to-r from-turquoise/20 to-transparent p-6 rounded-xl border border-turquoise/30 text-center"><h4 class="text-lg font-bold text-turquoise mb-2">' + summaryTitle + '</h4><p class="text-3xl font-black text-white">' + mainTotal.toFixed(2) + ' <span class="text-lg text-turquoise">' + unit + '</span></p>' + (totalDiscountAmount > 0 ? '<p class="text-sm text-red-400 mt-2">بعد خصم ' + totalDiscountAmount.toFixed(2) + ' ' + unit + '</p>' : '') + (pointsMode ? '<p class="text-xs text-gray-400 mt-2">(صافي النقاط + مساهمة شركاء النجاح في نقاطك)</p>' : '') + '</div>' + breakdownBlock + discountBlock + '<div class="space-y-3">' + (function(){
+  return normalizeBonusNamingText('<div class="space-y-3 employee-report-content"><div class="bg-gradient-to-r from-turquoise/20 to-transparent p-3 rounded-lg border border-turquoise/30"><h3 class="text-lg font-black text-turquoise mb-1">' + esc(emp.name) + '</h3><p class="text-xs text-gray-300">الفرع: <span class="text-turquoise font-bold">' + esc(emp.branch) + '</span></p><p class="text-xs text-gray-300">الفترة: <span class="text-turquoise font-bold">' + esc(periodText) + '</span></p><p class="text-xs text-gray-300">تاريخ التقرير: <span class="text-turquoise font-bold">' + reportDate + '</span></p></div><div class="bg-gradient-to-r from-turquoise/20 to-transparent p-4 rounded-lg border border-turquoise/30 text-center"><h4 class="text-base font-bold text-turquoise mb-1">' + summaryTitle + '</h4><p class="text-2xl font-black text-white">' + mainTotal.toFixed(2) + ' <span class="text-base text-turquoise">' + unit + '</span></p>' + (totalDiscountAmount > 0 ? '<p class="text-sm text-red-400 mt-2">بعد خصم ' + totalDiscountAmount.toFixed(2) + ' ' + unit + '</p>' : '') + (pointsMode ? '<p class="text-xs text-gray-400 mt-2">(صافي النقاط + مساهمة شركاء النجاح في نقاطك)</p>' : '') + '</div>' + breakdownBlock + discountBlock + '<div class="space-y-3">' + (function(){
 var bd=report.breakdown||{};
 var totalM=bd.morning||0,totalE=bd.evening||0,totalN=bd.night||0,bdV=bd.vipTotal||0;
 var useNew = (emp._receptionMorning != null || emp._bookingRegular != null);
@@ -7849,7 +7382,12 @@ if(bdV>0){
     if(cnt<=0)return;
     var roomAmt=rRec*(rates.reception||0)+rBk*(rates.booking||0);
     vipAmt+=roomAmt;
-    vipRoomLines.push('<div class="flex justify-between items-center py-0.5"><span class="text-gray-400">غرفة '+rn+': '+cnt+' '+w(cnt)+'</span><span class="font-bold text-violet-400">= '+roomAmt.toFixed(2)+' '+unit+'</span></div>');
+    var recRate=rates.reception||0,bkRate=rates.booking||0;
+    var parts=[];
+    if(rRec>0)parts.push(rRec+' استقبال × '+recRate+' '+unit);
+    if(rBk>0)parts.push(rBk+' بوكينج × '+bkRate+' '+unit);
+    var explain=parts.length>0?' <span class="text-[10px] text-gray-500">('+parts.join(' و ')+')</span>':'';
+    vipRoomLines.push('<div class="flex justify-between items-center py-0.5"><span class="text-gray-400">غرفة '+rn+': '+cnt+' '+w(cnt)+explain+'</span><span class="font-bold text-violet-400">= '+roomAmt.toFixed(2)+' '+unit+'</span></div>');
   });
 }
 var gbOnly=shiftAmt+bookingAmt+vipAmt;
@@ -7865,8 +7403,8 @@ var sec1='<div class="text-emerald-400/95 font-semibold text-sm mb-1">🟢 أو�
 var sec2=bkCount>0?'<div class="text-orange-400/95 font-semibold text-sm mb-1 mt-3">🟠 ثانياً: حجوزات العمولة الثابتة (بوكينج)</div><div class="flex justify-between items-center py-0.5"><span class="text-gray-400">بوكينج عادي: '+bkCount+' '+w(bkCount)+' × '+(_rp.rateBooking||0)+' '+unit+'</span><span class="font-bold text-orange-300">= '+bookingAmt.toFixed(2)+' '+unit+'</span></div>':'';
 var sec3=vipRoomLines.length>0?'<div class="text-violet-400/95 font-semibold text-sm mb-1 mt-3">👑 ثالثاً: حجوزات الـ VIP (سعر الغرفة)</div>'+vipRoomLines.join(''):'';
 var footer='<div class="flex justify-between items-center pt-3 mt-2 border-t border-white/10"><span class="font-bold text-green-400">💰 المجموع النهائي للمكافأة:</span><span class="font-bold text-blue-400">'+gbOnly.toFixed(2)+' '+unit+'</span></div><div class="text-xs text-gray-400 mt-1">(إجمالي الحجوزات: '+refCount+' حجز)</div>';
-return '<div class="bg-blue-500/10 p-4 rounded-xl border border-blue-500/30"><h5 class="text-base font-bold text-blue-400 mb-2 flex items-center gap-2"><span>📊</span><span>مكافآت الحجوزات</span></h5>'+sec1+sec2+sec3+footer+'</div></div>';
-})() + '<div class="bg-yellow-500/10 p-4 rounded-xl border border-yellow-500/30"><h5 class="text-base font-bold text-yellow-400 mb-3 flex items-center gap-2"><span>⭐</span><span>مكافآت التقييمات</span></h5><div class="space-y-2 text-sm text-gray-300"><div class="flex justify-between items-center"><span>تقييمات Booking: ' + evBooking + ' × ' + _rp.rateEvalBooking + ' ' + unit + '/تقييم</span><span class="font-bold text-yellow-400">' + (evBooking * _rp.rateEvalBooking).toFixed(2) + ' ' + unit + '</span></div><div class="flex justify-between items-center"><span>تقييمات Google Maps: ' + evGoogle + ' × ' + _rp.rateEvalGoogle + ' ' + unit + '/تقييم</span><span class="font-bold text-yellow-400">' + (evGoogle * _rp.rateEvalGoogle).toFixed(2) + ' ' + unit + '</span></div><div class="flex justify-between items-center pt-2 border-t-2 border-yellow-500/30 mt-2"><span class="font-bold text-green-400">إجمالي مكافآت التقييمات:</span><span class="font-bold text-yellow-400 text-lg">' + ((evBooking * _rp.rateEvalBooking) + (evGoogle * _rp.rateEvalGoogle)).toFixed(2) + ' ' + unit + '</span></div></div></div><div class="bg-purple-500/10 p-4 rounded-xl border border-purple-500/30"><h5 class="text-base font-bold text-purple-400 mb-3">الإجمالي قبل مساهمة شركاء النجاح</h5><div class="flex justify-between items-center"><span class="text-sm text-gray-300">إجمالي المكافآت (حجوزات + تقييمات):</span><span class="font-bold text-white text-lg">' + gross.toFixed(2) + ' ' + unit + '</span></div></div><div class="bg-orange-500/10 p-4 rounded-xl border border-orange-500/30"><h5 class="text-base font-bold text-orange-400 mb-3">' + (pointsMode ? 'مساهمة شركاء النجاح في نقاطك' : 'مساهمة شركاء النجاح') + '</h5><div class="space-y-2 text-sm text-gray-300"><div class="flex justify-between items-center"><span>' + fundLabel + '</span><span class="font-bold text-orange-400">' + fundSign + fund.toFixed(2) + ' ' + unit + '</span></div><p class="text-xs text-orange-300/60 mt-2">⚠️ هذه النسبة تُخصم من المبلغ المالي فقط ولا تؤثر على تقييم الأداء أو رصيد النقاط التراكمي.</p></div><div class="bg-turquoise/10 p-4 rounded-xl border border-turquoise/30"><h5 class="text-base font-bold text-turquoise mb-3">الحوافز الإضافية</h5><div class="space-y-3 text-sm">' + (attendance26Days ? '<div class="bg-green-500/10 p-3 rounded-lg border border-green-500/30"><div class="flex justify-between items-center mb-1"><span class="text-gray-300">✓ حافز تحدي الظروف (25%):</span><span class="font-bold text-green-400">+' + attendanceBonus.toFixed(2) + ' ' + unit + '</span></div><p class="text-xs text-gray-400 mt-1">تم إتمام ' + actualAttendanceDays + ' يوماً وأكثر من العطاء</p></div>' : '') + (hasExcellenceBonus ? '<div class="bg-turquoise/20 p-3 rounded-lg border border-turquoise/50"><div class="flex justify-between items-center mb-1"><span class="text-gray-300">✨ حافز الأفضل تقييماً + الأكثر حجوزات:</span><span class="font-bold text-turquoise">+' + excellenceBonus.toFixed(2) + ' ' + unit + '</span></div><p class="text-xs text-gray-400 mt-1">الأعلى تقييماً بـ ' + maxEvalCount + ' تقييم والأكثر حجوزات ' + maxBookCount + ' حجز في ' + esc(emp.branch) + '</p></div>' : '') + (hasCommitmentBonus ? '<div class="bg-purple-500/20 p-3 rounded-lg border border-purple-500/50"><div class="flex justify-between items-center mb-1"><span class="text-gray-300">✓ حافز الجمع بين الحضور والأكثر تميز:</span><span class="font-bold text-purple-400">+' + commitmentBonus.toFixed(2) + ' ' + unit + '</span></div></div>' : '') + (!attendance26Days && !hasExcellenceBonus && !hasCommitmentBonus ? '<p class="text-gray-400 text-center py-2">لا توجد حوافز إضافية</p>' : '') + '</div></div>' + (function(){var nbf=gross-fund;var lines='<div class="bg-gradient-to-r from-slate-800/50 to-slate-900/50 p-4 rounded-xl border border-white/10"><h5 class="text-base font-bold text-white mb-3">ملخص الحساب</h5><div class="space-y-2 text-sm"><div class="flex justify-between items-center text-gray-300"><span>إجمالي المكافآت:</span><span class="font-bold text-white">'+gross.toFixed(2)+' '+unit+'</span></div><div class="flex justify-between items-center text-gray-300"><span>'+fundLabel+'</span><span class="font-bold text-orange-400">'+fundSign+fund.toFixed(2)+' '+unit+'</span></div><div class="flex justify-between items-center text-gray-300"><span>الصافي قبل الحوافز:</span><span class="font-bold text-white">'+nbf.toFixed(2)+' '+unit+'</span></div>';if(attendanceBonus>0)lines+='<div class="flex justify-between items-center text-green-400"><span>+ حافز تحدي الظروف (25%):</span><span class="font-bold">+'+attendanceBonus.toFixed(2)+' '+unit+'</span></div>';if(excellenceBonus>0)lines+='<div class="flex justify-between items-center text-turquoise"><span>+ حافز التفوق:</span><span class="font-bold">+'+excellenceBonus.toFixed(2)+' '+unit+'</span></div>';if(commitmentBonus>0)lines+='<div class="flex justify-between items-center text-purple-400"><span>+ حافز الالتزام:</span><span class="font-bold">+'+commitmentBonus.toFixed(2)+' '+unit+'</span></div>';if(totalDiscountAmount>0)lines+='<div class="flex justify-between items-center text-red-400"><span>− الخصومات:</span><span class="font-bold">-'+totalDiscountAmount.toFixed(2)+' '+unit+'</span></div>';lines+='<div class="flex justify-between items-center pt-2 border-t border-white/10"><span class="font-bold text-turquoise">'+summaryTitle+':</span><span class="font-bold text-white text-lg">'+mainTotal.toFixed(2)+' '+unit+'</span></div></div></div>';return lines;})() + '</div></div>');
+return '<div class="bg-blue-500/10 p-3 rounded-lg border border-blue-500/30"><h5 class="text-sm font-bold text-blue-400 mb-1 flex items-center gap-1"><span>📊</span><span>مكافآت الحجوزات</span></h5>'+sec1+sec2+sec3+footer+'</div></div>';
+})() + '<div class="bg-yellow-500/10 p-3 rounded-lg border border-yellow-500/30"><h5 class="text-sm font-bold text-yellow-400 mb-1 flex items-center gap-1"><span>⭐</span><span>مكافآت التقييمات</span></h5><div class="space-y-1 text-xs text-gray-300"><div class="flex justify-between items-center"><span>تقييمات Booking: ' + evBooking + ' × ' + _rp.rateEvalBooking + ' ' + unit + '/تقييم</span><span class="font-bold text-yellow-400">' + (evBooking * _rp.rateEvalBooking).toFixed(2) + ' ' + unit + '</span></div><div class="flex justify-between items-center"><span>تقييمات Google Maps: ' + evGoogle + ' × ' + _rp.rateEvalGoogle + ' ' + unit + '/تقييم</span><span class="font-bold text-yellow-400">' + (evGoogle * _rp.rateEvalGoogle).toFixed(2) + ' ' + unit + '</span></div><div class="flex justify-between items-center pt-1 border-t border-yellow-500/30 mt-1"><span class="font-bold text-green-400">إجمالي مكافآت التقييمات:</span><span class="font-bold text-yellow-400 text-sm">' + ((evBooking * _rp.rateEvalBooking) + (evGoogle * _rp.rateEvalGoogle)).toFixed(2) + ' ' + unit + '</span></div></div></div><div class="bg-purple-500/10 p-3 rounded-lg border border-purple-500/30"><h5 class="text-sm font-bold text-purple-400 mb-1">الإجمالي قبل مساهمة شركاء النجاح</h5><div class="flex justify-between items-center text-xs"><span class="text-gray-300">إجمالي المكافآت (حجوزات + تقييمات):</span><span class="font-bold text-white text-sm">' + gross.toFixed(2) + ' ' + unit + '</span></div></div><div class="bg-orange-500/10 p-3 rounded-lg border border-orange-500/30"><h5 class="text-sm font-bold text-orange-400 mb-1">' + (pointsMode ? 'مساهمة شركاء النجاح في نقاطك' : 'مساهمة شركاء النجاح') + '</h5><div class="space-y-1 text-xs text-gray-300"><div class="flex justify-between items-center"><span>' + fundLabel + '</span><span class="font-bold text-orange-400">' + fundSign + fund.toFixed(2) + ' ' + unit + '</span></div><p class="text-[10px] text-orange-300/60 mt-1">⚠️ هذه النسبة تُخصم من المبلغ المالي فقط ولا تؤثر على تقييم الأداء أو رصيد النقاط التراكمي.</p></div><div class="bg-turquoise/10 p-3 rounded-lg border border-turquoise/30"><h5 class="text-sm font-bold text-turquoise mb-1">الحوافز الإضافية</h5><div class="space-y-2 text-xs">' + (attendance26Days ? '<div class="bg-green-500/10 p-3 rounded-lg border border-green-500/30"><div class="flex justify-between items-center mb-1"><span class="text-gray-300">✓ حافز تحدي الظروف (25%):</span><span class="font-bold text-green-400">+' + attendanceBonus.toFixed(2) + ' ' + unit + '</span></div><p class="text-xs text-gray-400 mt-1">تم إتمام ' + actualAttendanceDays + ' يوماً وأكثر من العطاء</p></div>' : '') + (hasExcellenceBonus ? '<div class="bg-turquoise/20 p-3 rounded-lg border border-turquoise/50"><div class="flex justify-between items-center mb-1"><span class="text-gray-300">✨ حافز الأفضل تقييماً + الأكثر حجوزات:</span><span class="font-bold text-turquoise">+' + excellenceBonus.toFixed(2) + ' ' + unit + '</span></div><p class="text-xs text-gray-400 mt-1">الأعلى تقييماً بـ ' + maxEvalCount + ' تقييم والأكثر حجوزات ' + maxBookCount + ' حجز في ' + esc(emp.branch) + '</p></div>' : '') + (hasCommitmentBonus ? '<div class="bg-purple-500/20 p-3 rounded-lg border border-purple-500/50"><div class="flex justify-between items-center mb-1"><span class="text-gray-300">✓ حافز الجمع بين الحضور والأكثر تميز:</span><span class="font-bold text-purple-400">+' + commitmentBonus.toFixed(2) + ' ' + unit + '</span></div>' + (commitmentExplain ? '<p class="text-xs text-gray-400 mt-1">' + commitmentExplain + '</p>' : '') + '</div>' : '') + (!attendance26Days && !hasExcellenceBonus && !hasCommitmentBonus ? '<p class="text-gray-400 text-center py-2">لا توجد حوافز إضافية</p>' : '') + '</div></div>' + (function(){var nbf=gross-fund;var lines='<div class="bg-gradient-to-r from-slate-800/50 to-slate-900/50 p-3 rounded-lg border border-white/10"><h5 class="text-sm font-bold text-white mb-1">ملخص الحساب</h5><div class="space-y-1 text-xs"><div class="flex justify-between items-center text-gray-300"><span>إجمالي المكافآت:</span><span class="font-bold text-white">'+gross.toFixed(2)+' '+unit+'</span></div><div class="flex justify-between items-center text-gray-300"><span>'+fundLabel+'</span><span class="font-bold text-orange-400">'+fundSign+fund.toFixed(2)+' '+unit+'</span></div><div class="flex justify-between items-center text-gray-300"><span>الصافي قبل الحوافز:</span><span class="font-bold text-white">'+nbf.toFixed(2)+' '+unit+'</span></div>';if(attendanceBonus>0)lines+='<div class="flex justify-between items-center text-green-400"><span>+ حافز تحدي الظروف (25%):</span><span class="font-bold">+'+attendanceBonus.toFixed(2)+' '+unit+'</span></div>';if(excellenceBonus>0)lines+='<div class="flex justify-between items-center text-turquoise"><span>+ حافز التفوق:</span><span class="font-bold">+'+excellenceBonus.toFixed(2)+' '+unit+'</span></div>';if(commitmentBonus>0)lines+='<div class="flex justify-between items-center text-purple-400"><span>+ حافز الالتزام:</span><span class="font-bold">+'+commitmentBonus.toFixed(2)+' '+unit+'</span></div>';if(totalDiscountAmount>0)lines+='<div class="flex justify-between items-center text-red-400"><span>− الخصومات:</span><span class="font-bold">-'+totalDiscountAmount.toFixed(2)+' '+unit+'</span></div>';lines+='<div class="flex justify-between items-center pt-1 border-t border-white/10"><span class="font-bold text-turquoise text-sm">'+summaryTitle+':</span><span class="font-bold text-white text-base">'+mainTotal.toFixed(2)+' '+unit+'</span></div></div></div>';return lines;})() + '</div></div>');
 }
 
 /** تقرير موظف متكرر: كل فرع بياناته منفصلة (كورنيش ثم أندلس) في تقرير واحد */
@@ -7874,7 +7412,7 @@ function buildEmployeeReportModalHTMLMultiBranch(report, opts) {
   opts = opts || {};
   var _rp = getPricingConfig();
   var periodText = opts.periodText || '-';
-  var reportDate = opts.reportDate || new Date().toLocaleDateString('ar-SA');
+  var reportDate = opts.reportDate || getReportDateGregorian();
   var pointsMode = !!opts.pointsMode;
   var emp = report.emp;
   var branchReports = report.branchReports || [];
@@ -7894,10 +7432,15 @@ function buildEmployeeReportModalHTMLMultiBranch(report, opts) {
   var excellenceBonus = report.excellenceBonus || 0;
   var commitmentBonus = report.commitmentBonus || 0;
   var attendance26Days = report.attendance26Days;
+  var maxEvalCount = report.maxEvalCount || 0;
+  var maxBookCount = report.maxBookCount || 0;
+  var isMostEval = report.isMostEval;
+  var isMostBook = report.isMostBook;
   function esc(s) { return String(s || '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;'); }
+  var commitmentExplainMulti = hasCommitmentBonus ? ('الأكثر التزاماً (26+ يوم)' + (isMostEval && isMostBook ? ' + الأعلى تقييماً بـ ' + maxEvalCount + ' تقييم والأكثر حجوزات ' + maxBookCount + ' حجز' : isMostEval ? ' + الأعلى تقييماً بـ ' + maxEvalCount + ' تقييم' : isMostBook ? ' + الأكثر حجوزات ' + maxBookCount + ' حجز' : '') + ' في أحد الفروع') : '';
   var disclaimer = '<p class="text-xs text-amber-400/90 mt-2">الإجمالي أعلاه محسوب على مستوى الاسم (حوافز وخصومات مرة واحدة).</p>';
-  var header = '<div class="bg-gradient-to-r from-turquoise/20 to-transparent p-4 rounded-xl border border-turquoise/30"><h3 class="text-xl font-black text-turquoise mb-2">' + esc(emp.name) + '</h3><p class="text-sm text-gray-300">الفروع: <span class="text-turquoise font-bold">' + esc(emp.branch) + '</span></p><p class="text-sm text-gray-300">الفترة: <span class="text-turquoise font-bold">' + esc(periodText) + '</span></p><p class="text-sm text-gray-300">تاريخ التقرير: <span class="text-turquoise font-bold">' + reportDate + '</span></p></div>';
-  var summary = '<div class="bg-gradient-to-r from-turquoise/20 to-transparent p-6 rounded-xl border border-turquoise/30 text-center"><h4 class="text-lg font-bold text-turquoise mb-2">' + summaryTitle + '</h4><p class="text-3xl font-black text-white">' + mainTotal.toFixed(2) + ' <span class="text-lg text-turquoise">' + unit + '</span></p>' + (totalDiscountAmount > 0 ? '<p class="text-sm text-red-400 mt-2">بعد خصم ' + totalDiscountAmount.toFixed(2) + ' ' + unit + '</p>' : '') + (pointsMode ? '<p class="text-xs text-gray-400 mt-2">(صافي النقاط + مساهمة شركاء النجاح في نقاطك)</p>' : '') + disclaimer + '</div>';
+  var header = '<div class="bg-gradient-to-r from-turquoise/20 to-transparent p-3 rounded-lg border border-turquoise/30"><h3 class="text-lg font-black text-turquoise mb-1">' + esc(emp.name) + '</h3><p class="text-xs text-gray-300">الفروع: <span class="text-turquoise font-bold">' + esc(emp.branch) + '</span></p><p class="text-xs text-gray-300">الفترة: <span class="text-turquoise font-bold">' + esc(periodText) + '</span></p><p class="text-xs text-gray-300">تاريخ التقرير: <span class="text-turquoise font-bold">' + reportDate + '</span></p></div>';
+  var summary = '<div class="bg-gradient-to-r from-turquoise/20 to-transparent p-4 rounded-lg border border-turquoise/30 text-center"><h4 class="text-base font-bold text-turquoise mb-1">' + summaryTitle + '</h4><p class="text-2xl font-black text-white">' + mainTotal.toFixed(2) + ' <span class="text-base text-turquoise">' + unit + '</span></p>' + (totalDiscountAmount > 0 ? '<p class="text-xs text-red-400 mt-1">بعد خصم ' + totalDiscountAmount.toFixed(2) + ' ' + unit + '</p>' : '') + (pointsMode ? '<p class="text-[10px] text-gray-400 mt-1">(صافي النقاط + مساهمة شركاء النجاح في نقاطك)</p>' : '') + disclaimer + '</div>';
   var breakdownPerBranch = '';
   branchReports.forEach(function (r) {
     var be = r.emp;
@@ -7927,13 +7470,13 @@ function buildEmployeeReportModalHTMLMultiBranch(report, opts) {
         '</div>' +
       '</div></div>';
   });
-  var breakdownBlock = breakdownPerBranch ? '<div class="space-y-3"><h5 class="text-base font-bold text-turquoise flex items-center gap-2"><span>📋</span><span>تفاصيل الحجوزات والشفتات والتنبيهات (كل فرع)</span></h5>' + breakdownPerBranch + '</div>' : '';
-  var discountBlock = totalDiscountAmount > 0 && discountDetails.length > 0 ? ('<div class="bg-red-500/10 p-4 rounded-xl border border-red-500/30"><h5 class="text-base font-bold text-red-400 mb-3 flex items-center gap-2"><span>💰</span><span>الخصومات المطبقة</span></h5><div class="space-y-2 text-sm">' + discountDetails.map(function (d) {
+  var breakdownBlock = breakdownPerBranch ? '<div class="space-y-2"><h5 class="text-sm font-bold text-turquoise flex items-center gap-1"><span>📋</span><span>تفاصيل الحجوزات والشفتات والتنبيهات (كل فرع)</span></h5>' + breakdownPerBranch + '</div>' : '';
+  var discountBlock = totalDiscountAmount > 0 && discountDetails.length > 0 ? ('<div class="bg-red-500/10 p-3 rounded-lg border border-red-500/30"><h5 class="text-sm font-bold text-red-400 mb-1 flex items-center gap-1"><span>💰</span><span>الخصومات المطبقة</span></h5><div class="space-y-1 text-xs">' + discountDetails.map(function (d) {
     var amt = d.isHotelRating && d.amount != null ? Number(d.amount) : (typeof calculateAggregatedNetForEmployee === 'function' ? calculateAggregatedNetForEmployee(emp.name) * (d.discountPercentage / 100) : 0);
     var label = d.isHotelRating ? d.discountType : d.discountType + ' (' + d.discountPercentage + '%)';
     return '<div class="bg-red-500/5 p-3 rounded-lg border border-red-500/20"><div class="flex justify-between items-center mb-1"><span class="text-gray-300">' + esc(label) + ':</span><span class="font-bold text-red-400">-' + amt.toFixed(2) + ' ' + unit + '</span></div></div>';
   }).join('') + '</div></div>') : '';
-  var bookingsSection = '<div class="bg-blue-500/10 p-4 rounded-xl border border-blue-500/30"><h5 class="text-base font-bold text-blue-400 mb-3 flex items-center gap-2"><span>📊</span><span>مكافآت الحجوزات</span></h5><div class="space-y-4">';
+  var bookingsSection = '<div class="bg-blue-500/10 p-3 rounded-lg border border-blue-500/30"><h5 class="text-sm font-bold text-blue-400 mb-1 flex items-center gap-1"><span>📊</span><span>مكافآت الحجوزات</span></h5><div class="space-y-2">';
   var _sumBranchBookOnly = 0;
   function wBranch(n) { return n === 1 ? 'حجز' : 'حجوزات'; }
   branchReports.forEach(function (r) {
@@ -7977,7 +7520,12 @@ function buildEmployeeReportModalHTMLMultiBranch(report, opts) {
         if (cnt <= 0) return;
         var roomAmt = rRec * (rates.reception || 0) + rBk * (rates.booking || 0);
         vipAmtSum += roomAmt;
-        vipRoomLines.push('<div class="flex justify-between items-center py-0.5"><span class="text-gray-400">غرفة ' + rn + ': ' + cnt + ' ' + wBranch(cnt) + '</span><span class="font-bold text-violet-400">= ' + roomAmt.toFixed(2) + ' ' + unit + '</span></div>');
+        var recRate = rates.reception || 0, bkRate = rates.booking || 0;
+        var parts = [];
+        if (rRec > 0) parts.push(rRec + ' استقبال × ' + recRate + ' ' + unit);
+        if (rBk > 0) parts.push(rBk + ' بوكينج × ' + bkRate + ' ' + unit);
+        var explain = parts.length > 0 ? ' <span class="text-[10px] text-gray-500">(' + parts.join(' و ') + ')</span>' : '';
+        vipRoomLines.push('<div class="flex justify-between items-center py-0.5"><span class="text-gray-400">غرفة ' + rn + ': ' + cnt + ' ' + wBranch(cnt) + explain + '</span><span class="font-bold text-violet-400">= ' + roomAmt.toFixed(2) + ' ' + unit + '</span></div>');
       });
     }
     var sec1 = '<div class="text-emerald-400/95 font-semibold text-sm mb-1">🟢 أولاً: حجوزات الشفتات (الاستقبال العادي)</div><div class="text-xs text-gray-400 mb-2">الحجوزات بعد استبعاد الـ VIP والبوكينج</div><div class="flex justify-between items-center py-0.5"><span class="text-gray-400">الشفت الصباحي: ' + nM + ' ' + wBranch(nM) + ' × ' + _rp.rateMorning + ' ' + unit + '</span><span class="font-bold text-blue-300">= ' + amtM.toFixed(2) + ' ' + unit + '</span></div><div class="flex justify-between items-center py-0.5"><span class="text-gray-400">الشفت المسائي: ' + nE + ' ' + wBranch(nE) + ' × ' + _rp.rateEvening + ' ' + unit + '</span><span class="font-bold text-blue-300">= ' + amtE.toFixed(2) + ' ' + unit + '</span></div><div class="flex justify-between items-center py-0.5"><span class="text-gray-400">الشفت الليلي: ' + nN + ' ' + wBranch(nN) + ' × ' + _rp.rateNight + ' ' + unit + '</span><span class="font-bold text-blue-300">= ' + amtN.toFixed(2) + ' ' + unit + '</span></div>';
@@ -7990,7 +7538,7 @@ function buildEmployeeReportModalHTMLMultiBranch(report, opts) {
   });
   var aggBookOnly = _sumBranchBookOnly;
   bookingsSection += '<div class="p-3 rounded-lg border-2 border-blue-400/40 bg-blue-500/10 mt-2"><p class="font-bold text-blue-200 mb-2">الإجمالي (كل الفروع)</p><div class="space-y-2 text-sm text-gray-300"><div class="flex justify-between items-center"><span>💰 المجموع النهائي للمكافأة:</span><span class="font-bold text-blue-400">' + aggBookOnly.toFixed(2) + ' ' + unit + '</span></div><div class="text-xs text-gray-400 mt-1">(إجمالي الحجوزات: ' + (emp.count || 0) + ' حجز)</div></div></div></div></div>';
-  var evalsSection = '<div class="bg-yellow-500/10 p-4 rounded-xl border border-yellow-500/30"><h5 class="text-base font-bold text-yellow-400 mb-3 flex items-center gap-2"><span>⭐</span><span>مكافآت التقييمات</span></h5><div class="space-y-4">';
+  var evalsSection = '<div class="bg-yellow-500/10 p-3 rounded-lg border border-yellow-500/30"><h5 class="text-sm font-bold text-yellow-400 mb-1 flex items-center gap-1"><span>⭐</span><span>مكافآت التقييمات</span></h5><div class="space-y-2">';
   branchReports.forEach(function (r) {
     var be = r.emp;
     var eb = r.evBooking || 0;
@@ -7999,8 +7547,8 @@ function buildEmployeeReportModalHTMLMultiBranch(report, opts) {
     evalsSection += '<div class="p-3 rounded-lg border border-yellow-500/20 bg-yellow-500/5"><p class="font-bold text-yellow-300 mb-2">' + esc(be.branch) + '</p><div class="space-y-2 text-sm text-gray-300"><div class="flex justify-between items-center"><span>تقييمات Booking: ' + eb + ' × ' + _rp.rateEvalBooking + ' ' + unit + '/تقييم</span><span class="font-bold text-yellow-400">' + (eb * _rp.rateEvalBooking).toFixed(2) + ' ' + unit + '</span></div><div class="flex justify-between items-center"><span>تقييمات Google Maps: ' + eg + ' × ' + _rp.rateEvalGoogle + ' ' + unit + '/تقييم</span><span class="font-bold text-yellow-400">' + (eg * _rp.rateEvalGoogle).toFixed(2) + ' ' + unit + '</span></div><div class="flex justify-between items-center pt-2 border-t border-white/10"><span class="font-bold text-green-400">إجمالي التقييمات (الفرع):</span><span class="font-bold text-yellow-400">' + tot.toFixed(2) + ' ' + unit + '</span></div></div></div>';
   });
   evalsSection += '<div class="p-3 rounded-lg border-2 border-yellow-400/40 bg-yellow-500/10 mt-2"><p class="font-bold text-yellow-200 mb-2">الإجمالي (كل الفروع)</p><div class="space-y-2 text-sm text-gray-300"><div class="flex justify-between items-center"><span>تقييمات Booking: ' + (report.evBooking || 0) + ' × ' + _rp.rateEvalBooking + ' ' + unit + '/تقييم</span><span class="font-bold text-yellow-400">' + ((report.evBooking || 0) * _rp.rateEvalBooking).toFixed(2) + ' ' + unit + '</span></div><div class="flex justify-between items-center"><span>تقييمات Google Maps: ' + (report.evGoogle || 0) + ' × ' + _rp.rateEvalGoogle + ' ' + unit + '/تقييم</span><span class="font-bold text-yellow-400">' + ((report.evGoogle || 0) * _rp.rateEvalGoogle).toFixed(2) + ' ' + unit + '</span></div><div class="flex justify-between items-center pt-2 border-t-2 border-yellow-500/30"><span class="font-bold text-green-400">إجمالي مكافآت التقييمات:</span><span class="font-bold text-yellow-400 text-lg">' + (((report.evBooking || 0) * _rp.rateEvalBooking) + ((report.evGoogle || 0) * _rp.rateEvalGoogle)).toFixed(2) + ' ' + unit + '</span></div></div></div></div></div>';
-  var rest = '<div class="bg-purple-500/10 p-4 rounded-xl border border-purple-500/30"><h5 class="text-base font-bold text-purple-400 mb-3">الإجمالي قبل مساهمة شركاء النجاح</h5><div class="flex justify-between items-center"><span class="text-sm text-gray-300">إجمالي المكافآت (حجوزات + تقييمات):</span><span class="font-bold text-white text-lg">' + gross.toFixed(2) + ' ' + unit + '</span></div></div><div class="bg-orange-500/10 p-4 rounded-xl border border-orange-500/30"><h5 class="text-base font-bold text-orange-400 mb-3">' + (pointsMode ? 'مساهمة شركاء النجاح في نقاطك' : 'مساهمة شركاء النجاح') + '</h5><div class="flex justify-between items-center"><span>' + fundLabel + '</span><span class="font-bold text-orange-400">' + fundSign + fund.toFixed(2) + ' ' + unit + '</span></div><p class="text-xs text-orange-300/60 mt-2">⚠️ هذه النسبة تُخصم من المبلغ المالي فقط ولا تؤثر على تقييم الأداء أو رصيد النقاط التراكمي.</p></div><div class="bg-turquoise/10 p-4 rounded-xl border border-turquoise/30"><h5 class="text-base font-bold text-turquoise mb-3">الحوافز الإضافية</h5><div class="space-y-3 text-sm">' + (attendance26Days ? '<div class="bg-green-500/10 p-3 rounded-lg border border-green-500/30"><div class="flex justify-between items-center mb-1"><span class="text-gray-300">✓ حافز تحدي الظروف (25%):</span><span class="font-bold text-green-400">+' + attendanceBonus.toFixed(2) + ' ' + unit + '</span></div><p class="text-xs text-gray-400 mt-1">تم إتمام ' + actualAttendanceDays + ' يوماً وأكثر من العطاء</p></div>' : '') + (hasExcellenceBonus ? '<div class="bg-turquoise/20 p-3 rounded-lg border border-turquoise/50"><div class="flex justify-between items-center mb-1"><span class="text-gray-300">✨ حافز الأفضل تقييماً + الأكثر حجوزات</span><span class="font-bold text-turquoise">+' + excellenceBonus.toFixed(2) + ' ' + unit + '</span></div></div>' : '') + (hasCommitmentBonus ? '<div class="bg-purple-500/20 p-3 rounded-lg border border-purple-500/50"><div class="flex justify-between items-center mb-1"><span class="text-gray-300">✓ حافز الجمع بين الحضور والأكثر تميز</span><span class="font-bold text-purple-400">+' + commitmentBonus.toFixed(2) + ' ' + unit + '</span></div></div>' : '') + (!attendance26Days && !hasExcellenceBonus && !hasCommitmentBonus ? '<p class="text-gray-400 text-center py-2">لا توجد حوافز إضافية</p>' : '') + '</div></div>' + (function(){var nbf=gross-fund;var totalDisc=report.totalDiscountAmount||0;var lines='<div class="bg-gradient-to-r from-slate-800/50 to-slate-900/50 p-4 rounded-xl border border-white/10"><h5 class="text-base font-bold text-white mb-3">ملخص الحساب</h5><div class="space-y-2 text-sm"><div class="flex justify-between items-center text-gray-300"><span>إجمالي المكافآت:</span><span class="font-bold text-white">'+gross.toFixed(2)+' '+unit+'</span></div><div class="flex justify-between items-center text-gray-300"><span>'+fundLabel+'</span><span class="font-bold text-orange-400">'+fundSign+fund.toFixed(2)+' '+unit+'</span></div><div class="flex justify-between items-center text-gray-300"><span>الصافي قبل الحوافز:</span><span class="font-bold text-white">'+nbf.toFixed(2)+' '+unit+'</span></div>';if(attendanceBonus>0)lines+='<div class="flex justify-between items-center text-green-400"><span>+ حافز تحدي الظروف (25%):</span><span class="font-bold">+'+attendanceBonus.toFixed(2)+' '+unit+'</span></div>';if(excellenceBonus>0)lines+='<div class="flex justify-between items-center text-turquoise"><span>+ حافز التفوق:</span><span class="font-bold">+'+excellenceBonus.toFixed(2)+' '+unit+'</span></div>';if(commitmentBonus>0)lines+='<div class="flex justify-between items-center text-purple-400"><span>+ حافز الالتزام:</span><span class="font-bold">+'+commitmentBonus.toFixed(2)+' '+unit+'</span></div>';if(totalDisc>0)lines+='<div class="flex justify-between items-center text-red-400"><span>− الخصومات:</span><span class="font-bold">-'+totalDisc.toFixed(2)+' '+unit+'</span></div>';lines+='<div class="flex justify-between items-center pt-2 border-t border-white/10"><span class="font-bold text-turquoise">'+summaryTitle+':</span><span class="font-bold text-white text-lg">'+mainTotal.toFixed(2)+' '+unit+'</span></div></div></div>';return lines;})();
-  return normalizeBonusNamingText('<div class="space-y-4">' + header + summary + breakdownBlock + discountBlock + '<div class="space-y-3">' + bookingsSection + evalsSection + rest + '</div></div>');
+  var rest = '<div class="bg-purple-500/10 p-3 rounded-lg border border-purple-500/30"><h5 class="text-sm font-bold text-purple-400 mb-1">الإجمالي قبل مساهمة شركاء النجاح</h5><div class="flex justify-between items-center text-xs"><span class="text-gray-300">إجمالي المكافآت (حجوزات + تقييمات):</span><span class="font-bold text-white text-sm">' + gross.toFixed(2) + ' ' + unit + '</span></div></div><div class="bg-orange-500/10 p-3 rounded-lg border border-orange-500/30"><h5 class="text-sm font-bold text-orange-400 mb-1">' + (pointsMode ? 'مساهمة شركاء النجاح في نقاطك' : 'مساهمة شركاء النجاح') + '</h5><div class="flex justify-between items-center text-xs"><span>' + fundLabel + '</span><span class="font-bold text-orange-400">' + fundSign + fund.toFixed(2) + ' ' + unit + '</span></div><p class="text-[10px] text-orange-300/60 mt-1">⚠️ هذه النسبة تُخصم من المبلغ المالي فقط ولا تؤثر على تقييم الأداء أو رصيد النقاط التراكمي.</p></div><div class="bg-turquoise/10 p-3 rounded-lg border border-turquoise/30"><h5 class="text-sm font-bold text-turquoise mb-1">الحوافز الإضافية</h5><div class="space-y-2 text-xs">' + (attendance26Days ? '<div class="bg-green-500/10 p-3 rounded-lg border border-green-500/30"><div class="flex justify-between items-center mb-1"><span class="text-gray-300">✓ حافز تحدي الظروف (25%):</span><span class="font-bold text-green-400">+' + attendanceBonus.toFixed(2) + ' ' + unit + '</span></div><p class="text-xs text-gray-400 mt-1">تم إتمام ' + actualAttendanceDays + ' يوماً وأكثر من العطاء</p></div>' : '') + (hasExcellenceBonus ? '<div class="bg-turquoise/20 p-3 rounded-lg border border-turquoise/50"><div class="flex justify-between items-center mb-1"><span class="text-gray-300">✨ حافز الأفضل تقييماً + الأكثر حجوزات</span><span class="font-bold text-turquoise">+' + excellenceBonus.toFixed(2) + ' ' + unit + '</span></div></div>' : '') + (hasCommitmentBonus ? '<div class="bg-purple-500/20 p-3 rounded-lg border border-purple-500/50"><div class="flex justify-between items-center mb-1"><span class="text-gray-300">✓ حافز الجمع بين الحضور والأكثر تميز</span><span class="font-bold text-purple-400">+' + commitmentBonus.toFixed(2) + ' ' + unit + '</span></div>' + (commitmentExplainMulti ? '<p class="text-xs text-gray-400 mt-1">' + commitmentExplainMulti + '</p>' : '') + '</div>' : '') + (!attendance26Days && !hasExcellenceBonus && !hasCommitmentBonus ? '<p class="text-gray-400 text-center py-2">لا توجد حوافز إضافية</p>' : '') + '</div></div>' + (function(){var nbf=gross-fund;var totalDisc=report.totalDiscountAmount||0;var lines='<div class="bg-gradient-to-r from-slate-800/50 to-slate-900/50 p-3 rounded-lg border border-white/10"><h5 class="text-sm font-bold text-white mb-1">ملخص الحساب</h5><div class="space-y-1 text-xs"><div class="flex justify-between items-center text-gray-300"><span>إجمالي المكافآت:</span><span class="font-bold text-white">'+gross.toFixed(2)+' '+unit+'</span></div><div class="flex justify-between items-center text-gray-300"><span>'+fundLabel+'</span><span class="font-bold text-orange-400">'+fundSign+fund.toFixed(2)+' '+unit+'</span></div><div class="flex justify-between items-center text-gray-300"><span>الصافي قبل الحوافز:</span><span class="font-bold text-white">'+nbf.toFixed(2)+' '+unit+'</span></div>';if(attendanceBonus>0)lines+='<div class="flex justify-between items-center text-green-400"><span>+ حافز تحدي الظروف (25%):</span><span class="font-bold">+'+attendanceBonus.toFixed(2)+' '+unit+'</span></div>';if(excellenceBonus>0)lines+='<div class="flex justify-between items-center text-turquoise"><span>+ حافز التفوق:</span><span class="font-bold">+'+excellenceBonus.toFixed(2)+' '+unit+'</span></div>';if(commitmentBonus>0)lines+='<div class="flex justify-between items-center text-purple-400"><span>+ حافز الالتزام:</span><span class="font-bold">+'+commitmentBonus.toFixed(2)+' '+unit+'</span></div>';if(totalDisc>0)lines+='<div class="flex justify-between items-center text-red-400"><span>− الخصومات:</span><span class="font-bold">-'+totalDisc.toFixed(2)+' '+unit+'</span></div>';lines+='<div class="flex justify-between items-center pt-1 border-t border-white/10"><span class="font-bold text-turquoise text-sm">'+summaryTitle+':</span><span class="font-bold text-white text-base">'+mainTotal.toFixed(2)+' '+unit+'</span></div></div></div>';return lines;})();
+  return normalizeBonusNamingText('<div class="space-y-3 employee-report-content">' + header + summary + breakdownBlock + discountBlock + '<div class="space-y-2">' + bookingsSection + evalsSection + rest + '</div></div>');
 }
 function showEmployeeReport(empId, options) {
   options = options || {};
@@ -8034,7 +7582,7 @@ function showEmployeeReport(empId, options) {
   const emp = report.emp;
   title.innerText = pointsMode ? `تقرير النقاط — ${emp.name}` : `تقرير ${emp.name} - ${emp.branch}`;
   const periodText = document.getElementById('headerPeriodRange')?.innerText || '-';
-  const reportDate = new Date().toLocaleDateString('ar-SA');
+  const reportDate = getReportDateGregorian();
   content.innerHTML = typeof buildEmployeeReportModalHTML === 'function' ? normalizeBonusNamingText(buildEmployeeReportModalHTML(report, { periodText, reportDate, pointsMode })) : '<p class="text-red-400">خطأ في بناء التقرير</p>';
   modal.style.setProperty('display', 'flex', 'important');
   modal.style.setProperty('z-index', '1000', 'important');
@@ -8600,7 +8148,7 @@ function printEmployeeReport() {
   }
   if (!report) return;
   const periodText = document.getElementById('headerPeriodRange')?.innerText || '-';
-  const reportDate = new Date().toLocaleDateString('ar-SA');
+  const reportDate = getReportDateGregorian();
   const printWindow = window.open('', '_blank');
   const bodyContent = (report.branchReports && report.branchReports.length > 1 && typeof buildEmployeeReportBodyContentMultiBranch === 'function')
     ? buildEmployeeReportBodyContentMultiBranch(report, periodText, reportDate, { pointsMode: pointsMode })
@@ -8629,10 +8177,10 @@ function generateEmployeeReportPdfBlob() {
   var wrapper = document.createElement('div');
   wrapper.setAttribute('dir', 'rtl');
   wrapper.setAttribute('lang', 'ar');
-  wrapper.style.cssText = 'width: 800px; max-width: 100%; padding: 24px; background: linear-gradient(135deg, #0f1729 0%, #1a1f35 100%); color: #e2e8f0; font-family: inherit; box-sizing: border-box;';
+  wrapper.style.cssText = 'width: 800px; max-width: 100%; padding: 20px; margin: 0; background: linear-gradient(135deg, #0f1729 0%, #1a1f35 100%); color: #e2e8f0; font-family: inherit; box-sizing: border-box;';
   var titleClone = titleEl ? titleEl.cloneNode(true) : null;
   if (titleClone) {
-    titleClone.style.cssText = 'font-size: 1.5rem; font-weight: 900; color: #14b8a6; margin-bottom: 1rem;';
+    titleClone.style.cssText = 'font-size: 1.25rem; font-weight: 900; color: #14b8a6; margin: 0 0 0.5rem 0;';
     wrapper.appendChild(titleClone);
   }
   wrapper.appendChild(contentEl.cloneNode(true));
@@ -8643,7 +8191,8 @@ function generateEmployeeReportPdfBlob() {
     filename: fileName,
     image: { type: 'jpeg', quality: 0.95 },
     html2canvas: { scale: 2, useCORS: true, logging: false },
-    jsPDF: { unit: 'mm', format: 'a4', orientation: 'portrait' }
+    jsPDF: { unit: 'mm', format: 'a4', orientation: 'portrait' },
+    pagebreak: { mode: 'auto', before: '.pdf-page-break-before', after: '.pdf-page-break-after', avoid: ['tr', 'table'] }
   };
 
   return html2pdf().set(opt).from(wrapper).outputPdf('blob').then(function (blob) {
@@ -8718,7 +8267,7 @@ function printAllEmployeeReports() {
     return;
   }
   const periodText = document.getElementById('headerPeriodRange')?.innerText || '-';
-  const reportDate = new Date().toLocaleDateString('ar-SA');
+  const reportDate = getReportDateGregorian();
   const bodyParts = [];
   const uniqueNames = [];
   db.forEach(function (emp) {
@@ -8750,950 +8299,28 @@ function printAllEmployeeReports() {
     printWindow.print();
   }, delay);
 }
-// === Role-Based UI Functions ===
-function initializeRoleBasedUI(role) {
-  // Hide all action buttons by default
-  const actionBtns = document.getElementById('actionBtns');
-  if (actionBtns) {
-    actionBtns.style.display = 'none';
-  }
-  
-  // Hide upload box
-  const uploadBox = document.getElementById('uploadBox');
-  if (uploadBox) {
-    uploadBox.classList.add('hidden');
-  }
-  
-  // Show dashboard
-  const dashboard = document.getElementById('dashboard');
-  if (dashboard) {
-    dashboard.classList.remove('hidden');
-  }
-  
-  // Body class for role-specific table layout (e.g. supervisor columns)
-  document.body.classList.remove('role-supervisor', 'role-hr', 'role-accounting', 'role-manager');
-  if (role === 'supervisor') {
-    document.body.classList.add('role-supervisor');
-  } else if (role === 'hr') {
-    document.body.classList.add('role-hr');
-  } else if (role === 'accounting') {
-    document.body.classList.add('role-accounting');
-  } else if (role === 'manager') {
-    document.body.classList.add('role-manager');
-  }
-
-  // Hide elements based on role — أزرار الفروع (الكل + كل فرع) تبقى ظاهرة؛ عند اختيار فرع يُعرض فقط موظفوه
-  if (role === 'supervisor') {
-    // المشرف: يرى الكل + كل فرع؛ الكل للعرض فقط، التقييمات يُدخلها في الفروع فقط
-    hideElementsForSupervisor();
-  } else if (role === 'hr') {
-    // HR: يرى الكل + كل فرع؛ الكل للعرض فقط، تم/لم يتم وأيام المتكررين في الفروع فقط
-    hideElementsForHR();
-  } else if (role === 'accounting') {
-    // الحسابات: كل الفروع (عرض + طباعة حسب الفرع المختار)
-    hideElementsForAccounting();
-  } else if (role === 'manager') {
-    // Manager: Statistics page only — إخفاء زر الأكواد وزر الرجوع عن المدير العام
-    hideElementsForManager();
-    var rp = document.getElementById('reportsPage');
-    if (rp) {
-      var backBtn = rp.querySelector('button[onclick*="hideReportsPage"]');
-      var codesBtn = rp.querySelector('button[onclick*="showEmployeeCodesModal"]');
-      if (backBtn) backBtn.style.display = 'none';
-      if (codesBtn) codesBtn.style.display = 'none';
-    }
-  }
-  
-  // منع رجوع المتصفح من فتح المشروع الكامل: عند ضغط "رجوع المتصفح" نعرض شاشة إنهاء فقط
-  // لا نضيف popstate للمدير العام والحسابات: واجهتهما عرض فقط وبدون زر رجوع، وتفعيل popstate يسبب انتقالاً تلقائياً لواجهة «لا يمكنك الرجوع» في بعض المتصفحات
-  if (['supervisor', 'hr', 'accounting', 'manager'].indexOf(role) >= 0) {
-    try {
-      if (typeof history !== 'undefined' && history.pushState) {
-        history.pushState({ adminRestricted: true }, '', window.location.href);
-      }
-      if (role !== 'manager' && role !== 'accounting') {
-        window.addEventListener('popstate', function adminPopstate(e) {
-          var r = typeof localStorage !== 'undefined' ? localStorage.getItem('adora_current_role') : null;
-          var urlRole = new URLSearchParams(window.location.search).get('role');
-          var adminRoles = ['supervisor', 'hr', 'accounting', 'manager'];
-          var isAdmin = (r && adminRoles.indexOf(r) >= 0) || (urlRole && adminRoles.indexOf(urlRole) >= 0);
-          if (isAdmin && typeof showAdminNoReturnScreen === 'function') {
-            showAdminNoReturnScreen();
-            if (history.pushState) history.pushState({ adminRestricted: true }, '', window.location.href);
-          }
-        });
-      }
-    } catch (err) {}
-  }
-  
-  // للاختبار: إلغاء حالة «تم الإرسال» عند وجود reset_submitted=1 في الرابط (لتمكين إدخال بيانات من المشرف/HR مرة أخرى)
-  try {
-    var params = new URLSearchParams(window.location.search);
-    if (params.get('reset_submitted') === '1') {
-      var p = (params.get('period') || '').trim();
-      if (p && role) localStorage.removeItem('adora_admin_submitted_' + p + '_' + role);
-    }
-  } catch (_) {}
-
-  // Show welcome message
-  showRoleWelcomeMessage(role);
-
-  // إذا فتح الرابط بعد الإرسال: عرض فقط — تعطيل كل خانات الإدخال + عرض «الكل» فقط (إخفاء أزرار الفروع)
-  if (typeof isAdminLinkSubmitted === 'function' && isAdminLinkSubmitted()) {
-    setTimeout(function applySubmittedViewOnly() {
-      document.querySelectorAll('.eval-input').forEach(function (el) { el.disabled = true; el.style.opacity = '0.7'; });
-      document.querySelectorAll('.attendance-toggle').forEach(function (el) { el.disabled = true; el.style.opacity = '0.7'; });
-      document.querySelectorAll('.attendance-days-input').forEach(function (el) { el.disabled = true; el.style.opacity = '0.7'; });
-    }, 200);
-    // المشرف و HR بعد الإرسال: يعرض لهما «الكل» فقط — الفروع تظهر للإدخال قبل الإرسال فقط
-    if (role === 'supervisor' || role === 'hr') {
-      currentFilter = 'الكل';
-      if (typeof updateFilters === 'function') updateFilters();
-      var container = document.getElementById('branchFilters');
-      if (container) {
-        container.querySelectorAll('.filter-pill[data-filter]').forEach(function (btn) {
-          btn.style.display = btn.getAttribute('data-filter') === 'الكل' ? '' : 'none';
-        });
-      }
-      if (typeof updateReportTitle === 'function') updateReportTitle();
-      if (typeof updatePrintButtonText === 'function') updatePrintButtonText();
-      if (typeof renderUI === 'function') renderUI('الكل');
-    }
-  } else if (role === 'supervisor' && typeof branches !== 'undefined' && branches.size > 0) {
-    // المشرف عند فتح الرابط أول مرة: عرض أول فرع مباشرة (خانات الإدخال جاهزة) بدلاً من «الكل» للعرض فقط
-    var firstBranch = Array.from(branches).filter(function (b) { return b !== 'الكل'; })[0];
-    if (firstBranch) {
-      currentFilter = firstBranch;
-      if (typeof updateFilters === 'function') updateFilters();
-      if (typeof updateReportTitle === 'function') updateReportTitle();
-      if (typeof updatePrintButtonText === 'function') updatePrintButtonText();
-      if (typeof renderUI === 'function') renderUI(firstBranch);
-    }
-  }
-}
-
-function hideElementsForSupervisor() {
-  // المشرف يرى "الكل" + كل فرع — الكل للعرض فقط، يدخل التقييمات في الفروع فقط. لا نخفي أزرار الفروع.
-  // زر شروط المكافآت معروض لكل الإداريين والموظفين
-  var actionBtns = document.getElementById('actionBtns');
-  if (actionBtns) {
-    actionBtns.style.display = 'flex';
-    actionBtns.style.removeProperty && actionBtns.style.removeProperty('display');
-    actionBtns.querySelectorAll('button').forEach(function (b) {
-      var onclick = b.getAttribute('onclick') || '';
-      // المشرف يرى شروط المكافآت فقط — الخصومات صلاحية أدمن حصراً
-      b.style.display = (onclick.indexOf('showConditionsModal') >= 0) ? '' : 'none';
-    });
-  }
-  
-  // Hide attendance inputs and toggles
-  document.querySelectorAll('.attendance-toggle, .attendance-days-input').forEach(el => {
-    el.style.display = 'none';
-  });
-  
-  // Hide reports button
-  const reportsBtn = document.querySelector('[onclick*="showReportsPage"]');
-  if (reportsBtn) reportsBtn.style.display = 'none';
-  
-  // Hide print buttons
-  document.querySelectorAll('[onclick*="smartPrint"], [onclick*="printConditions"]').forEach(btn => {
-    btn.style.display = 'none';
-  });
-  
-  // Hide close period button
-  const closePeriodBtn = document.querySelector('[onclick*="showClosePeriodModal"]');
-  if (closePeriodBtn) closePeriodBtn.style.display = 'none';
-  
-  // Make evaluation inputs editable (they already are)
-  // But disable other inputs
-  document.querySelectorAll('input[type="text"]:not(.eval-input)').forEach(input => {
-    input.disabled = true;
-    input.style.opacity = '0.5';
-  });
-}
-
-function hideElementsForHR() {
-  // HR يرى كل الفروع (الكل + كل فرع) لتعديل تم/لم يتم وعدد الأيام في كل فرع
-  // لا نخفي أزرار الفروع. زر شروط المكافآت معروض لكل الإداريين والموظفين
-  var actionBtns = document.getElementById('actionBtns');
-  if (actionBtns) {
-    actionBtns.style.display = 'flex';
-    actionBtns.style.removeProperty && actionBtns.style.removeProperty('display');
-    actionBtns.querySelectorAll('button').forEach(function (b) {
-      b.style.display = (b.getAttribute('onclick') || '').indexOf('showConditionsModal') >= 0 ? '' : 'none';
-    });
-  }
-  
-  // Hide evaluation inputs
-  document.querySelectorAll('.eval-input').forEach(el => {
-    el.style.display = 'none';
-  });
-  
-  // Hide discount button
-  const discountBtn = document.querySelector('[onclick*="showDiscountsModal"]');
-  if (discountBtn) discountBtn.style.display = 'none';
-  
-  // Hide reports button
-  const reportsBtn = document.querySelector('[onclick*="showReportsPage"]');
-  if (reportsBtn) reportsBtn.style.display = 'none';
-  
-  // Hide print buttons
-  document.querySelectorAll('[onclick*="smartPrint"], [onclick*="printConditions"]').forEach(btn => {
-    btn.style.display = 'none';
-  });
-  
-  // Hide close period button
-  const closePeriodBtn = document.querySelector('[onclick*="showClosePeriodModal"]');
-  if (closePeriodBtn) closePeriodBtn.style.display = 'none';
-  
-  // Make attendance inputs editable (they already are)
-  // But disable other inputs
-  document.querySelectorAll('input[type="text"]:not(.attendance-days-input)').forEach(input => {
-    input.disabled = true;
-    input.style.opacity = '0.5';
-  });
-}
-
-function hideElementsForAccounting() {
-  // Hide evaluation inputs
-  document.querySelectorAll('.eval-input').forEach(el => {
-    el.style.display = 'none';
-  });
-  
-  // Hide attendance inputs and toggles
-  document.querySelectorAll('.attendance-toggle, .attendance-days-input').forEach(el => {
-    el.style.display = 'none';
-  });
-  
-  // Hide discount button
-  const discountBtn = document.querySelector('[onclick*="showDiscountsModal"]');
-  if (discountBtn) discountBtn.style.display = 'none';
-  
-  // Hide close period button
-  const closePeriodBtn = document.querySelector('[onclick*="showClosePeriodModal"]');
-  if (closePeriodBtn) closePeriodBtn.style.display = 'none';
-  
-  // Hide admin management button
-  const adminBtn = document.querySelector('[onclick*="showAdminManagementModal"]');
-  if (adminBtn) adminBtn.style.display = 'none';
-  
-  // الحسابات: إظهار الترويسة + زر شروط المكافآت + أزرار الطباعة (الكل والمحدد)
-  var actionBtns = document.getElementById('actionBtns');
-  if (actionBtns) {
-    actionBtns.style.display = 'flex';
-    actionBtns.style.removeProperty && actionBtns.style.removeProperty('display');
-    actionBtns.querySelectorAll('button').forEach(function (b) {
-      var onclick = b.getAttribute('onclick') || '';
-      var isConditions = onclick.indexOf('showConditionsModal') >= 0;
-      var isPrint = onclick.indexOf('smartPrint') >= 0 || (b.id === 'printAllBtn' || b.id === 'printSelectedBtn');
-      b.style.display = (isConditions || isPrint) ? '' : 'none';
-    });
-  }
-  var printAllBtn = document.getElementById('printAllBtn');
-  var printSelectedBtn = document.getElementById('printSelectedBtn');
-  if (printAllBtn) printAllBtn.style.display = '';
-  if (printSelectedBtn) printSelectedBtn.style.display = '';
-  
-  // Disable all inputs
-  document.querySelectorAll('input[type="text"], input[type="checkbox"]').forEach(input => {
-    input.disabled = true;
-    input.style.opacity = '0.5';
-  });
-  
-  // Make employee names clickable (already implemented in renderUI)
-  setTimeout(() => {
-    document.querySelectorAll('.col-name span[onclick]').forEach(span => {
-      span.style.cursor = 'pointer';
-      span.classList.add('hover:text-turquoise', 'transition-colors');
-    });
-  }, 200);
-}
-
-function hideElementsForManager() {
-  document.getElementById('dashboard')?.classList.add('hidden');
-  document.getElementById('uploadBox')?.classList.add('hidden');
-  // المدير: إظهار زر شروط المكافآت فقط (معروض لكل الإداريين والموظفين)
-  var actionBtns = document.getElementById('actionBtns');
-  if (actionBtns) {
-    actionBtns.style.display = 'flex';
-    actionBtns.style.removeProperty && actionBtns.style.removeProperty('display');
-    actionBtns.querySelectorAll('button').forEach(function (b) {
-      b.style.display = (b.getAttribute('onclick') || '').indexOf('showConditionsModal') >= 0 ? '' : 'none';
-    });
-  }
-  
-  const reportsPage = document.getElementById('reportsPage');
-  if (reportsPage) {
-    reportsPage.classList.remove('hidden');
-    var rp = document.getElementById('reportsPage');
-    if (rp) {
-      var backBtn = rp.querySelector('button[onclick*="hideReportsPage"]');
-      var codesBtn = rp.querySelector('button[onclick*="showEmployeeCodesModal"]');
-      if (backBtn) backBtn.style.display = 'none';
-      if (codesBtn) codesBtn.style.display = 'none';
-    }
-    setTimeout(() => {
-      if (typeof switchReportsTab === 'function') switchReportsTab('statistics');
-    }, 100);
-    setTimeout(() => {
-      if (typeof loadStatisticsPage === 'function') loadStatisticsPage();
-    }, 350);
-  }
-}
-
-function showRoleWelcomeMessage(role) {
-  var roleNames = { supervisor: 'المشرف', hr: 'HR', accounting: 'الحسابات', manager: 'المدير العام' };
-  var roleIcons = { supervisor: '👨\u200D💼', hr: '👔', accounting: '💰', manager: '👑' };
-  var roleName = roleNames[role] || role;
-  var roleIcon = roleIcons[role] || '👋';
-  var isViewOnly = (role === 'accounting' || role === 'manager') || (typeof isAdminLinkSubmitted === 'function' && isAdminLinkSubmitted());
-  var displayName = '';
-  try {
-    var params = new URLSearchParams(window.location.search);
-    var nameFromUrl = params.get('name');
-    if (nameFromUrl) displayName = decodeURIComponent(nameFromUrl).trim();
-    if (!displayName && typeof getAdminNameForRole === 'function') displayName = (getAdminNameForRole(role) || '').trim();
-    if (!displayName) displayName = roleName;
-  } catch (e) { displayName = roleName; }
-  var instruction = '';
-  if (isViewOnly) {
-    instruction = 'عرض وطباعة فقط.';
-  } else if (role === 'supervisor') {
-    instruction = 'أدخل تقييمات Booking و Google لكل فرع، ثم اضغط «إرسال» لإرسال البيانات لإدارة التشغيل.';
-  } else if (role === 'hr') {
-    instruction = 'أدخل معدلات الالتزام (26 يوم) وأيام الحضور للمتكررين، ثم اضغط «إرسال» لإرسال البيانات لإدارة التشغيل.';
-  } else {
-    instruction = 'أدخل البيانات المطلوبة ثم اضغط «إرسال» لإرسالها لإدارة التشغيل.';
-  }
-  var banner = document.createElement('div');
-  banner.id = 'roleWelcomeBanner';
-  banner.className = 'fixed top-0 left-0 right-0 z-[9999] text-white';
-  banner.style.cssText = 'background: linear-gradient(135deg, rgba(15, 23, 41, 0.98) 0%, rgba(26, 31, 53, 0.98) 100%); backdrop-filter: blur(16px); -webkit-backdrop-filter: blur(16px); border-bottom: 1px solid rgba(20, 184, 166, 0.25); box-shadow: 0 4px 24px rgba(0,0,0,0.25), 0 0 0 1px rgba(255,255,255,0.05); padding: 0.875rem 1rem 0.875rem 1.25rem;';
-  var sendBtn = !isViewOnly ? '<button type="button" onclick="submitAdminAndLock()" class="flex-shrink-0 px-4 py-2 rounded-xl font-bold text-sm transition-all hover:opacity-95 min-h-[40px] flex items-center justify-center gap-2" style="background: rgba(20, 184, 166, 0.25); border: 1px solid rgba(20, 184, 166, 0.6); color: #fff; box-shadow: 0 2px 12px rgba(20, 184, 166, 0.2);">إرسال</button>' : '';
-  banner.innerHTML =
-    '<div class="flex flex-wrap items-center justify-between gap-3 max-w-6xl mx-auto" style="direction: rtl;">' +
-      '<div class="flex items-center gap-3 flex-wrap flex-1 min-w-0">' +
-        '<span class="flex-shrink-0 w-10 h-10 rounded-xl flex items-center justify-center text-xl" style="background: rgba(20, 184, 166, 0.2); border: 1px solid rgba(20, 184, 166, 0.4);">' + roleIcon + '</span>' +
-        '<div class="min-w-0">' +
-          '<div class="flex items-center gap-2 flex-wrap">' +
-            '<span class="font-bold text-base sm:text-lg tracking-tight text-white">مرحباً، ' + (displayName || roleName) + '</span>' +
-            (displayName !== roleName ? '<span class="inline-flex items-center px-2.5 py-0.5 rounded-lg text-xs font-bold flex-shrink-0" style="background: rgba(20, 184, 166, 0.2); color: #5eead4;">' + roleName + '</span>' : '') +
-          '</div>' +
-          '<p class="text-sm text-white/85 mt-0.5" style="margin:0;line-height:1.4;">' + instruction + '</p>' +
-        '</div>' +
-      '</div>' +
-      '<div class="flex items-center gap-2 flex-shrink-0">' +
-        sendBtn +
-      '</div>' +
-    '</div>';
-  document.body.insertBefore(banner, document.body.firstChild);
-  var adminRoles = ['supervisor', 'hr', 'accounting', 'manager'];
-  if (adminRoles.indexOf(role) < 0) {
-    setTimeout(function () {
-      if (banner.parentNode) banner.remove();
-    }, 5000);
-  }
-}
+// === Role-Based UI: initializeRoleBasedUI، hideElementsFor*، showRoleWelcomeMessage في rewards-rbac.js ===
 
 function printConditions() {
-var _rp = getPricingConfig();
-
-// Build VIP pricing for print
-var vipPrintHtml = '';
-var vipByBranch = _rp.rateVipByBranch || {};
-var vipDefault = _rp.rateVipDefault || { reception: 0, booking: 0 };
-var branchNames = Object.keys(vipByBranch);
-if (branchNames.length > 0 || vipDefault.reception > 0 || vipDefault.booking > 0) {
-  vipPrintHtml += '<div class="section" style="background-color: rgba(245, 158, 11, 0.08); border-color: rgba(245, 158, 11, 0.4); border-right: 5px solid rgba(245, 158, 11, 0.6);">';
-  vipPrintHtml += '<h2>👑 أسعار غرف VIP</h2><ul>';
-  branchNames.forEach(function(branch) {
-    var rooms = vipByBranch[branch];
-    var roomNums = Object.keys(rooms);
-    if (roomNums.length === 0) return;
-    var roomParts = [];
-    roomNums.forEach(function(room) {
-      var r = rooms[room];
-      roomParts.push('غرفة ' + room + ' (استقبال: ' + (r.reception || 0) + ' ريال، بوكينج: ' + (r.booking || 0) + ' ريال)');
-    });
-    vipPrintHtml += '<li><strong>' + branch + ':</strong> ' + roomParts.join(' — ') + '</li>';
-  });
-  if (vipDefault.reception > 0 || vipDefault.booking > 0) {
-    vipPrintHtml += '<li><strong>VIP افتراضي:</strong> استقبال: ' + vipDefault.reception + ' ريال، بوكينج: ' + vipDefault.booking + ' ريال لكل حجز</li>';
-  }
-  vipPrintHtml += '</ul></div>';
-}
-
-const printWindow = window.open('', '_blank');
-const printContent = '<!DOCTYPE html>' +
-'<html dir="rtl" lang="ar"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0">' +
-'<title>شروط الحصول على المكافآت</title>' +
-'<style>' +
-'@page { size: A4 portrait; margin: 6mm; }' +
-'* { margin: 0; padding: 0; box-sizing: border-box; }' +
-'body { font-family: "Arial", "Segoe UI", "Tahoma", sans-serif; padding: 4px 8px; background: #fff; color: #000; line-height: 1.25; direction: rtl; font-size: 9px; }' +
-'h1 { font-size: 14px; font-weight: 900; color: #000; margin-bottom: 4px; text-align: center; border-bottom: 1.5px solid #14b8a6; padding-bottom: 3px; }' +
-'.section { margin-bottom: 3px; padding: 3px 6px; border-radius: 3px; border: 0.5px solid #ddd; page-break-inside: avoid; }' +
-'.section.contracts { background-color: rgba(59, 130, 246, 0.06); border-color: rgba(59, 130, 246, 0.3); border-right: 3px solid rgba(59, 130, 246, 0.5); }' +
-'.section.evaluations { background-color: rgba(234, 179, 8, 0.06); border-color: rgba(234, 179, 8, 0.3); border-right: 3px solid rgba(234, 179, 8, 0.5); }' +
-'.section.bonuses { background-color: rgba(20, 184, 166, 0.06); border-color: rgba(20, 184, 166, 0.3); border-right: 3px solid rgba(20, 184, 166, 0.5); }' +
-'.section.attendance { background-color: rgba(16, 185, 129, 0.06); border-color: rgba(16, 185, 129, 0.3); border-right: 3px solid rgba(16, 185, 129, 0.5); }' +
-'.section.discounts { background-color: rgba(239, 68, 68, 0.06); border-color: rgba(239, 68, 68, 0.3); border-right: 3px solid rgba(239, 68, 68, 0.5); }' +
-'h2 { font-size: 10px; font-weight: 800; color: #000; margin: 0 0 2px 0; display: flex; align-items: center; gap: 4px; padding-bottom: 1px; border-bottom: 0.5px solid rgba(0,0,0,0.1); }' +
-'ul { list-style: none; padding: 0; margin: 0; }' +
-'li { font-size: 8.5px; font-weight: 600; color: #000; margin: 1.5px 0; padding-right: 12px; position: relative; line-height: 1.3; text-align: right; }' +
-'li::before { content: "•"; position: absolute; right: 0; top: 0; font-weight: 900; color: #000; font-size: 10px; }' +
-'.highlight-red { color: #dc2626; font-weight: 700; background-color: rgba(220, 38, 38, 0.04); padding: 2px 6px; border-radius: 2px; border-right: 2px solid #dc2626; margin: 2px 0; }' +
-'.highlight-green { color: #10b981; font-weight: 700; background-color: rgba(16, 185, 129, 0.04); padding: 2px 6px; border-radius: 2px; border-right: 2px solid #10b981; margin: 2px 0; }' +
-'@media print { body { padding: 2px 6px; } .conditions-one-page { page-break-after: avoid; page-break-inside: avoid; } }' +
-'</style></head><body><div class="conditions-one-page">' +
-'<h1>شروط الحصول على المكافآت</h1>' +
-
-// مكافآت الحجوزات
-'<div class="section contracts">' +
-'<h2>📊 مكافآت الحجوزات</h2>' +
-'<ul>' +
-'<li><strong>استقبال</strong> شفت صباحي: <strong>' + _rp.rateMorning + ' ريال</strong> لكل حجز</li>' +
-'<li><strong>استقبال</strong> شفت مسائي: <strong>' + _rp.rateEvening + ' ريال</strong> لكل حجز</li>' +
-'<li><strong>استقبال</strong> شفت ليلي: <strong>' + _rp.rateNight + ' ريال</strong> لكل حجز</li>' +
-'<li><strong>بوكينج عادي</strong> (غير VIP): <strong>' + _rp.rateBooking + ' ريال</strong> لكل حجز (سعر ثابت)</li>' +
-'<li>حجوزات <strong>VIP</strong> — تُسعّر من خانات VIP (استقبال/بوكينج لكل غرفة)</li>' +
-'</ul></div>' +
-
-// أسعار VIP (إن وجدت)
-vipPrintHtml +
-
-// مكافآت التقييمات
-'<div class="section evaluations">' +
-'<h2>⭐ مكافآت التقييمات</h2>' +
-'<ul>' +
-'<li><strong>' + _rp.rateEvalBooking + ' ريال</strong> لكل تقييم Booking</li>' +
-'<li><strong>' + _rp.rateEvalGoogle + ' ريال</strong> لكل تقييم Google Maps</li>' +
-'<li>تُحتسب المكافآت أعلاه على أن يكون التقييم <strong>مساوٍ أو أعلى</strong> من التقييم الحالي للفندق.</li>' +
-'</ul></div>' +
-
-// حوافز تحدي الظروف
-'<div class="section attendance">' +
-'<h2>✓ حوافز تحدي الظروف</h2>' +
-'<ul>' +
-'<li class="highlight-green">مكافأة 25% إضافية للموظفين الذين أتموا 26 يوماً وأكثر من العطاء (بطل تحدي الظروف) (يتم التطبيق بناء على بصمه الحضور والانصراف)</li>' +
-'</ul></div>' +
-
-// الحوافز الإضافية
-'<div class="section bonuses">' +
-'<h2>🏆 الحوافز الإضافية</h2>' +
-'<ul>' +
-'<li>50 ريال خبير إرضاء العميل في الفرع (الأكثر تقييماً + الأكثر حجوزات)</li>' +
-'<li>50 ريال حافز الالتزام والانجاز، وتُعرض كـ "حافز الالتزام ورضاء العميل" عند تميز الموظف بالتقييمات، مضافاً إلى الـ 25% لمن أتم 26 يوم دوام</li>' +
-'</ul></div>' +
-
-// مساهمة شركاء النجاح
-'<div class="section" style="background-color: rgba(245, 158, 11, 0.08); border-color: rgba(245, 158, 11, 0.4); border-right: 5px solid rgba(245, 158, 11, 0.6);">' +
-'<h2>📌 مساهمة شركاء النجاح (15%) ورصيد النقاط</h2>' +
-'<ul>' +
-'<li><strong>بالريال (الجدول والتقرير العادي):</strong> يُخصم 15% من إجمالي المكافآت كمساهمة شركاء النجاح، ويُعرض الصافي المستحق بالريال.</li>' +
-'<li><strong>رصيد النقاط (تقرير النقاط):</strong> من صفحة التقارير → الإحصائيات عند الضغط على اسم الموظف يُعرض تقرير النقاط؛ نفس الأرقام بالمسميات «نقطة»، والـ 15% تظهر كـ <strong>+ مساهمة شركاء النجاح في نقاطك</strong> (تُضاف لرصيدك ولا تُخصم). رصيد النقاط من الفترة = صافي المستحق (ريال) + مساهمة شركاء النجاح (15%).</li>' +
-'</ul></div>' +
-
-// النقاط التراكمية
-'<div class="section" style="background-color: rgba(245, 158, 11, 0.06); border-color: rgba(245, 158, 11, 0.35); border-right: 5px solid rgba(245, 158, 11, 0.5);">' +
-'<h2>💰 النقاط التراكمية</h2>' +
-'<ul>' +
-'<li><strong>رصيد النقاط من الفترة</strong> = صافي المستحق بعد 15% معروض كنقاط (نفس الرقم في عمود «النقاط» في الجدول وفي التقرير). يُحسب لكل موظف <strong>رصيد تراكمي</strong> = مجموع هذا الرصيد عند كل <strong>إغلاق فترة</strong>.</li>' +
-'<li>المكافأة الكبرى: عند وصول الموظف إلى 100,000 نقطة تراكمية، يستحق "باكيج" التميز: قسيمة مشتريات بقيمة 1,500 ريال من أسواق ومخابز الحمراء؛ إقامة فاخرة (ليلة مجانية في جناح VIP للموظف أو لأحد ضيوفه)؛ وجبة عشاء فاخر متكامل. نظام النقاط: تُحتسب وتُضاف النقاط للموظفين دورياً مع كل إغلاق فترة.</li>' +
-'<li>يمكن متابعة الرصيد التراكمي من صفحة <strong>التقارير → الإحصائيات</strong> (قسم «الرصيد التراكمي من النقاط»).</li>' +
-'</ul></div>' +
-
-// خصومات التقصير
-'<div class="section discounts" style="background-color: rgba(239, 68, 68, 0.08); border-color: rgba(239, 68, 68, 0.4); border-right: 5px solid rgba(239, 68, 68, 0.6);">' +
-'<h2>💰 خصومات التقصير</h2>' +
-'<ul>' +
-'<li>الحفاظ علي معايير الجودة والأداء 💎</li>' +
-'<li><strong>خصم على فريق العمل كامل في حال وصول تقييم أقل من تقييم الفندق، أو فقدان فرص حجز نتيجة المكالمات التي لم يتم الرد عليها.</strong> قيمة الخصم: 10 ريال × عدد التقييمات السلبية للفرع، تُخصم من صافي كل موظف في ذلك الفرع. ويُخصم حد أقصى 10 نقاط من نقاط تقييم الموظف.</li>' +
-'<li class="highlight-red">تطبق إدارة التشغيل خصومات تتراوح بين 15% إلى 50% من صافي المستحق في حالات تقصير الموظفين وعدم اتباع التعليمات</li>' +
-'<li>( فى حال عدم استلامك نسخه من التعليمات اطلب نسختك المطبوعه الان ).</li>' +
-'<li>تُحدد نسبة الخصم بناءً على جسامة التأثير على جودة الخدمة، وتُسجل رسمياً في سجل وأرشيف الموظف وتؤثر على تقييم اداءه.</li>' +
-'<li>هدفنا الالتزام بالتعليمات لضمان استمرار تميز "إليت" وتجنب أي إجراءات تؤثر على مبلغ المكافأة النهائي.</li>' +
-'</ul></div>' +
-
-'</div></body></html>';
-printWindow.document.write(printContent);
-printWindow.document.close();
-printWindow.focus();
-setTimeout(() => {
-// Wrap content in .print-page for scale-to-fit
-var wrapper = printWindow.document.querySelector('.conditions-one-page');
-if (wrapper && !wrapper.classList.contains('print-page')) wrapper.classList.add('print-page');
-scaleToFitA4(printWindow.document);
-printWindow.print();
-}, 300);
-}
-
-// === Firebase Storage Functions ===
-// Initialize Firebase when SDK loads
-let firebaseInitAttempts = 0;
-const MAX_INIT_ATTEMPTS = 5;
-
-function initializeFirebase() {
-  var config = typeof window !== 'undefined' && window.firebaseConfig ? window.firebaseConfig : null;
-  if (typeof firebase === 'undefined') {
-    firebaseInitAttempts++;
-    if (firebaseInitAttempts < MAX_INIT_ATTEMPTS) {
-      console.log('⏳ Waiting for Firebase SDK... (attempt ' + firebaseInitAttempts + '/' + MAX_INIT_ATTEMPTS + ')');
-      setTimeout(initializeFirebase, 1000);
-      return;
-    } else {
-      console.error('❌ Firebase SDK failed to load after multiple attempts');
-      storage = null;
+  getConditionsContentSchema(function(schema) {
+    if (!schema) {
+      if (typeof alert !== 'undefined') alert('تعذر تحميل محتوى الشروط. تأكد من توفر shared/conditions-content.json.');
       return;
     }
-  }
-  if (typeof window !== 'undefined' && window.storage) {
-    storage = window.storage;
-    firebaseApp = firebase.apps && firebase.apps[0] ? firebase.apps[0] : null;
-    if (storage) return;
-  }
-  if (!config) {
-    console.warn('⚠️ firebaseConfig not found (load firebase-config.js)');
-    return;
-  }
-  try {
-    if (!firebase.apps || firebase.apps.length === 0) {
-      firebaseApp = firebase.initializeApp(config);
-      console.log('✅ Firebase app initialized');
-    } else {
-      firebaseApp = firebase.apps[0];
-      console.log('✅ Firebase app already initialized');
-    }
-    if (firebaseApp && typeof firebase.storage === 'function') {
-      storage = firebase.storage();
-      if (typeof window !== 'undefined') window.storage = storage;
-      console.log('✅ Firebase Storage initialized');
-    } else {
-      console.error('❌ Firebase Storage function not available');
-      storage = null;
-    }
-  } catch (error) {
-    console.error('❌ Firebase initialization error:', error);
-    storage = null;
-  }
-}
-
-// === مزامنة الفترة الحية مع Firebase (آخر وضع على كل الأجهزة) ===
-const LIVE_PERIOD_PATH = 'periods/live.json';
-let syncLivePeriodTimer = null;
-
-/** يُطبّع استجابة Firebase: يدعم صيغة الحية { db, branches, ... } وصيغة الأرشيف { data: { db, branches, ... } }. */
-function normalizePeriodPayload(raw) {
-  if (!raw || typeof raw !== 'object') return null;
-  var data = raw;
-  if (raw.data && typeof raw.data === 'object' && Array.isArray(raw.data.db)) data = raw.data;
-  if (!data || !Array.isArray(data.db)) return null;
-  return data;
-}
-
-/** جلب نص ملف من Firebase: getBlob أولاً، عند الفشل getDownloadURL + fetch (أفضل توافق في بعض المتصفحات). */
-async function fetchStorageJson(st, path) {
-  if (!st || typeof st.ref !== 'function') return null;
-  var text = null;
-  try {
-    var ref = st.ref(path);
-    var blob = await ref.getBlob();
-    text = typeof blob.text === 'function' ? await blob.text() : await new Promise(function (res, rej) {
-      var r = new FileReader();
-      r.onload = function () { res(r.result); };
-      r.onerror = rej;
-      r.readAsText(blob);
-    });
-  } catch (e1) {
-    try {
-      var url = await st.ref(path).getDownloadURL();
-      var resp = await fetch(url);
-      if (resp && resp.ok) text = await resp.text();
-    } catch (e2) {}
-  }
-  if (!text) return null;
-  try {
-    return JSON.parse(text);
-  } catch (e3) {
-    return null;
-  }
-}
-
-/** يجلب آخر وضع الفترة الحية من Firebase. يُستخدم عند فتح التطبيق. */
-async function fetchLivePeriodFromFirebase() {
-  const st = typeof storage !== 'undefined' ? storage : (typeof window !== 'undefined' ? window.storage : null);
-  var parsed = await fetchStorageJson(st, LIVE_PERIOD_PATH);
-  return normalizePeriodPayload(parsed);
-}
-
-/** يجلب بيانات فترة محددة من Firebase (periods/{periodId}.json) — احتياطي عند فتح رابط إداري عندما live.json فارغ أو غير موجود. */
-async function fetchPeriodFromFirebase(periodId) {
-  if (!periodId || typeof periodId !== 'string') return null;
-  var raw = String(periodId).replace(/-/g, '_').trim();
-  if (!raw) return null;
-  var normalizedId = (typeof window !== 'undefined' && window.normalizePeriodIdToFirebase) ? window.normalizePeriodIdToFirebase(raw) : raw;
-  const st = typeof storage !== 'undefined' ? storage : (typeof window !== 'undefined' ? window.storage : null);
-  var parsed = await fetchStorageJson(st, 'periods/' + normalizedId + '.json');
-  if ((!parsed || !Array.isArray(parsed.db) || parsed.db.length === 0) && normalizedId !== raw) {
-    parsed = await fetchStorageJson(st, 'periods/' + raw + '.json');
-  }
-  var data = normalizePeriodPayload(parsed);
-  if (!data || data.db.length === 0) return null;
-  return data;
-}
-
-/** آخر وقت تطبيق معروف من Firebase (لتجنّب استبدال بيانات أحدث بقديمة). */
-let lastAppliedLiveModified = 0;
-
-/** يطبّق بيانات الفترة المُحمّلة من Firebase على localStorage دون إعادة رسم الواجهة. */
-function applyLivePeriod(data) {
-  if (!data || !Array.isArray(data.db)) return;
-  try {
-    localStorage.setItem('adora_rewards_db', JSON.stringify(data.db));
-    const br = data.branches;
-    localStorage.setItem('adora_rewards_branches', JSON.stringify(Array.isArray(br) ? br : (br && typeof br.forEach === 'function' ? [...br] : [])));
-    if (data.reportStartDate != null) localStorage.setItem('adora_rewards_startDate', String(data.reportStartDate));
-    if (data.periodText != null) localStorage.setItem('adora_rewards_periodText', String(data.periodText));
-    if (data.evalRate != null) localStorage.setItem('adora_rewards_evalRate', String(data.evalRate));
-    if (Array.isArray(data.discounts)) localStorage.setItem('adora_rewards_discounts', JSON.stringify(data.discounts));
-    if (Array.isArray(data.discountTypes)) localStorage.setItem('adora_rewards_discountTypes', JSON.stringify(data.discountTypes));
-    if (data.employeeCodes && typeof data.employeeCodes === 'object') localStorage.setItem('adora_rewards_employeeCodes', JSON.stringify(data.employeeCodes));
-    if (data.negativeRatingsCount && typeof data.negativeRatingsCount === 'object') {
-      try {
-        branchNegativeRatingsCount = data.negativeRatingsCount;
-        localStorage.setItem('adora_rewards_negativeRatingsCount', JSON.stringify(branchNegativeRatingsCount));
-        if (typeof window !== 'undefined') window.branchNegativeRatingsCount = branchNegativeRatingsCount;
-      } catch (_) {}
-    }
-    if (data.rewardPricing && typeof data.rewardPricing === 'object') {
-      try {
-        localStorage.setItem('adora_rewards_pricing', JSON.stringify(data.rewardPricing));
-        if (typeof window !== 'undefined') {
-          if (!window.adoraConfig) window.adoraConfig = {};
-          window.adoraConfig.rewardPricing = data.rewardPricing;
-        }
-      } catch (_) {}
-    }
-    if (data.lastModified != null) {
-      var remoteTs = Number(data.lastModified) || 0;
-      lastAppliedLiveModified = remoteTs;
-      clearLocalRewardsDirty(remoteTs);
-    }
-  } catch (e) {
-    console.warn('⚠️ applyLivePeriod:', e);
-  }
-}
-
-/** رفع فوري لوضع الفترة إلى Firebase (إدخالات المشرف/HR + التقييمات السلبية) — يُستدعى قبل الخروج لضمان عدم فقدان البيانات. */
-function doSyncLivePeriodToFirebase() {
-  return new Promise(function (resolve) {
-    (async function () {
-      try {
-        var st = typeof storage !== 'undefined' ? storage : (typeof window !== 'undefined' ? window.storage : null);
-        if (!st || typeof st.ref !== 'function') {
-          if (typeof initializeFirebase === 'function') initializeFirebase();
-          var waitStart = Date.now();
-          while (!(typeof window !== 'undefined' && window.storage) && (Date.now() - waitStart) < 5000) {
-            await new Promise(function (r) { setTimeout(r, 150); });
-          }
-          st = typeof window !== 'undefined' ? window.storage : null;
-        }
-        if (!st || typeof st.ref !== 'function') { resolve(); return; }
-        var savedDb = localStorage.getItem('adora_rewards_db');
-        if (!savedDb || !Array.isArray(JSON.parse(savedDb)) || JSON.parse(savedDb).length === 0) { resolve(); return; }
-        var parsed = JSON.parse(savedDb);
-        var negativeFromStorage = (() => { try { return JSON.parse(localStorage.getItem('adora_rewards_negativeRatingsCount') || '{}'); } catch (_) { return {}; } })();
-        var payload = {
-          db: parsed,
-          branches: JSON.parse(localStorage.getItem('adora_rewards_branches') || '[]'),
-          reportStartDate: localStorage.getItem('adora_rewards_startDate') || null,
-          periodText: localStorage.getItem('adora_rewards_periodText') || null,
-          evalRate: parseInt(localStorage.getItem('adora_rewards_evalRate'), 10) || 20,
-          discounts: (() => { try { return JSON.parse(localStorage.getItem('adora_rewards_discounts') || '[]'); } catch (_) { return []; } })(),
-          discountTypes: (() => { try { return JSON.parse(localStorage.getItem('adora_rewards_discountTypes') || '[]'); } catch (_) { return []; } })(),
-          employeeCodes: (() => { try { return JSON.parse(localStorage.getItem('adora_rewards_employeeCodes') || '{}'); } catch (_) { return {}; } })(),
-          negativeRatingsCount: negativeFromStorage,
-          rewardPricing: (() => { try { var rp = localStorage.getItem('adora_rewards_pricing'); return rp ? JSON.parse(rp) : null; } catch (_) { return null; } })(),
-          lastModified: Date.now()
-        };
-        var blob = new Blob([JSON.stringify(payload)], { type: 'application/json' });
-        await st.ref(LIVE_PERIOD_PATH).put(blob);
-        var startDate = payload.reportStartDate || localStorage.getItem('adora_rewards_startDate');
-        var periodIdForWrite = (startDate && /^\d{4}-\d{2}-\d{2}/.test(String(startDate))) ? String(startDate).substring(0, 7).replace('-', '_') : (typeof window.getCurrentPeriodId === 'function' ? window.getCurrentPeriodId() : (new Date().getFullYear() + '_' + String(new Date().getMonth() + 1).padStart(2, '0')));
-        if (periodIdForWrite) { try { await st.ref('periods/' + periodIdForWrite + '.json').put(blob); } catch (_) {} }
-      } catch (_) {}
-      resolve();
-    })();
+    var pricing = getPricingConfig();
+    var printContent = buildConditionsPrintDocument(pricing, schema);
+    var printWindow = window.open('', '_blank');
+    if (!printWindow) return;
+    printWindow.document.write(printContent);
+    printWindow.document.close();
+    printWindow.focus();
+    setTimeout(function() {
+      var wrapper = printWindow.document.querySelector('.conditions-one-page');
+      if (wrapper && !wrapper.classList.contains('print-page')) wrapper.classList.add('print-page');
+      if (typeof scaleToFitA4 === 'function') scaleToFitA4(printWindow.document);
+      printWindow.print();
+    }, 300);
   });
 }
 
-/** يرفع آخر وضع الفترة الحية إلى Firebase (مع debounce 150ms — سريع للكتابة الفورية). المشرف وHR: مزامنة في الخلفية بدون إظهار overlay. */
-function syncLivePeriodToFirebase() {
-  clearTimeout(syncLivePeriodTimer);
-  syncLivePeriodTimer = setTimeout(function () { doSyncLivePeriodToFirebase(); }, 150);
-}
-
-/** دفع قيم حقول HR (أيام الحضور) وحقول المشرف (تقييم الحجز / جوجل) من الـ DOM إلى db و localStorage قبل الرفع — لضمان أن إرسال المشرف/HR يحفظ فوراً حتى لو لم يُنفَّذ blur. */
-function flushAdminInputsToStorage() {
-  try {
-    if (typeof db === 'undefined' || !db.length) return;
-    // 1) حقول HR: أيام الحضور
-    var inputs = document.querySelectorAll('.attendance-days-input');
-    inputs.forEach(function (el) {
-      var name = el.getAttribute('data-emp-name');
-      var branch = el.getAttribute('data-emp-branch');
-      if (!name || !branch) return;
-      var val = parseInt(el.value, 10) || 0;
-      if (typeof updateAttendanceDaysForBranch === 'function') {
-        updateAttendanceDaysForBranch(name, branch, val, false);
-      }
-    });
-    // 2) حقول المشرف: تقييم الحجز وتقييم جوجل — لانتقالها فوراً لجدول الأدمن
-    var evalInputs = document.querySelectorAll('.eval-input');
-    evalInputs.forEach(function (el) {
-      var id = el.getAttribute('data-emp-id');
-      var type = el.getAttribute('data-eval-type');
-      if (!id || !type) return;
-      var val = parseInt(el.value, 10) || 0;
-      if (type === 'booking' && typeof updateEvalBooking === 'function') {
-        updateEvalBooking(id, val, el, false);
-      } else if (type === 'google' && typeof updateEvalGoogle === 'function') {
-        updateEvalGoogle(id, val, el, false);
-      }
-    });
-    if (typeof db !== 'undefined' && db && db.length > 0) {
-      localStorage.setItem('adora_rewards_db', JSON.stringify(db));
-      if (typeof window !== 'undefined') window.db = db;
-    }
-  } catch (e) {}
-}
-
-/** مزامنة فورية (بدون debounce) — تُستدعى عند الضغط على إرسال في المشرف/HR. تُرجع Promise. إذا Firebase غير جاهز: ننتظر ثم نرفض حتى يظهر للمستخدم خطأ. */
-function doSyncLivePeriodNow() {
-  return new Promise(async function (resolve, reject) {
-    var st = typeof storage !== 'undefined' ? storage : (typeof window !== 'undefined' ? window.storage : null);
-    if (!st || typeof st.ref !== 'function') {
-      if (typeof initializeFirebase === 'function') initializeFirebase();
-      var waitStart = Date.now();
-      var maxWaitMs = 10000;
-      while (!(typeof window !== 'undefined' && window.storage) && (Date.now() - waitStart) < maxWaitMs) {
-        await new Promise(function (r) { setTimeout(r, 200); });
-      }
-      st = typeof storage !== 'undefined' ? storage : (typeof window !== 'undefined' ? window.storage : null);
-    }
-    if (!st || typeof st.ref !== 'function') {
-      reject(new Error('Firebase غير جاهز — تحقق من الاتصال وجرّب مرة أخرى'));
-      return;
-    }
-    try {
-      var savedDb = localStorage.getItem('adora_rewards_db');
-      if (!savedDb) { resolve(); return; }
-      var parsed = JSON.parse(savedDb);
-      if (!Array.isArray(parsed) || parsed.length === 0) { resolve(); return; }
-      var payload = {
-        db: parsed,
-        branches: JSON.parse(localStorage.getItem('adora_rewards_branches') || '[]'),
-        reportStartDate: localStorage.getItem('adora_rewards_startDate') || null,
-        periodText: localStorage.getItem('adora_rewards_periodText') || null,
-        evalRate: parseInt(localStorage.getItem('adora_rewards_evalRate'), 10) || 20,
-        discounts: (function () { try { return JSON.parse(localStorage.getItem('adora_rewards_discounts') || '[]'); } catch (_) { return []; } })(),
-        discountTypes: (function () { try { return JSON.parse(localStorage.getItem('adora_rewards_discountTypes') || '[]'); } catch (_) { return []; } })(),
-        employeeCodes: (function () { try { return JSON.parse(localStorage.getItem('adora_rewards_employeeCodes') || '{}'); } catch (_) { return {}; } })(),
-        negativeRatingsCount: (function () { try { return JSON.parse(localStorage.getItem('adora_rewards_negativeRatingsCount') || '{}'); } catch (_) { return {}; } })(),
-        rewardPricing: (function () { try { var rp = localStorage.getItem('adora_rewards_pricing'); return rp ? JSON.parse(rp) : null; } catch (_) { return null; } })(),
-        lastModified: Date.now()
-      };
-      var blob = new Blob([JSON.stringify(payload)], { type: 'application/json' });
-      await st.ref(LIVE_PERIOD_PATH).put(blob);
-      if (payload.lastModified && typeof lastAppliedLiveModified !== 'undefined') lastAppliedLiveModified = payload.lastModified;
-      if (payload.lastModified) clearLocalRewardsDirty(payload.lastModified);
-      var startDate = payload.reportStartDate || (typeof localStorage !== 'undefined' ? localStorage.getItem('adora_rewards_startDate') : null);
-      var periodIdForWrite = (startDate && /^\d{4}-\d{2}-\d{2}/.test(String(startDate))) ? String(startDate).substring(0, 7).replace('-', '_') : (typeof window.getCurrentPeriodId === 'function' ? window.getCurrentPeriodId() : (new Date().getFullYear() + '_' + String(new Date().getMonth() + 1).padStart(2, '0')));
-      if (periodIdForWrite) {
-        try { await st.ref('periods/' + periodIdForWrite + '.json').put(blob); } catch (_) {}
-      }
-      resolve();
-    } catch (e) {
-      reject(e);
-    }
-  });
-}
-
-/** جلب دوري لآخر وضع الفترة من Firebase وتحديث الواجهة — الأدمن كل ثانية (تحديث فوري بعد إرسال المشرف/HR)، وباقي الأدوار كل 15 ثانية. */
-const LIVE_POLL_INTERVAL_MS = 15000;
-const ADMIN_POLL_INTERVAL_MS = 12000;
-let livePollTimerId = null;
-
-function startLivePeriodPolling() {
-  if (livePollTimerId != null) return;
-  if (typeof isEmployeeMode === 'function' && isEmployeeMode()) return;
-  function poll() {
-    if (typeof isEmployeeMode === 'function' && isEmployeeMode()) return;
-    (async function () {
-      var role = (typeof localStorage !== 'undefined' && localStorage.getItem('adora_current_role')) || '';
-      var indicator = document.getElementById('liveSyncIndicator');
-      try {
-        if (indicator && role !== 'supervisor' && role !== 'hr') indicator.style.display = 'flex';
-        const data = await (typeof fetchLivePeriodFromFirebase === 'function' ? fetchLivePeriodFromFirebase() : null);
-        if (!data || !Array.isArray(data.db) || data.db.length === 0) return;
-        const remoteModified = Number(data.lastModified) || 0;
-        var isAdmin = typeof isAdminMode === 'function' && isAdminMode();
-        if (remoteModified <= lastAppliedLiveModified) {
-          if (isAdmin) {
-            var currentStr = typeof db !== 'undefined' && db && db.length ? JSON.stringify(db.map(function (e) { return { id: e.id, evaluationsBooking: e.evaluationsBooking, evaluationsGoogle: e.evaluationsGoogle, attendance26Days: e.attendance26Days, attendanceDaysPerBranch: e.attendanceDaysPerBranch, totalAttendanceDays: e.totalAttendanceDays }; })) : '';
-            var remoteStr = data.db && data.db.length ? JSON.stringify(data.db.map(function (e) { return { id: e.id, evaluationsBooking: e.evaluationsBooking, evaluationsGoogle: e.evaluationsGoogle, attendance26Days: e.attendance26Days, attendanceDaysPerBranch: e.attendanceDaysPerBranch, totalAttendanceDays: e.totalAttendanceDays }; })) : '';
-            if (currentStr === remoteStr) return;
-          } else return;
-        }
-        if (typeof applyLivePeriod === 'function') applyLivePeriod(data);
-        lastAppliedLiveModified = remoteModified;
-        db = data.db;
-        if (typeof normalizeDuplicateAttendance === 'function') normalizeDuplicateAttendance(db);
-        if (typeof window !== 'undefined') window.db = db;
-        branches = new Set(Array.isArray(data.branches) ? data.branches : []);
-        if (data.reportStartDate != null) reportStartDate = data.reportStartDate;
-        if (data.evalRate != null) currentEvalRate = parseInt(data.evalRate, 10) || 20;
-        if (Array.isArray(data.discounts)) { try { discounts = data.discounts; window.discounts = data.discounts; } catch (_) {} }
-        if (Array.isArray(data.discountTypes)) { try { discountTypes = data.discountTypes; window.discountTypes = data.discountTypes; } catch (_) {} }
-        if (data.employeeCodes && typeof data.employeeCodes === 'object') { try { employeeCodesMap = data.employeeCodes; if (typeof window !== 'undefined') window.employeeCodesMap = employeeCodesMap; } catch (_) {} }
-        if (data.negativeRatingsCount && typeof data.negativeRatingsCount === 'object') { try { branchNegativeRatingsCount = data.negativeRatingsCount; if (typeof window !== 'undefined') window.branchNegativeRatingsCount = data.negativeRatingsCount; localStorage.setItem('adora_rewards_negativeRatingsCount', JSON.stringify(data.negativeRatingsCount)); } catch (_) {} }
-        if (data.rewardPricing && typeof data.rewardPricing === 'object') { try { localStorage.setItem('adora_rewards_pricing', JSON.stringify(data.rewardPricing)); if (typeof window !== 'undefined' && window.adoraConfig) window.adoraConfig.rewardPricing = data.rewardPricing; } catch (_) {} }
-        if (data.periodText != null) {
-          try {
-            localStorage.setItem('adora_rewards_periodText', String(data.periodText));
-            var periodRangeEl = document.getElementById('periodRange');
-            var headerPeriodRangeEl = document.getElementById('headerPeriodRange');
-            if (periodRangeEl) periodRangeEl.innerText = data.periodText;
-            if (headerPeriodRangeEl) headerPeriodRangeEl.innerText = data.periodText;
-          } catch (_) {}
-        }
-        if (typeof renderUI === 'function' && typeof currentFilter !== 'undefined') {
-          requestAnimationFrame(function () { renderUI(currentFilter); });
-        }
-        if (isAdmin && typeof showToast === 'function') showToast('تم تحديث البيانات من المشرف/HR', 'success');
-      } catch (_) {}
-      finally {
-        if (indicator) indicator.style.display = 'none';
-      }
-    })();
-    var intervalMs = (typeof isAdminMode === 'function' && isAdminMode()) ? ADMIN_POLL_INTERVAL_MS : LIVE_POLL_INTERVAL_MS;
-    livePollTimerId = setTimeout(poll, intervalMs);
-  }
-  var isAdmin = typeof isAdminMode === 'function' && isAdminMode();
-  var firstDelay = isAdmin ? 0 : LIVE_POLL_INTERVAL_MS;
-  livePollTimerId = setTimeout(poll, firstDelay);
-  if (isAdmin && typeof document !== 'undefined' && document.addEventListener) {
-    document.addEventListener('visibilitychange', function () {
-      if (document.visibilityState === 'visible' && typeof isAdminMode === 'function' && isAdminMode() && livePollTimerId != null) {
-        poll();
-      }
-    });
-  }
-}
-
-function stopLivePeriodPolling() {
-  if (livePollTimerId != null) {
-    clearTimeout(livePollTimerId);
-    livePollTimerId = null;
-  }
-}
-
-/** تحميل التحديثات من Firebase يدوياً (للأدمن فقط) — دمج إدخالات المشرف/HR في الجدول الحالي فقط، دون استبدال قائمة الموظفين (مصدر القائمة: النقل من التحليل). */
-async function refreshLivePeriodFromFirebase() {
-  if (typeof isAdminMode !== 'function' || !isAdminMode()) return;
-  var btn = document.getElementById('refreshLiveBtn');
-  try {
-    if (btn) { btn.disabled = true; btn.setAttribute('aria-busy', 'true'); }
-    var data = typeof fetchLivePeriodFromFirebase === 'function' ? await fetchLivePeriodFromFirebase() : null;
-    if (!data) {
-      if (typeof showToast === 'function') showToast('فشل التحميل من الخادم', 'info');
-      return;
-    }
-    // دمج إدخالات المشرف/HR فقط في db الحالي — لا نستبدل db بالكامل حتى لا يُفرّغ الجدول إذا كان live.json فارغاً أو أقل من النقل المحلي
-    if (typeof db !== 'undefined' && Array.isArray(db) && db.length > 0) {
-      var merged = 0;
-      if (Array.isArray(data.db) && data.db.length > 0 && typeof mergeFirebaseInputsIntoCurrentDb === 'function') {
-        merged = mergeFirebaseInputsIntoCurrentDb(data);
-      }
-      // تطبيق الخصومات والتقييمات السلبية من Firebase حتى لو db في Firebase فارغ
-      if (data.negativeRatingsCount && typeof data.negativeRatingsCount === 'object' && typeof branchNegativeRatingsCount !== 'undefined') {
-        try { branchNegativeRatingsCount = data.negativeRatingsCount; localStorage.setItem('adora_rewards_negativeRatingsCount', JSON.stringify(branchNegativeRatingsCount)); if (typeof window !== 'undefined') window.branchNegativeRatingsCount = branchNegativeRatingsCount; } catch (_) {}
-      }
-      if (Array.isArray(data.discounts) && typeof discounts !== 'undefined') { try { discounts = data.discounts; if (window.discounts !== undefined) window.discounts = data.discounts; localStorage.setItem('adora_rewards_discounts', JSON.stringify(discounts)); } catch (_) {} }
-      if (Array.isArray(data.discountTypes) && typeof discountTypes !== 'undefined') { try { discountTypes = data.discountTypes; if (window.discountTypes !== undefined) window.discountTypes = data.discountTypes; localStorage.setItem('adora_rewards_discountTypes', JSON.stringify(discountTypes)); } catch (_) {} }
-      try { localStorage.setItem('adora_rewards_db', JSON.stringify(db)); } catch (_) {}
-      if (data.periodText != null) {
-        var periodRangeEl = document.getElementById('periodRange');
-        var headerPeriodRangeEl = document.getElementById('headerPeriodRange');
-        if (periodRangeEl) periodRangeEl.innerText = data.periodText;
-        if (headerPeriodRangeEl) headerPeriodRangeEl.innerText = data.periodText;
-      }
-      if (Number(data.lastModified) > 0) lastAppliedLiveModified = Number(data.lastModified);
-      if (typeof normalizeDuplicateAttendance === 'function' && Array.isArray(db)) normalizeDuplicateAttendance(db);
-      if (typeof window !== 'undefined') window.db = db;
-      if (typeof renderUI === 'function' && typeof currentFilter !== 'undefined') requestAnimationFrame(function () { renderUI(currentFilter); });
-      if (typeof populateEmployeePerformanceTable === 'function') requestAnimationFrame(function () { populateEmployeePerformanceTable(); });
-      if (typeof updateFilters === 'function') updateFilters();
-      if (typeof updatePrintButtonText === 'function') updatePrintButtonText();
-      if (typeof showToast === 'function') showToast(merged > 0 ? 'تم تحميل التحديثات من المشرف/HR' : 'تم التحديث — لا توجد تغييرات جديدة', 'success');
-    } else {
-      // لا يوجد جدول محلي (لم يُنقل بعد): تطبيق بيانات Firebase كاملة كما في فتح الصفحة أول مرة
-      if (!Array.isArray(data.db) || data.db.length === 0) {
-        if (typeof showToast === 'function') showToast('لا توجد بيانات. انقل النتائج من نظام التحليل أولاً.', 'info');
-        return;
-      }
-      if (typeof applyLivePeriod === 'function') applyLivePeriod(data);
-      lastAppliedLiveModified = Number(data.lastModified) || 0;
-      if (typeof db !== 'undefined') db = data.db;
-      if (typeof normalizeDuplicateAttendance === 'function' && Array.isArray(db)) normalizeDuplicateAttendance(db);
-      if (typeof window !== 'undefined') window.db = db;
-      if (typeof branches !== 'undefined') branches = new Set(Array.isArray(data.branches) ? data.branches : []);
-      if (data.reportStartDate != null && typeof reportStartDate !== 'undefined') reportStartDate = data.reportStartDate;
-      if (data.evalRate != null && typeof currentEvalRate !== 'undefined') currentEvalRate = parseInt(data.evalRate, 10) || 20;
-      if (Array.isArray(data.discounts) && typeof discounts !== 'undefined') { try { discounts = data.discounts; if (window.discounts !== undefined) window.discounts = data.discounts; } catch (_) {} }
-      if (Array.isArray(data.discountTypes) && typeof discountTypes !== 'undefined') { try { discountTypes = data.discountTypes; if (window.discountTypes !== undefined) window.discountTypes = data.discountTypes; } catch (_) {} }
-      if (data.negativeRatingsCount && typeof data.negativeRatingsCount === 'object' && typeof branchNegativeRatingsCount !== 'undefined') { try { branchNegativeRatingsCount = data.negativeRatingsCount; localStorage.setItem('adora_rewards_negativeRatingsCount', JSON.stringify(branchNegativeRatingsCount)); if (typeof window !== 'undefined') window.branchNegativeRatingsCount = branchNegativeRatingsCount; } catch (_) {} }
-      if (data.periodText != null) {
-        var periodRangeEl = document.getElementById('periodRange');
-        var headerPeriodRangeEl = document.getElementById('headerPeriodRange');
-        if (periodRangeEl) periodRangeEl.innerText = data.periodText;
-        if (headerPeriodRangeEl) headerPeriodRangeEl.innerText = data.periodText;
-      }
-      if (typeof renderUI === 'function' && typeof currentFilter !== 'undefined') requestAnimationFrame(function () { renderUI(currentFilter); });
-      if (typeof populateEmployeePerformanceTable === 'function') requestAnimationFrame(function () { populateEmployeePerformanceTable(); });
-      if (typeof updateFilters === 'function') updateFilters();
-      if (typeof updatePrintButtonText === 'function') updatePrintButtonText();
-      if (typeof showToast === 'function') showToast('تم تحميل التحديثات من المشرف/HR', 'success');
-    }
-  } catch (e) {
-    if (typeof showToast === 'function') showToast('فشل تحميل التحديثات', 'error');
-  } finally {
-    if (btn) { btn.disabled = false; btn.removeAttribute('aria-busy'); }
-  }
-}
-
-if (typeof window !== 'undefined') {
-  window.initializeFirebase = initializeFirebase;
-  window.syncLivePeriodToFirebase = syncLivePeriodToFirebase;
-  window.doSyncLivePeriodNow = doSyncLivePeriodNow;
-  window.fetchLivePeriodFromFirebase = fetchLivePeriodFromFirebase;
-  window.fetchPeriodFromFirebase = fetchPeriodFromFirebase;
-  window.applyLivePeriod = applyLivePeriod;
-  window.startLivePeriodPolling = startLivePeriodPolling;
-  window.stopLivePeriodPolling = stopLivePeriodPolling;
-  window.refreshLivePeriodFromFirebase = refreshLivePeriodFromFirebase;
-}
-
-// Wait for Firebase SDK to load
-window.addEventListener('load', () => {
-  // Try immediate initialization
-  initializeFirebase();
-  
-  // Also try after a delay as fallback
-  setTimeout(() => {
-    if (!storage) {
-      console.log('⏳ Retrying Firebase initialization...');
-      initializeFirebase();
-    }
-  }, 1000);
-});
+// === Firebase: دوال التهيئة والمزامنة والفترة الحية في rewards-firebase.js ===

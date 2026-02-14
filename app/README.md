@@ -1,6 +1,6 @@
 # React + TypeScript + Vite — مشروع إليت / App
 
-**قبل الرفع (Deploy):** راجع `PRE-DEPLOY-STEPS.md` و `Rewards/SECURITY.md` (تقييد API key + اختبار).
+**قبل الرفع (Deploy):** انسخ `.env.example` إلى `.env` واملأ القيم (مفتاح الأدمن، الإيميلات، إعداد Firebase) قبل النشر الحقيقي. راجع `PRE-DEPLOY-STEPS.md` و `Rewards/SECURITY.md` (تقييد API key + اختبار). شغّل `npm run pre-deploy-check` للتحقق من الأسرار.
 
 هذا المشروع يوفّر واجهة التحليل (رفع الملفات) وبوابة الأدمن وتطبيق المكافآت (من `Rewards` مُزامَن إلى `public/rewards`).
 
@@ -9,6 +9,11 @@
 | `PRE-DEPLOY-STEPS.md` | خطوات قبل النشر (تقييد API key، CORS للـ localhost). |
 | `docs/DEV-SETUP.md` | تشغيل التطبيق محلياً (منفذ واحد، روابط). |
 | `docs/CLEANUP.md` | هيكل المشروع وما يُحذف وما لا يُحذف. |
+| `docs/BROWSER-SUPPORT.md` | المتصفحات المدعومة. |
+
+**المتطلبات:** Node بإصدار 20 أو أحدث (راجع `engines` في `package.json` أو استخدم `nvm use` مع ملف `.nvmrc` في مجلد `app`).
+
+**المتصفحات المستهدفة:** التطبيق يستهدف المتصفحات الحديثة (آخر إصدارين من Chrome، Firefox، Safari، Edge) ويعتمد على واجهات حديثة مثل Fetch، localStorage، URLSearchParams، classList. للتفاصيل راجع `docs/BROWSER-SUPPORT.md`.
 
 ---
 

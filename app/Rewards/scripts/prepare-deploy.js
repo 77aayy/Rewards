@@ -62,13 +62,19 @@ if (fs.existsSync(srcDir)) {
   });
 }
 
-// نسخ headerButtonsConfig من app/shared ليكون مصدراً واحداً لأزرار الترويسة (مرآة لـ App)
+// نسخ ملفات shared من app/shared (أزرار الترويسة + محتوى شروط المكافآت)
 const appRoot = path.resolve(root, '..');
-const sharedConfigSrc = path.join(appRoot, 'shared', 'headerButtonsConfig.json');
 const sharedOutDir = path.join(outDir, 'shared');
-if (fs.existsSync(sharedConfigSrc)) {
-  fs.mkdirSync(sharedOutDir, { recursive: true });
-  copyWithLF(sharedConfigSrc, path.join(sharedOutDir, 'headerButtonsConfig.json'));
-}
+const sharedSources = [
+  { name: 'headerButtonsConfig.json', dest: 'headerButtonsConfig.json' },
+  { name: 'conditions-content.json', dest: 'conditions-content.json' }
+];
+sharedSources.forEach(function (entry) {
+  const src = path.join(appRoot, 'shared', entry.name);
+  if (fs.existsSync(src)) {
+    fs.mkdirSync(sharedOutDir, { recursive: true });
+    copyWithLF(src, path.join(sharedOutDir, entry.dest));
+  }
+});
 
 console.log('Deploy folder ready: public/ (LF line endings)');

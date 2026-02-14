@@ -1,5 +1,7 @@
 # خطوات قبل الرفع — أنت تعملها يدوياً
 
+قبل كل رفع: أمر **`npm run deploy`** يشغّل التحقق تلقائياً (`pre-deploy-check`) قبل المتابعة؛ إن ظهرت أخطاء أو تحذيرات أصلحها ثم أعد `npm run deploy`. يمكنك أيضاً تشغيل **`npm run pre-deploy-check`** يدوياً من مجلد `app` للتحقق من الأسرار (وجود .env، عدم بقاء المفتاح الافتراضيّ، إعداد Firebase).
+
 هذا الملف يشرح بالتفصيل الخطوة الوحيدة اللي تحتاج تعملها **أنت** من المتصفح (مرة واحدة أو عند تغيير الدومين). باقي الخطوات (البناء، الرفع، Git) السكربت يعملها.
 
 ---
@@ -63,6 +65,18 @@
 
 ---
 
+## فحص آلي قبل النشر
+
+قبل الرفع، شغّل:
+
+```bash
+npm run pre-deploy-check
+```
+
+يتحقق من وجود `.env` وتغيير مفتاح الأدمن ويطبع قائمة الخطوات اليدوية.
+
+---
+
 ## اختبار قبل الرفع (قبل كل مرة ترفع فيها)
 
 - **يدوي:** شغّل الموقع عندك (`npm run dev` من مجلد `app`) وافتح المتصفح:
@@ -75,20 +89,31 @@
 
 ## CORS على Firebase Storage (عند التطوير من localhost)
 
-عند تشغيل التطبيق من **localhost** (مثلاً `npm run dev` من مجلد `app`)، صفحة المكافآت (`/rewards/`) تجلب بيانات من Firebase Storage (`periods/live.json`). لو ظهر خطأ في المتصفح:
+عند تشغيل التطبيق من **localhost** (مثلاً `npm run dev` أو Vite على منفذ 5175)، صفحة المكافآت وروابط المشرف/HR تجلب بيانات من Firebase Storage (`periods/live.json`, `periods/2026_02.json`). لو ظهر في المتصفح:
 
-`Access to fetch at 'https://firebasestorage.googleapis.com/...' from origin 'http://localhost:5175' has been blocked by CORS policy`
+`Access to XMLHttpRequest at 'https://firebasestorage.googleapis.com/...' from origin 'http://localhost:5175' has been blocked by CORS policy`
 
-**السبب:** الـ bucket مسموح له بأصول (origins) معيّنة فقط. المنافذ 5173، 5174، 5175، 5176 مضافة في الكود؛ لو Vite شغّل على منفذ تاني، أضفه في `Rewards/scripts/set-storage-cors.js` ثم نفّذ:
+**السبب:** الـ bucket لم يُضبط عليه CORS بعد، أو لم تُضف أصل (origin) المنفذ اللي شغّال عليه التطبيق.
 
-```bash
-cd app\Rewards
-npm run storage-cors
-```
+**الحل (مرة واحدة):**
 
-(يحتاج تسجيل دخول: `gcloud auth application-default login` أو ضبط `GOOGLE_APPLICATION_CREDENTIALS`.)
+1. **من Node (مجلد المشروع):**
+   - ثبّت التبعيات في مجلد Rewards إن لم تكن: `cd app\Rewards` ثم `npm install`
+   - سجّل دخول Google Cloud: `gcloud auth application-default login`
+   - شغّل: `npm run storage-cors`
+   - إن نجح، ستظهر رسالة "CORS تم تطبيقه على rewards-63e43.firebasestorage.app". حدّث صفحة المكافآت وجرب.
 
-بعد تشغيل `storage-cors` مرة واحدة، حدّث الصفحة وجرب من جديد.
+2. **بديل من gcloud (لو فشل Node):**
+   - من **Google Cloud Shell** أو من جهازك بعد تثبيت [Google Cloud SDK](https://cloud.google.com/sdk/docs/install):
+   - أنشئ ملفاً (مثلاً `cors.json`) بالمحتوى من `app/Rewards/cors.json`.
+   - نفّذ (اسم الـ bucket قد يكون `rewards-63e43.appspot.com` أو `rewards-63e43.firebasestorage.app` حسب المشروع):
+     ```bash
+     gcloud storage buckets update gs://rewards-63e43.firebasestorage.app --cors-file=./cors.json
+     ```
+     لو ظهر خطأ أن الـ bucket غير موجود، جرّب: `gs://rewards-63e43.appspot.com`
+   - حدّث الصفحة وجرب.
+
+بعد تطبيق CORS مرة واحدة، خطأ CORS يختفي من localhost.
 
 ---
 

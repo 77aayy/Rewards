@@ -19,6 +19,17 @@
 |-------|--------|
 | `app/TASKS_PLAN.md` | خطة مهام منفّذة — لا حاجة لها في الهيكل الحالي. |
 | `app/REMAINING_TASKS.md` | مهام R1, R2 منتهية — نفس الشيء. |
+| `app/docs/TANFIZ-DONE.md` | دُمج في DELIVERY-AND-AUDIT.md. |
+| `app/docs/RELEASES.md` | دُمج في DELIVERY-AND-AUDIT.md. |
+| `app/docs/FULL-AUDIT-PROGRAMMER-WORK.md` | دُمج في DELIVERY-AND-AUDIT.md. |
+| `app/docs/BAND-6-AUDIT.md` | دُمج في DELIVERY-AND-AUDIT.md. |
+| `app/docs/REQUESTS-OPTIONAL-AUDIT.md` | دُمج في DELIVERY-AND-AUDIT.md. |
+| `app/docs/TASKS-REMAINING.md` | دُمج في DELIVERY-AND-AUDIT.md. |
+| `app/docs/MERAGAA-TANFIZ-FINAL.md` | توثيق تحقق منتهٍ — غير مستخدم. |
+| `app/docs/VERIFICATION-TANFIZ.md` | توثيق تحقق منتهٍ — غير مستخدم. |
+| `app/docs/VERIFICATION-OF-REVIEW.md` | توثيق تحقق منتهٍ — غير مستخدم. |
+| `app/docs/PROMPT-BAND-6-FASL-APPJS.md` | تعليمات بند 6 منفّذ — مرجع في DELIVERY-AND-AUDIT. |
+| `app/docs/REQUESTS-OPTIONAL.md` | طلبات اختيارية منفّذة — مرجع في DELIVERY-AND-AUDIT. |
 
 ---
 

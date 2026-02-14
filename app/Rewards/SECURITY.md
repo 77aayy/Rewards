@@ -17,6 +17,25 @@
 
 ---
 
+## استخدام .env للإنتاج
+
+لإخفاء الأسرار في الإنتاج، استخدم ملف `.env` (لا ترفعه للمستودع). انسخ من `app/.env.example` وضَع القيم:
+
+| المتغير | الوصف |
+|---------|-------|
+| `VITE_ADMIN_SECRET_KEY` | مفتاح الأدمن السري |
+| `VITE_ADMIN_ALLOWED_EMAILS` | إيميلات الأدمن مفصولة بفاصلة |
+| `VITE_FIREBASE_API_KEY` | مفتاح Firebase API |
+| `VITE_FIREBASE_AUTH_DOMAIN` | نطاق التوثيق |
+| `VITE_FIREBASE_PROJECT_ID` | معرف المشروع |
+| `VITE_FIREBASE_STORAGE_BUCKET` | اسم bucket التخزين |
+| `VITE_FIREBASE_MESSAGING_SENDER_ID` | معرف المرسل |
+| `VITE_FIREBASE_APP_ID` | معرف التطبيق |
+
+التحليل (React) يقرأ من هذه المتغيرات عند البناء. لـ Rewards و clear-session (ملفات ثابتة): حدّث يدوياً في `Rewards/src/app.js` و `firebase-config.js` و `clear-session.html` لتطابق القيم، أو استخدم سكربت حقن عند التوفر. شغّل `npm run pre-deploy-check` للتحقق قبل النشر.
+
+---
+
 ## 1. مفتاح الأدمن
 
 - **يجب تغيير المفتاح قبل النشر إلى الإنتاج.**
@@ -39,12 +58,11 @@
 
 ## 2. إعداد Firebase
 
-- **الملفات التي تحتوي إعداد Firebase (عند التعديل حدّثها كلها أو استخدم مصدراً واحداً):**
-  - `app/src/App.tsx` (ثابت FIREBASE_CONFIG لـ بوابة الأدمن)
-  - `app/src/firebase.ts` (تطبيق التحليل)
+- **مصدر واحد:** عدّل إعداد Firebase في **`app/shared/firebase-config.json`** فقط، ثم شغّل `node scripts/inject-firebase-config.js` (يُشغَّل تلقائياً مع `npm run sync:rewards` و `npm run build`). السكربت يحدّث:
+  - `app/Rewards/src/firebase-config.js` (تطبيق المكافآت)
   - `app/public/clear-session.html` (تسجيل الخروج)
-  - `app/Rewards/src/firebase-config.js` (المصدر — تطبيق المكافآت)
-  - `app/public/rewards/src/firebase-config.js` (يُحدَّث تلقائياً عبر sync-rewards)
+  - `app/src/firebase-config.generated.ts` (fallback لـ adminConfig.ts و firebase.ts)
+  - ونسخة المكافآت في `app/public/rewards/` تُحدَّث عند `npm run sync:rewards`.
 - التطبيق يدعم جلب الإعداد من **`window.__FIREBASE_CONFIG__`** (يُحقَن عند البناء أو من بيئة) مع fallback افتراضي.
 - في بيئة إنتاج: يُفضّل حقن القيم من متغيرات بيئة أو config لا يُرفع إلى المستودع (راجع API_KEY_SETUP_GUIDE.md إن وُجد).
 - **قبل الإنتاج:** قيّد الـ API key في Firebase Console (مثلاً HTTP referrer أو تطبيق مسموح) حتى لا يُستخدَم من دومينات غير معتمدة.

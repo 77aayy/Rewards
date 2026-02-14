@@ -2,6 +2,9 @@
 // Dynamic Configuration — Pricing, Branches, Thresholds
 // All values that were previously hardcoded are now configurable.
 // Persisted in localStorage under key "adora-analysis-config".
+//
+// إعدادات عامة للمشروع: لا ترتبط بفترة ولا تُستبدل عند تغيير الفترة أو
+// إغلاقها أو رفع ملفات جديدة أو مزامنة Firebase. التخزين بمفتاح ثابت فقط.
 // ===================================================================
 
 /** Minimum nightly price for a room type (daily vs monthly) */
@@ -80,7 +83,11 @@ export interface AppConfig {
 }
 
 // ===================================================================
-// Default values (matching current hardcoded data)
+// القيم الافتراضية — تُستخدم عند أول تحميل أو عند «استعادة الافتراضي»
+// (ما لم يكن قد تم «حفظ كافتراضي» من لوحة الإعدادات).
+// لتعديل الافتراضي مستقبلاً: إما عدّل القيم أدناه (DEFAULT_*) في هذا الملف،
+// أو من لوحة الإعدادات اضغط «حفظ كافتراضي» بعد ضبط القيم المطلوبة.
+// (حفظ كافتراضي من اللوحة يخزّن في المتصفح ويُستعاد بزر «استعادة الافتراضي».)
 // ===================================================================
 
 const DEFAULT_CORNICHE: BranchConfig = {
@@ -145,6 +152,7 @@ export const DEFAULT_CONFIG: AppConfig = {
 // ===================================================================
 
 const STORAGE_KEY = 'adora-analysis-config';
+const STORAGE_KEY_DEFAULT = 'adora-analysis-default-config';
 const REWARDS_PRICING_KEY = 'adora_rewards_pricing';
 
 /** Try to load rewardPricing from Rewards app storage (when returning from rewards) */
@@ -208,6 +216,28 @@ export function hasLocalConfig(): boolean {
     return localStorage.getItem(STORAGE_KEY) !== null;
   } catch {
     return false;
+  }
+}
+
+/** حفظ الإعدادات الحالية كافتراضي — تُستعاد عند «استعادة الافتراضي» في لوحة الإعدادات */
+export function saveDefaultConfig(config: AppConfig): void {
+  try {
+    localStorage.setItem(STORAGE_KEY_DEFAULT, JSON.stringify(config));
+  } catch {
+    /* ignore */
+  }
+}
+
+/** قراءة الافتراضي المحفوظ؛ إن لم يوجد يُرجع null (لوحة الإعدادات تستخدم الإعدادات الحالية بدلاً منه) */
+export function getDefaultConfig(): AppConfig | null {
+  try {
+    const raw = localStorage.getItem(STORAGE_KEY_DEFAULT);
+    if (!raw) return null;
+    const parsed = JSON.parse(raw) as AppConfig;
+    if (!parsed || typeof parsed !== 'object') return null;
+    return structuredClone(parsed) as AppConfig;
+  } catch {
+    return null;
   }
 }
 

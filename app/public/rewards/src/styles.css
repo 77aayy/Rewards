@@ -299,6 +299,24 @@ display: table-cell !important;
 #targetTable thead tr.main-header-row th.col-net {
   text-align: center !important;
 }
+
+/* صف «تقييمات سلبية» — شكل وخط مميزان */
+.negative-ratings-header-row {
+  background: linear-gradient(90deg, rgba(239, 68, 68, 0.08) 0%, rgba(251, 191, 36, 0.05) 100%);
+  border-bottom: 1px solid rgba(239, 68, 68, 0.2);
+  border-top: 1px solid rgba(255, 255, 255, 0.06);
+}
+.negative-ratings-label-cell {
+  padding: 6px 12px;
+  text-align: center;
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  color: rgba(251, 191, 36, 0.95);
+  border-right: 3px solid rgba(239, 68, 68, 0.35);
+  line-height: 1.4;
+}
+
 /* عمود م: compact — ثابت صغير */
 #targetTable th.col-m,
 #targetTable td.col-m {
@@ -361,7 +379,7 @@ padding: 1rem !important;
 }
 /* Stats cards on mobile */
 .stats-card {
-min-height: 80px !important;
+min-height: 52px !important;
 }
 /* Table: تمرير أفقي سلس على الجوال */
 .table-scroll-container {
@@ -394,6 +412,7 @@ overflow-y: auto;
 -webkit-overflow-scrolling: touch;
 gap: 0.5rem !important;
 }
+/* نفس تصميم صفحة التحليل — المصدر المشترك app/shared/action-header-buttons.css */
 #actionBtns .btn-modern {
 padding: 0.5rem 0.75rem !important;
 font-size: 0.75rem !important;
@@ -514,10 +533,10 @@ line-height: 1.3 !important;
   color: #9ca3af !important;
 }
 
-/* Tablet — stats cards only (table sizing handled by fluid variables) */
+/* Tablet — stats cards only (أحجام مدمجة لتناسب الجدول) */
 @media (min-width: 481px) and (max-width: 768px) {
 .stats-card {
-min-height: 90px;
+min-height: 56px;
 }
 }
 /* Desktop — scroll container */
@@ -601,6 +620,8 @@ display: none !important;
 .badges-row td {
 border-top: none !important;
 padding: 1px 8px 2px !important;
+width: 100%;
+box-sizing: border-box;
 }
 /* Wrapper: سطر واحد مرئي — عند hover يتوسع بسلاسة */
 .badges-wrapper {
@@ -897,11 +918,11 @@ min-width: 0;
 .stats-grid-container {
 display: grid;
 grid-auto-flow: row;
-gap: clamp(0.5rem, 1.5vw, 1rem);
+gap: clamp(0.35rem, 1vw, 0.6rem);
 width: 100%;
 min-width: 0;
 /* أعمدة مرنة: حد أدنى للكارت مع نمو لملء العرض */
-grid-template-columns: repeat(auto-fit, minmax(min(120px, 100%), 1fr));
+grid-template-columns: repeat(auto-fit, minmax(min(100px, 100%), 1fr));
 }
 /* Responsive breakpoints for optimal card distribution */
 @media (max-width: 480px) {
@@ -941,7 +962,7 @@ grid-template-columns: repeat(auto-fit, minmax(min(160px, 100%), 1fr));
 }
 }
 .stats-card {
-min-height: clamp(60px, 12vw, 120px);
+min-height: clamp(48px, 8vw, 72px);
 display: flex;
 flex-direction: column;
 justify-content: center;
@@ -1313,34 +1334,69 @@ body.role-manager .max-w-full.mx-auto {
   padding-top: 5.25rem;
 }
 
-/* محاذاة أعمدة صفحة HR (التش ار) — table-layout ثابت ومحاذاة عمود الموظف مع الترويسة */
+/* محاذاة أعمدة صفحة HR (التش ار) — تناسق الترويسة مع الخلايا */
 body.role-hr #targetTable {
-  table-layout: auto;
+  table-layout: fixed;
   width: 100%;
+}
+body.role-hr #targetTable th.col-m,
+body.role-hr #targetTable td.col-m {
+  width: 2.5rem;
+  min-width: 2.5rem;
+  max-width: 2.5rem;
+  text-align: center;
+  vertical-align: middle;
 }
 body.role-hr #targetTable th.col-name,
 body.role-hr #targetTable tbody td.col-name {
   vertical-align: middle;
   text-align: right;
-  width: 18%;
+  width: 45%;
+  min-width: 5rem;
 }
 body.role-hr #targetTable tbody td.col-name > div {
   text-align: right;
   direction: rtl;
 }
-body.role-hr #targetTable .col-attendance {
-  width: 9%;
+/* عمود بطل تحدي الظروف: عرض موحّد للترويسة والخلايا حتى لا تلتف الترويسة وحدها */
+body.role-hr #targetTable th.col-attendance,
+body.role-hr #targetTable td.col-attendance {
+  width: 100px;
+  min-width: 100px;
+  max-width: 100px;
   text-align: center;
+  vertical-align: middle;
+  box-sizing: border-box;
+}
+body.role-hr #targetTable th.col-attendance {
+  font-size: 0.65rem;
+  line-height: 1.25;
+  padding: 0.35rem 0.25rem;
+  white-space: normal;
+}
+body.role-hr #targetTable .col-attendance .attendance-days-input,
+body.role-hr #targetTable .col-attendance input {
+  margin: 0 auto;
+  display: block;
 }
 body.role-hr #targetTable .col-count {
-  width: 6%;
+  width: 4rem;
+  min-width: 4rem;
+  text-align: center;
+  vertical-align: middle;
 }
 body.role-hr #targetTable .col-eval-booking,
 body.role-hr #targetTable .col-eval-google {
-  width: 7%;
+  width: 3.5rem;
+  min-width: 3.5rem;
+  text-align: center;
+  vertical-align: middle;
 }
 body.role-hr #targetTable .col-net {
-  width: 10%;
+  width: 4.5rem;
+  min-width: 4.5rem;
+  text-align: center;
+  vertical-align: middle;
 }
 body.role-hr #mainTable tr.badges-row {
   display: none !important;

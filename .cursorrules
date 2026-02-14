@@ -41,6 +41,10 @@
 - **التخمين:** لو المعادلة أو المنطق غامض — قل "INSUFFICIENT CONTEXT — حدّد X" ولا تخمّن.
 - **بعد 3 تعديلات متتالية:** راجع الملف كاملاً وتأكد من التناسق.
 
+## 3.6 أسلوب الرد: مختصر قبل التنفيذ + شرح بدون تعقيد
+- **لما يطلب فحص أو تعديل:** قبل ما تنفّذ أي حاجة، اكتب له **أولاً** ملخص قصير (خمسة أسطر كحد أقصى) بلغه مصريّة واضحة، بدون مصطلحات معقّدة، يوضّح: إيه اللي هتفحصه أو هتعدّله وإيه المتوقّع. بعدين نفّذ.
+- **لما يطلب شرح أو توضيح:** الرد يكون بنفس الأسلوب: خمسة أسطر كحد أقصى، لهجة مصريّة واضحة، بدون تعقيد، مختصر جداً.
+
 ## 4. Agent Mode & Execution
 - **Authority:** You have full permission to use the Terminal, run `npm` commands, and read file lints to fix yourself.
 - **Self-Correction:** If a command fails, analyze the error and try a different approach without waiting for user input.

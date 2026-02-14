@@ -5,7 +5,10 @@
  */
 const { Storage } = require('@google-cloud/storage');
 
-const BUCKET_NAME = 'rewards-63e43.firebasestorage.app';
+const BUCKET_NAMES = [
+  'rewards-63e43.firebasestorage.app',
+  'rewards-63e43.appspot.com',
+];
 
 const cors = [
   {
@@ -37,8 +40,19 @@ const cors = [
 
 async function main() {
   const storage = new Storage();
-  await storage.bucket(BUCKET_NAME).setCorsConfiguration(cors);
-  console.log('CORS تم تطبيقه على', BUCKET_NAME);
+  let lastErr;
+  for (const name of BUCKET_NAMES) {
+    try {
+      await storage.bucket(name).setCorsConfiguration(cors);
+      console.log('CORS تم تطبيقه على', name);
+      return;
+    } catch (e) {
+      lastErr = e;
+      console.warn('تخطي', name, '—', e.message || e);
+    }
+  }
+  console.error('فشل تطبيق CORS على كل المحاولات. آخر خطأ:', lastErr?.message || lastErr);
+  process.exit(1);
 }
 
 main().catch((e) => {

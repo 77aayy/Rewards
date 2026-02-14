@@ -1,5 +1,7 @@
 # تشغيل التطبيق — منفذ واحد
 
+**المتصفحات المستهدفة:** التطبيق يستهدف المتصفحات الحديثة (آخر إصدارين من Chrome، Firefox، Safari، Edge) ويعتمد على واجهات مثل Fetch، localStorage، URLSearchParams، classList. للتفاصيل راجع `README.md` و `docs/BROWSER-SUPPORT.md`.
+
 ## أمر واحد للتطوير
 
 من مجلد **`app`**:

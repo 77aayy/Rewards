@@ -1,7 +1,6 @@
 /**
- * مصدر واحد لإعداد Firebase — يُحمّل من الـ head لتهيئة مبكرة ويُستخدم من app.js
- * يُفضّل حقن الإعداد من البناء: window.__FIREBASE_CONFIG__ (من .env أو build script).
- * إن لم يُحقَن يُستخدم الافتراضي أدناه. راجع API_KEY_SETUP_GUIDE.md
+ * إعداد Firebase — يُحقَن من app/shared/firebase-config.json عبر scripts/inject-firebase-config.js.
+ * لا تعدّل يدوياً؛ عدّل المصدر ثم شغّل السكربت. راجع SECURITY.md.
  */
 (function () {
   if (typeof window === 'undefined') return;

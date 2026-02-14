@@ -66,6 +66,9 @@ import { AdminGate } from './AdminGate';
 import { AdminLoginForm } from './AdminLoginForm';
 import instructionsBodyHtml from '../shared/instructionsBody.html?raw';
 import headerButtonsConfig from '../shared/headerButtonsConfig.json';
+import conditionsContentSchema from '../shared/conditions-content.json';
+
+// مراجعة cleanup: كل useEffect يضيف listener أو subscription يعيد دالة cleanup (انظر addEventListener message و onAuthStateChanged).
 
 type HeaderButtonVariant = 'default' | 'red' | 'cyan' | 'primary' | 'amber' | 'violet';
 interface HeaderButtonDef {
@@ -114,6 +117,7 @@ import {
   getFileTypeIcon,
   getStaffBranches,
   extractRoomNumber,
+  MAX_FILE_SIZE_BYTES,
   type FileDetectionResult,
 } from './parser';
 import {
@@ -124,9 +128,24 @@ import {
   saveConfig,
   hasLocalConfig,
   ensureBranchConfig,
+  getDefaultConfig,
+  saveDefaultConfig,
+  DEFAULT_CONFIG,
 } from './config';
 
 // ===== Helpers =====
+
+const EXCEL_ALLOWED_EXT = /\.xlsx?$/i;
+
+function validateExcelFile(file: File): { ok: boolean; error?: string } {
+  if (file.size > MAX_FILE_SIZE_BYTES) {
+    return { ok: false, error: `حجم الملف يتجاوز الحد المسموح (10 ميجابايت): ${file.name}` };
+  }
+  if (!EXCEL_ALLOWED_EXT.test(file.name)) {
+    return { ok: false, error: `نوع الملف غير مدعوم (استخدم .xlsx أو .xls): ${file.name}` };
+  }
+  return { ok: true };
+}
 
 function readFileAsArrayBuffer(file: File): Promise<ArrayBuffer> {
   return new Promise((resolve, reject) => {
@@ -448,43 +467,26 @@ export default function App() {
     if (typeof window === 'undefined') return '';
     return new URLSearchParams(window.location.search).get('admin') || '';
   }, []);
-  const allowedRoles = useMemo(() => ['supervisor', 'hr', 'accounting', 'manager'] as const, []);
-  const shouldRedirectToRewards = useMemo(() => {
-    if (typeof window === 'undefined' || !window.location) return false;
+
+  /** روابط الإداريين: /supervisor|hr|accounting|manager/TOKEN/PERIOD يجب أن تفتح صفحة المكافآت مباشرة وليس بوابة المفتاح */
+  const adminRoleRedirect = useMemo(() => {
+    if (typeof window === 'undefined') return null;
     const pathname = window.location.pathname || '';
-    const search = window.location.search || '';
-    const params = new URLSearchParams(search);
-    const roleFromPath = pathname.match(/^\/(supervisor|hr|accounting|manager)\/([^/]+)\/([^/]+)\/?$/);
-    if (roleFromPath) return true;
-    const role = params.get('role') || '';
-    const token = params.get('token') || '';
-    const period = params.get('period') || '';
-    if (pathname.includes('/rewards')) return false;
-    return allowedRoles.includes(role as (typeof allowedRoles)[number]) && token.length > 0 && period.length > 0;
-  }, [allowedRoles]);
-  const isAdminLink = adminKeyFromUrl === ADMIN_SECRET_KEY;
+    const m = pathname.match(/^\/(supervisor|hr|accounting|manager)\/([^/]+)\/([^/]+)\/?$/);
+    if (!m) return null;
+    const [, role, token, period] = m;
+    const origin = window.location.origin || '';
+    const base = origin + '/rewards';
+    return base + '?role=' + encodeURIComponent(role) + '&token=' + encodeURIComponent(token) + '&period=' + encodeURIComponent(period);
+  }, []);
 
   useEffect(() => {
-    if (!shouldRedirectToRewards || typeof window === 'undefined') return;
-    const pathname = window.location.pathname || '';
-    const params = new URLSearchParams(window.location.search || '');
-    let role = '';
-    let token = '';
-    let period = '';
-    const roleFromPath = pathname.match(/^\/(supervisor|hr|accounting|manager)\/([^/]+)\/([^/]+)\/?$/);
-    if (roleFromPath) {
-      role = roleFromPath[1];
-      token = roleFromPath[2];
-      period = roleFromPath[3];
-    } else {
-      role = params.get('role') || '';
-      token = params.get('token') || '';
-      period = params.get('period') || '';
+    if (adminRoleRedirect && window.location.href !== adminRoleRedirect) {
+      window.location.replace(adminRoleRedirect);
     }
-    if (!role || !token || !period) return;
-    const q = `?role=${encodeURIComponent(role)}&token=${encodeURIComponent(token)}&period=${encodeURIComponent(period)}`;
-    window.location.replace(window.location.origin + '/rewards/' + q);
-  }, [shouldRedirectToRewards]);
+  }, [adminRoleRedirect]);
+
+  const isAdminLink = adminKeyFromUrl === ADMIN_SECRET_KEY;
 
   useEffect(() => {
     if (!isAdminLink) {
@@ -672,9 +674,16 @@ export default function App() {
     setAnalyzed(false);
     const newSlots = { ...fileSlots };
     const newUnknown: string[] = [...unknownFiles];
+    const rejectionMessages: string[] = [];
     let updatedConfig = config;
 
     for (const file of Array.from(files)) {
+      const validation = validateExcelFile(file);
+      if (!validation.ok) {
+        newUnknown.push(file.name);
+        if (validation.error) rejectionMessages.push(validation.error);
+        continue;
+      }
       try {
         const buffer = await readFileAsArrayBuffer(file);
         const result: FileDetectionResult = detectFileType(buffer);
@@ -723,6 +732,10 @@ export default function App() {
       } catch {
         newUnknown.push(file.name);
       }
+    }
+
+    if (rejectionMessages.length > 0) {
+      alert(rejectionMessages.length === 1 ? rejectionMessages[0] : rejectionMessages.join('\n'));
     }
 
     // Preserve user's "اخفاء الفرع" (excluded) from saved config so upload doesn't overwrite it
@@ -963,19 +976,15 @@ export default function App() {
     window.location.href = url.pathname + url.search;
   }, [gateKey]);
 
-  if (shouldRedirectToRewards) {
-    return (
-      <div dir="rtl" className="min-h-screen text-slate-100 flex items-center justify-center px-4">
-        <div className="glass rounded-2xl border border-white/15 p-6 max-w-md w-full text-center">
+  return (
+    adminRoleRedirect ? (
+      <div dir="rtl" className="min-h-screen text-slate-100 relative flex items-center justify-center px-4">
+        <div className="glass rounded-2xl border border-white/15 p-6 max-w-xl w-full text-center">
           <h2 className="text-xl font-black text-turquoise mb-2">جاري التحويل</h2>
-          <p className="text-sm text-slate-300">يتم فتح صفحتك المخصصة...</p>
+          <p className="text-sm text-slate-300 leading-7">تحويلك إلى شاشة المكافآت بحسب صلاحيات الرابط...</p>
         </div>
       </div>
-    );
-  }
-
-  return (
-    adminKeyFromUrl === '' ? (
+    ) : adminKeyFromUrl === '' ? (
       <AdminGate gateKey={gateKey} setGateKey={setGateKey} onSubmit={handleGateSubmit} />
     ) : !isAdminLink ? (
       <div dir="rtl" className="min-h-screen text-slate-100 relative flex items-center justify-center px-4">
@@ -1201,9 +1210,15 @@ export default function App() {
                       )}
                     </h3>
                     <span className="flex items-center gap-2 shrink-0">
-                      <button onClick={(e) => { e.stopPropagation(); clearAll(); }} className="flex items-center gap-1 text-xs text-red-400/70 hover:text-red-400 transition-colors">
+                      <span
+                        role="button"
+                        tabIndex={0}
+                        onClick={(e) => { e.stopPropagation(); clearAll(); }}
+                        onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); e.stopPropagation(); clearAll(); } }}
+                        className="flex items-center gap-1 text-xs text-red-400/70 hover:text-red-400 transition-colors cursor-pointer"
+                      >
                         <Trash2 className="w-3 h-3" /> مسح الكل
-                      </button>
+                      </span>
                       {isAllFilesFilled && (filesSectionCollapsed ? <ChevronDown className="w-4 h-4 text-slate-500" /> : <ChevronUp className="w-4 h-4 text-slate-500" />)}
                     </span>
                   </button>
@@ -1622,7 +1637,12 @@ function SettingsPanel({ config, discoveredBranches, onSave, onClose }: {
   };
 
   const resetDefaults = () => {
-    setDraft(structuredClone(config));
+    const base = getDefaultConfig() ?? DEFAULT_CONFIG;
+    setDraft(structuredClone(base));
+  };
+
+  const saveAsDefault = () => {
+    saveDefaultConfig(draft);
   };
 
   const allBranches = useMemo(() => {
@@ -1652,6 +1672,7 @@ function SettingsPanel({ config, discoveredBranches, onSave, onClose }: {
             <div>
               <h3 className="text-base font-bold text-white">إعدادات التحليل</h3>
               <p className="text-[11px] text-slate-500">الأسعار، الفروع، الحدود — محفوظة تلقائياً</p>
+              <p className="text-[10px] text-cyan-400/80 mt-0.5">هذه الإعدادات عامة للمشروع ولا تتغير بتغيير الفترة أو إغلاقها أو رفع ملفات جديدة. الإعدادات الحالية يمكن حفظها كافتراضي بزر «حفظ كافتراضي» لتُستعاد لاحقاً بـ «استعادة الافتراضي».</p>
             </div>
           </div>
           <button onClick={onClose} className="text-slate-500 hover:text-slate-200 transition-colors">
@@ -1978,10 +1999,17 @@ function SettingsPanel({ config, discoveredBranches, onSave, onClose }: {
 
         {/* Footer */}
         <div className="px-6 py-3 border-t border-slate-700/50 bg-slate-800/40 shrink-0 flex items-center justify-between">
-          <button onClick={resetDefaults}
-            className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs text-slate-500 hover:text-slate-300 transition-colors">
-            <RotateCcw className="w-3.5 h-3.5" /> استعادة الافتراضي
-          </button>
+          <div className="flex items-center gap-2">
+            <button onClick={resetDefaults}
+              className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs text-slate-500 hover:text-slate-300 transition-colors">
+              <RotateCcw className="w-3.5 h-3.5" /> استعادة الافتراضي
+            </button>
+            <button onClick={saveAsDefault}
+              className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs text-slate-500 hover:text-slate-300 transition-colors"
+              title="حفظ الإعدادات الحالية كافتراضي يُستعاد بزر «استعادة الافتراضي»">
+              حفظ كافتراضي
+            </button>
+          </div>
           <div className="flex items-center gap-2">
             <button onClick={onClose}
               className="px-4 py-1.5 rounded-lg text-xs font-medium text-slate-400 hover:text-slate-200 transition-colors">
@@ -2277,8 +2305,98 @@ function RatingExplanationPopup({ onClose }: { onClose: () => void }) {
 }
 
 // ===================================================================
-// شروط المكافآت — نفس المحتوى المعروض في صفحة المكافآت (من config.rewardPricing)
+// شروط المكافآت — مصدر واحد: shared/conditions-content.json + config.rewardPricing
 // ===================================================================
+
+interface ConditionsSectionItem {
+  template?: string;
+  static?: string;
+  placeholder?: string;
+  staticBefore?: string;
+}
+interface ConditionsSection {
+  id: string;
+  theme: string;
+  icon?: string;
+  title: string;
+  items?: ConditionsSectionItem[];
+  branchLineTemplate?: string;
+  defaultLineTemplate?: string;
+}
+interface ConditionsSchema {
+  modalTitle: string;
+  sections: ConditionsSection[];
+}
+
+const CONDITIONS_SCHEMA = conditionsContentSchema as ConditionsSchema;
+
+const THEME_CLASSES: Record<string, { wrap: string; title: string; bullet: string }> = {
+  turquoise: { wrap: 'bg-[#14b8a6]/10 rounded-xl p-4 border border-[#14b8a6]/30', title: 'text-[#14b8a6]', bullet: 'text-[#14b8a6]' },
+  amber: { wrap: 'bg-amber-500/10 rounded-xl p-4 border border-amber-500/30', title: 'text-amber-400', bullet: 'text-amber-400' },
+  yellow: { wrap: 'bg-yellow-500/10 rounded-xl p-4 border border-yellow-500/30', title: 'text-yellow-400', bullet: 'text-yellow-400' },
+  green: { wrap: 'bg-green-500/10 rounded-xl p-4 border border-green-500/30', title: 'text-green-400', bullet: 'text-green-400' },
+  orange: { wrap: 'bg-orange-500/10 rounded-xl p-4 border border-orange-500/30', title: 'text-orange-400', bullet: 'text-orange-400' },
+  red: { wrap: 'bg-red-500/10 rounded-xl p-4 border border-red-500/30', title: 'text-red-400', bullet: 'text-red-400' },
+};
+
+function conditionsReplaceTemplate(tpl: string, rp: AppConfig['rewardPricing']): string {
+  return tpl
+    .replace(/\{\{rateMorning\}\}/g, String(rp.rateMorning))
+    .replace(/\{\{rateEvening\}\}/g, String(rp.rateEvening))
+    .replace(/\{\{rateNight\}\}/g, String(rp.rateNight))
+    .replace(/\{\{rateBooking\}\}/g, String(rp.rateBooking))
+    .replace(/\{\{rateEvalBooking\}\}/g, String(rp.rateEvalBooking))
+    .replace(/\{\{rateEvalGoogle\}\}/g, String(rp.rateEvalGoogle));
+}
+
+function buildConditionsPrintHtml(config: AppConfig): string {
+  const rp = config.rewardPricing;
+  const vipByBranch = rp.rateVipByBranch || {};
+  const vipDefault = rp.rateVipDefault || { reception: 0, booking: 0 };
+  const title = CONDITIONS_SCHEMA.modalTitle;
+  const esc = (s: string) => s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+  let body = '<h1>' + esc(title) + '</h1>';
+  const section = (cls: string, style: string, title: string, items: string) =>
+    '<div class="' + cls + '"' + (style ? ' style="' + style + '"' : '') + '><h2>' + esc(title) + '</h2><ul>' + items + '</ul></div>';
+
+  CONDITIONS_SCHEMA.sections.forEach((sec) => {
+    if (sec.id === 'vip') {
+      const branchNames = Object.keys(vipByBranch);
+      if (branchNames.length === 0 && !(vipDefault.reception > 0 || vipDefault.booking > 0)) return;
+      let items = '';
+      branchNames.forEach((branch) => {
+        const rooms = vipByBranch[branch] || {};
+        const roomNums = Object.keys(rooms);
+        if (roomNums.length === 0) return;
+        const roomParts = roomNums.map((room) => {
+          const r = rooms[room];
+          return 'غرفة ' + esc(room) + ' (استقبال: ' + (r?.reception ?? 0) + ' ريال، بوكينج: ' + (r?.booking ?? 0) + ' ريال)';
+        });
+        items += '<li><strong>' + esc(branch) + ':</strong> ' + roomParts.join(' — ') + '</li>';
+      });
+      if (vipDefault.reception > 0 || vipDefault.booking > 0) items += '<li><strong>VIP افتراضي:</strong> استقبال: ' + vipDefault.reception + ' ريال، بوكينج: ' + vipDefault.booking + ' ريال لكل حجز</li>';
+      body += section('section', 'background-color: rgba(245, 158, 11, 0.08); border-color: rgba(245, 158, 11, 0.4); border-right: 5px solid rgba(245, 158, 11, 0.6);', (sec.icon || '') + ' ' + sec.title, items);
+      return;
+    }
+    let items = '';
+    (sec.items || []).forEach((item) => {
+      if (item.placeholder === 'instructionsButton') {
+        items += '<li>' + esc(item.staticBefore || '') + '.</li>';
+        return;
+      }
+      const raw = item.template ? conditionsReplaceTemplate(item.template, rp) : (item.static || '');
+      items += '<li>' + (item.template && item.template.includes('ريال') ? '<strong>' + esc(raw) + '</strong>' : esc(raw)) + '</li>';
+    });
+    const cls = sec.theme === 'orange' ? 'section' : 'section ' + (sec.theme === 'turquoise' ? 'contracts' : sec.theme === 'yellow' ? 'evaluations' : sec.theme === 'green' ? 'attendance' : sec.theme === 'red' ? 'discounts' : '');
+    const style = sec.theme === 'orange' ? 'background-color: rgba(245, 158, 11, 0.08); border-color: rgba(245, 158, 11, 0.4); border-right: 5px solid rgba(245, 158, 11, 0.6);' : sec.theme === 'amber' ? 'background-color: rgba(245, 158, 11, 0.06); border-color: rgba(245, 158, 11, 0.35); border-right: 5px solid rgba(245, 158, 11, 0.5);' : '';
+    body += section(cls, style, (sec.icon || '') + ' ' + sec.title, items);
+  });
+
+  return '<!DOCTYPE html><html dir="rtl" lang="ar"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0">' +
+    '<title>' + esc(title) + '</title>' +
+    '<style>@page { size: A4 portrait; margin: 6mm; } * { margin: 0; padding: 0; box-sizing: border-box; } body { font-family: Arial, Segoe UI, Tahoma, sans-serif; padding: 4px 8px; background: #fff; color: #000; line-height: 1.25; direction: rtl; font-size: 9px; } h1 { font-size: 14px; font-weight: 900; margin-bottom: 4px; text-align: center; border-bottom: 1.5px solid #14b8a6; padding-bottom: 3px; } .section { margin-bottom: 3px; padding: 3px 6px; border-radius: 3px; border: 0.5px solid #ddd; page-break-inside: avoid; } .section.contracts { background-color: rgba(59, 130, 246, 0.06); border-color: rgba(59, 130, 246, 0.3); border-right: 3px solid rgba(59, 130, 246, 0.5); } .section.evaluations { background-color: rgba(234, 179, 8, 0.06); border-color: rgba(234, 179, 8, 0.3); border-right: 3px solid rgba(234, 179, 8, 0.5); } .section.attendance { background-color: rgba(16, 185, 129, 0.06); border-color: rgba(16, 185, 129, 0.3); border-right: 3px solid rgba(16, 185, 129, 0.5); } .section.discounts { background-color: rgba(239, 68, 68, 0.06); border-color: rgba(239, 68, 68, 0.3); border-right: 3px solid rgba(239, 68, 68, 0.5); } h2 { font-size: 10px; font-weight: 800; margin: 0 0 2px 0; } ul { list-style: none; padding: 0; margin: 0; } li { font-size: 8.5px; font-weight: 600; margin: 1.5px 0; padding-right: 12px; position: relative; line-height: 1.3; text-align: right; } li::before { content: "•"; position: absolute; right: 0; top: 0; font-weight: 900; } @media print { body { padding: 2px 6px; } .conditions-one-page { page-break-after: avoid; page-break-inside: avoid; } }</style></head><body><div class="conditions-one-page">' +
+    body + '</div></body></html>';
+}
 
 function ConditionsPopup({ config, onClose }: { config: AppConfig; onClose: () => void }) {
   const [showInstructions, setShowInstructions] = useState(false);
@@ -2287,6 +2405,16 @@ function ConditionsPopup({ config, onClose }: { config: AppConfig; onClose: () =
   const vipDefault = rp.rateVipDefault || { reception: 0, booking: 0 };
   const branchNames = Object.keys(vipByBranch);
 
+  const handlePrint = useCallback(() => {
+    const doc = buildConditionsPrintHtml(config);
+    const w = window.open('', '_blank');
+    if (!w) return;
+    w.document.write(doc);
+    w.document.close();
+    w.focus();
+    setTimeout(() => w.print(), 300);
+  }, [config]);
+
   return (
     <>
     <div className="fixed inset-0 z-[200] flex items-center justify-center bg-black/70 backdrop-blur-sm p-2 sm:p-4" onClick={onClose}>
@@ -2294,123 +2422,78 @@ function ConditionsPopup({ config, onClose }: { config: AppConfig; onClose: () =
         <div className="px-6 py-4 border-b border-white/10 shrink-0 flex items-center justify-between">
           <h3 className="text-lg font-black text-[#14b8a6] flex items-center gap-2">
             <span>📋</span>
-            <span>شروط المكافآت</span>
+            <span>{CONDITIONS_SCHEMA.modalTitle}</span>
           </h3>
           <button onClick={onClose} className="text-gray-400 hover:text-white transition-colors text-2xl font-bold w-11 h-11 flex items-center justify-center rounded-lg hover:bg-white/10">×</button>
         </div>
         <div className="px-6 py-5 space-y-4 text-sm text-gray-300">
-          {/* مكافآت الحجوزات */}
-          <div className="bg-[#14b8a6]/10 rounded-xl p-4 border border-[#14b8a6]/30">
-            <h4 className="text-base font-bold text-[#14b8a6] mb-3 flex items-center gap-2"><span>📊</span>مكافآت الحجوزات (استقبال حسب الشفت + بوكينج سعر ثابت)</h4>
-            <ul className="space-y-2 list-none">
-              <li className="flex items-start gap-2"><span className="text-[#14b8a6] font-bold">•</span><span><strong className="text-emerald-300">استقبال</strong> شفت <strong className="text-cyan-300">صباحي</strong>: <strong className="text-white">{rp.rateMorning} ريال</strong> لكل حجز</span></li>
-              <li className="flex items-start gap-2"><span className="text-[#14b8a6] font-bold">•</span><span><strong className="text-emerald-300">استقبال</strong> شفت <strong className="text-orange-300">مسائي</strong>: <strong className="text-white">{rp.rateEvening} ريال</strong> لكل حجز</span></li>
-              <li className="flex items-start gap-2"><span className="text-[#14b8a6] font-bold">•</span><span><strong className="text-emerald-300">استقبال</strong> شفت <strong className="text-indigo-300">ليلي</strong>: <strong className="text-white">{rp.rateNight} ريال</strong> لكل حجز</span></li>
-              <li className="flex items-start gap-2"><span className="text-[#14b8a6] font-bold">•</span><span><strong className="text-orange-300">بوكينج عادي</strong> (غير VIP): <strong className="text-white">{rp.rateBooking} ريال</strong> لكل حجز (سعر ثابت لكل الشفتات)</span></li>
-              <li className="flex items-start gap-2"><span className="text-[#14b8a6] font-bold">•</span><span className="text-[#14b8a6]/80">حجوزات <strong>VIP</strong> — تُسعّر من خانات VIP (استقبال/بوكينج لكل غرفة)</span></li>
-            </ul>
-          </div>
-          {/* أسعار غرف VIP */}
-          {(branchNames.length > 0 || vipDefault.reception > 0 || vipDefault.booking > 0) && (
-            <div className="bg-amber-500/10 rounded-xl p-4 border border-amber-500/30">
-              <h4 className="text-base font-bold text-amber-400 mb-3 flex items-center gap-2"><span>👑</span>أسعار غرف VIP</h4>
-              <ul className="space-y-2 list-none">
-                {branchNames.map((branch) => {
-                  const rooms = vipByBranch[branch] || {};
-                  const roomNums = Object.keys(rooms);
-                  if (roomNums.length === 0) return null;
-                  return (
-                    <li key={branch} className="flex items-start gap-2">
-                      <span className="text-amber-400 font-bold">•</span>
-                      <span><strong className="text-amber-300">{branch}:</strong>{' '}
-                        {roomNums.map((room) => {
-                          const r = rooms[room];
-                          return `غرفة ${room} (استقبال: ${r?.reception ?? 0} ريال، بوكينج: ${r?.booking ?? 0} ريال)`;
-                        }).join(' — ')}
-                      </span>
-                    </li>
-                  );
-                })}
-                {(vipDefault.reception > 0 || vipDefault.booking > 0) && (
-                  <li className="flex items-start gap-2"><span className="text-amber-400 font-bold">•</span><span><strong className="text-amber-300">VIP افتراضي:</strong> استقبال: {vipDefault.reception} ريال، بوكينج: {vipDefault.booking} ريال لكل حجز</span></li>
-                )}
-              </ul>
-            </div>
-          )}
-          {/* مكافآت التقييمات */}
-          <div className="bg-yellow-500/10 rounded-xl p-4 border border-yellow-500/30">
-            <h4 className="text-base font-bold text-yellow-400 mb-3 flex items-center gap-2"><span>⭐</span>مكافآت التقييمات</h4>
-            <ul className="space-y-2 list-none">
-              <li className="flex items-start gap-2"><span className="text-yellow-400 font-bold">•</span><span><strong className="text-white">{rp.rateEvalBooking} ريال</strong> لكل تقييم Booking</span></li>
-              <li className="flex items-start gap-2"><span className="text-yellow-400 font-bold">•</span><span><strong className="text-white">{rp.rateEvalGoogle} ريال</strong> لكل تقييم Google Maps</span></li>
-              <li className="flex items-start gap-2"><span className="text-yellow-400 font-bold">•</span><span className="text-yellow-200/90">تُحتسب المكافآت أعلاه على أن يكون التقييم <strong>مساوٍ أو أعلى</strong> من التقييم الحالي للفندق.</span></li>
-            </ul>
-          </div>
-          {/* حوافز تحدي الظروف */}
-          <div className="bg-green-500/10 rounded-xl p-4 border border-green-500/30">
-            <h4 className="text-base font-bold text-green-400 mb-3 flex items-center gap-2"><span>✓</span>حوافز تحدي الظروف</h4>
-            <ul className="space-y-2 list-none">
-              <li className="flex items-start gap-2"><span className="text-green-400 font-bold">•</span><span className="text-green-300">مكافأة 25% إضافية للموظفين الذين أتموا 26 يوماً وأكثر من العطاء (بطل تحدي الظروف) - يتم تفعيلها يدوياً من قبل المستخدم عند إتمام الموظف 26 يوماً وأكثر من العطاء (يتم التطبيق بناء على بصمه الحضور والانصراف)</span></li>
-            </ul>
-          </div>
-          {/* الحوافز الإضافية */}
-          <div className="bg-[#14b8a6]/10 rounded-xl p-4 border border-[#14b8a6]/30">
-            <h4 className="text-base font-bold text-[#14b8a6] mb-3 flex items-center gap-2"><span>🏆</span>الحوافز الإضافية</h4>
-            <ul className="space-y-2 list-none">
-              <li className="flex items-start gap-2"><span className="text-[#14b8a6] font-bold">•</span><span>50 ريال خبير إرضاء العميل في الفرع (الأكثر تقييماً + الأكثر حجوزات)</span></li>
-              <li className="flex items-start gap-2"><span className="text-[#14b8a6] font-bold">•</span><span>50 ريال حافز الالتزام والانجاز، وتُعرض كـ &quot;حافز الالتزام ورضاء العميل&quot; عند تميز الموظف بالتقييمات، مضافاً إلى الـ 25% لمن أتم 26 يوم دوام</span></li>
-            </ul>
-          </div>
-          {/* مساهمة شركاء النجاح */}
-          <div className="bg-orange-500/10 rounded-xl p-4 border border-orange-500/30">
-            <h4 className="text-base font-bold text-orange-400 mb-3 flex items-center gap-2"><span>📌</span>مساهمة شركاء النجاح (15%) ورصيد النقاط</h4>
-            <ul className="space-y-2 list-none">
-              <li className="flex items-start gap-2"><span className="text-orange-400 font-bold">•</span><span><strong className="text-orange-300">بالريال (الجدول والتقرير العادي):</strong> يُخصم 15% من إجمالي المكافآت (حجوزات + تقييمات) كمساهمة شركاء النجاح، ويُعرض <strong>الصافي المستحق</strong> بالريال بعد هذا الخصم.</span></li>
-              <li className="flex items-start gap-2"><span className="text-orange-400 font-bold">•</span><span><strong className="text-amber-300">رصيد النقاط (تقرير النقاط):</strong> من صفحة <strong>التقارير → الإحصائيات</strong> عند الضغط على اسم الموظف يُعرض <strong>تقرير النقاط</strong>؛ نفس الأرقام بالمسميات «نقطة»، والـ 15% تظهر كـ <strong className="text-amber-400">+ مساهمة شركاء النجاح في نقاطك</strong> (تُضاف لرصيدك ولا تُخصم).</span></li>
-            </ul>
-          </div>
-          {/* خصومات التقصير */}
-          <div className="bg-red-500/10 rounded-xl p-4 border border-red-500/30">
-            <h4 className="text-base font-bold text-red-400 mb-3 flex items-center gap-2"><span>💰</span>خصومات التقصير</h4>
-            <ul className="space-y-2 list-none">
-              <li className="flex items-start gap-2"><span className="text-[#14b8a6] font-bold">💎</span><span>الحفاظ علي معايير الجودة والأداء 💎</span></li>
-              <li className="flex items-start gap-2"><span className="text-red-400 font-bold">•</span><span><strong>خصم على فريق العمل كامل في حال وصول تقييم أقل من تقييم الفندق، أو فقدان فرص حجز نتيجة المكالمات التي لم يتم الرد عليها.</strong> <strong>قيمة الخصم:</strong> 10 ريال × عدد التقييمات السلبية للفرع، تُخصم من صافي كل موظف في ذلك الفرع. ويُخصم حد أقصى 10 نقاط من نقاط تقييم الموظف.</span></li>
-              <li className="flex items-start gap-2"><span className="text-red-400 font-bold">•</span><span className="text-red-300 font-semibold">تطبق إدارة التشغيل خصومات تتراوح بين 15% إلى 50% من صافي المستحق في حالات تقصير الموظفين وعدم اتباع التعليمات</span></li>
-              <li className="flex items-start gap-2 flex-wrap items-center">
-                <span className="text-red-400 font-bold">•</span>
-                <span className="text-gray-400">( فى حال عدم استلامك نسخه من التعليمات اطلب نسختك المطبوعه الان )</span>
-                <button type="button" onClick={(e) => { e.stopPropagation(); setShowInstructions(true); }} className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg text-xs font-bold text-[#14b8a6] bg-[#14b8a6]/20 border border-[#14b8a6]/40 hover:bg-[#14b8a6]/30 transition-colors mt-1 sm:mt-0">
-                  او اضغط هنا
-                </button>
-              </li>
-              <li className="flex items-start gap-2"><span className="text-red-400 font-bold">•</span><span>تُحدد نسبة الخصم بناءً على جسامة التأثير على جودة الخدمة، وتُسجل رسمياً في سجل وأرشيف الموظف وتؤثر على تقييم اداءه.</span></li>
-              <li className="flex items-start gap-2"><span className="text-red-400 font-bold">•</span><span>هدفنا الالتزام بالتعليمات لضمان استمرار تميز &quot;إليت&quot; وتجنب أي إجراءات تؤثر على مبلغ المكافأة النهائي.</span></li>
-            </ul>
-          </div>
-          {/* النقاط التراكمية */}
-          <div className="bg-amber-500/10 rounded-xl p-4 border border-amber-500/30">
-            <h4 className="text-base font-bold text-amber-400 mb-3 flex items-center gap-2"><span>💰</span>النقاط التراكمية</h4>
-            <ul className="space-y-2 list-none">
-              <li className="flex items-start gap-2"><span className="text-amber-400 font-bold">•</span><span><strong>رصيد النقاط من الفترة</strong> = صافي المستحق بعد 15% معروض كنقاط (نفس الرقم في عمود «النقاط» في الجدول وفي التقرير). يُحسب لكل موظف <strong>رصيد تراكمي</strong> = مجموع هذا الرصيد عند كل <strong>إغلاق فترة</strong>.</span></li>
-              <li className="list-none">
-                <div className="bg-amber-500/15 border-2 border-amber-400/40 rounded-xl p-4 mt-2 space-y-3">
-                  <div className="flex items-center gap-2">
-                    <span className="text-2xl">🏆</span>
-                    <strong className="text-amber-300 text-base">المكافأة الكبرى</strong>
-                  </div>
-                  <p className="text-amber-100/95 text-sm">عند وصول الموظف إلى <strong className="text-white">100,000 نقطة تراكمية</strong>، يستحق &quot;باكيج&quot; التميز:</p>
-                  <ul className="space-y-2 list-none pr-4 border-r-2 border-amber-400/30 min-h-[1.5rem]">
-                    <li className="flex items-start gap-2"><span className="text-amber-400 font-bold mt-0.5">▪</span><span>قسيمة مشتريات بقيمة 1,500 ريال من أسواق ومخابز الحمراء</span></li>
-                    <li className="flex items-start gap-2"><span className="text-amber-400 font-bold mt-0.5">▪</span><span>إقامة فاخرة (ليلة مجانية في جناح VIP للموظف أو لأحد ضيوفه)</span></li>
-                    <li className="flex items-start gap-2"><span className="text-amber-400 font-bold mt-0.5">▪</span><span>وجبة عشاء فاخر متكامل</span></li>
+          {CONDITIONS_SCHEMA.sections.map((sec) => {
+            if (sec.id === 'vip') {
+              if (branchNames.length === 0 && !(vipDefault.reception > 0 || vipDefault.booking > 0)) return null;
+              const theme = THEME_CLASSES[sec.theme] || THEME_CLASSES.amber;
+              return (
+                <div key={sec.id} className={theme.wrap}>
+                  <h4 className={'text-base font-bold mb-3 flex items-center gap-2 ' + theme.title}><span>{sec.icon || ''}</span><span>{sec.title}</span></h4>
+                  <ul className="space-y-2 list-none">
+                    {branchNames.map((branch) => {
+                      const rooms = vipByBranch[branch] || {};
+                      const roomNums = Object.keys(rooms);
+                      if (roomNums.length === 0) return null;
+                      return (
+                        <li key={branch} className="flex items-start gap-2">
+                          <span className={theme.bullet + ' font-bold'}>•</span>
+                          <span><strong className="text-amber-300">{branch}:</strong>{' '}
+                            {roomNums.map((room) => {
+                              const r = rooms[room];
+                              return `غرفة ${room} (استقبال: ${r?.reception ?? 0} ريال، بوكينج: ${r?.booking ?? 0} ريال)`;
+                            }).join(' — ')}
+                          </span>
+                        </li>
+                      );
+                    })}
+                    {(vipDefault.reception > 0 || vipDefault.booking > 0) && (
+                      <li className="flex items-start gap-2"><span className={theme.bullet + ' font-bold'}>•</span><span><strong className="text-amber-300">VIP افتراضي:</strong> استقبال: {vipDefault.reception} ريال، بوكينج: {vipDefault.booking} ريال لكل حجز</span></li>
+                    )}
                   </ul>
                 </div>
-              </li>
-              <li className="flex items-start gap-2"><span className="text-amber-400 font-bold">•</span><span>يمكن متابعة الرصيد التراكمي من صفحة <strong>التقارير → الإحصائيات</strong> (قسم «الرصيد التراكمي من النقاط»).</span></li>
-            </ul>
-          </div>
+              );
+            }
+            const theme = THEME_CLASSES[sec.theme] || THEME_CLASSES.turquoise;
+            // قسم النقاط التراكمية: نفس التنسيق (نقاط + theme) لكن بعرض عمودين
+            const isPointsSection = sec.id === 'points';
+            return (
+              <div key={sec.id} className={theme.wrap}>
+                <h4 className={'text-base font-bold mb-3 flex items-center gap-2 ' + theme.title}><span>{sec.icon || ''}</span><span>{sec.title}</span></h4>
+                <ul className={'space-y-2 list-none ' + (isPointsSection ? 'grid grid-cols-1 sm:grid-cols-2 gap-x-6 gap-y-2' : '')}>
+                  {(sec.items || []).map((item, idx) => {
+                    if (item.placeholder === 'instructionsButton') {
+                      return (
+                        <li key={idx} className="flex items-start gap-2 flex-wrap items-center">
+                          <span className={theme.bullet + ' font-bold'}>•</span>
+                          <span className="text-gray-400">{item.staticBefore}</span>
+                          <button type="button" onClick={(e) => { e.stopPropagation(); setShowInstructions(true); }} className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg text-xs font-bold text-[#14b8a6] bg-[#14b8a6]/20 border border-[#14b8a6]/40 hover:bg-[#14b8a6]/30 transition-colors mt-1 sm:mt-0">او اضغط هنا</button>
+                        </li>
+                      );
+                    }
+                    const text = item.template ? conditionsReplaceTemplate(item.template, rp) : (item.static || '');
+                    const hasRate = item.template && item.template.includes('ريال');
+                    return (
+                      <li key={idx} className="flex items-start gap-2">
+                        <span className={theme.bullet + ' font-bold'}>•</span>
+                        <span>{hasRate ? <strong className="text-white">{text}</strong> : text}</span>
+                      </li>
+                    );
+                  })}
+                </ul>
+              </div>
+            );
+          })}
         </div>
-        <div className="px-6 py-3 border-t border-white/10 shrink-0 flex justify-end">
+        <div className="px-6 py-3 border-t border-white/10 shrink-0 flex justify-end gap-2">
+          <button type="button" onClick={handlePrint} className="px-4 py-2.5 rounded-lg text-sm font-bold text-gray-300 hover:bg-white/10 transition-colors inline-flex items-center gap-2">
+            <Printer className="w-4 h-4" />
+            طباعة الشروط
+          </button>
           <button onClick={onClose} className="px-4 py-2.5 rounded-lg text-sm font-bold text-gray-300 hover:bg-white/10 transition-colors">إغلاق</button>
         </div>
       </div>
@@ -2423,15 +2506,62 @@ function ConditionsPopup({ config, onClose }: { config: AppConfig; onClose: () =
 }
 
 // ===================================================================
-// لائحة التعليمات — نفس المحتوى والشكل كما في صفحة المكافآت (مصدر: app/shared/instructionsBody.html)
-// نفس استقبال نافذة "منهجية التحليل والشروط" (هيدر + بادي + فوتر)
+// لائحة التعليمات — نافذة موحدة: نفس المحتوى والمميزات (لائحة + أنواع خصم + طباعة) في التحليل والمكافآت والأدمن
+// مصدر المحتوى: app/shared/instructionsBody.html ؛ أنواع الخصم من نفس مصدر المكافآت (localStorage adora_rewards_discountTypes)
 // ===================================================================
+
+function getDiscountTypesFromStorage(): string[] {
+  if (typeof window === 'undefined') return [];
+  try {
+    const raw = localStorage.getItem('adora_rewards_discountTypes') || '[]';
+    const arr = JSON.parse(raw);
+    return Array.isArray(arr) ? arr.filter((t): t is string => typeof t === 'string' && t.trim() !== '') : [];
+  } catch {
+    return [];
+  }
+}
+
+function getCustomDiscountSectionHtml(types: string[]): string {
+  if (types.length === 0) return '';
+  const lis = types
+    .map((t) => {
+      const s = String(t).replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+      return '<li class="flex gap-2"><span class="text-purple-400">•</span><span>' + s + '</span></li>';
+    })
+    .join('');
+  return '<div class="bg-purple-500/10 rounded-xl p-4 border border-purple-500/30"><h4 class="text-purple-400 font-bold mb-2 text-base">أنواع خصم إضافية (أضافها المدير)</h4><p class="text-slate-400 text-xs mb-2">تظهر تلقائياً هنا عند إضافة المدير نوع خصم جديد من نافذة الخصومات.</p><ul class="space-y-2 text-slate-300 list-none">' + lis + '</ul></div>';
+}
+
+function printInstructionsModal(instructionsHtml: string, discountSectionHtml: string) {
+  const content = '<div class="space-y-5">' + instructionsHtml + (discountSectionHtml ? discountSectionHtml : '') + '</div>';
+  const printWin = window.open('', '_blank');
+  if (!printWin) return;
+  const printStyles = '@page{size:A4 portrait;margin:6mm}body{background:#fff!important;color:#000!important;padding:4mm;font-family:"IBM Plex Sans Arabic",Arial,sans-serif;font-size:9px;line-height:1.25}@media print{body{background:#fff!important;color:#000!important} .no-print{display:none} *{color:#000!important;background:transparent!important}}';
+  printWin.document.write(
+    '<!DOCTYPE html><html dir="rtl" lang="ar"><head><meta charset="UTF-8"><title>لائحة تعليمات وسياسات عمل موظفي الاستقبال</title><style>' +
+      printStyles +
+      '</style></head><body><h1 style="font-size:14px;font-weight:900;color:#000;margin-bottom:6px;text-align:center;border-bottom:1.5px solid #14b8a6;padding-bottom:3px;">لائحة تعليمات وسياسات عمل موظفي الاستقبال</h1><div style="max-width:100%;margin:0 auto;font-size:9px;line-height:1.25;">' +
+      content +
+      '</div></body></html>'
+  );
+  printWin.document.close();
+  printWin.focus();
+  setTimeout(() => {
+    printWin.print();
+  }, 400);
+}
+
 function InstructionsPopup({ onClose }: { onClose: () => void }) {
-  const rewardsUrl = typeof window !== 'undefined' ? (window.location.pathname.includes('/rewards') ? window.location.href : window.location.origin + '/rewards/') : '/rewards/';
+  const discountTypes = getDiscountTypesFromStorage();
+  const customSectionHtml = getCustomDiscountSectionHtml(discountTypes);
+
+  const handlePrint = () => {
+    printInstructionsModal(instructionsBodyHtml, customSectionHtml);
+  };
+
   return (
     <div className="fixed inset-0 z-[300] flex items-center justify-center bg-black/70 backdrop-blur-sm" onClick={onClose}>
       <div className="bg-slate-900/98 border border-slate-700/60 rounded-2xl shadow-2xl max-w-2xl w-[95%] max-h-[90vh] flex flex-col overflow-hidden" onClick={(e) => e.stopPropagation()}>
-        {/* Header — نفس استقبال MethodologyPopup */}
         <div className="px-6 py-4 border-b border-slate-700/50 bg-slate-800/50 shrink-0 flex items-center justify-between">
           <div className="flex items-center gap-3">
             <div className="p-2 bg-cyan-500/20 rounded-xl">
@@ -2439,26 +2569,22 @@ function InstructionsPopup({ onClose }: { onClose: () => void }) {
             </div>
             <div>
               <h3 className="text-base font-bold text-white">لائحة تعليمات وسياسات عمل موظفي الاستقبال</h3>
-              <p className="text-[11px] text-slate-500">قائمة أنواع الخصم الإضافية والطباعة في صفحة المكافآت</p>
+              <p className="text-[11px] text-slate-500">لائحة موحدة — قائمة أنواع الخصم وطباعة اللائحة هنا</p>
             </div>
           </div>
           <button onClick={onClose} className="text-slate-500 hover:text-slate-200 transition-colors">
             <X className="w-5 h-5" />
           </button>
         </div>
-        {/* Body */}
         <div className="overflow-y-auto flex-1 px-6 py-5 space-y-6 text-sm leading-relaxed">
           <div className="space-y-5" dangerouslySetInnerHTML={{ __html: instructionsBodyHtml }} />
-          <p className="mt-4 pt-3 border-t border-slate-700/50 text-slate-400 text-xs">
-            اللائحة أعلاه هي النص الثابت. قائمة أنواع الخصم الإضافية التي يسجّلها المدير، وزر طباعة اللائحة، متوفرة في صفحة المكافآت.
-          </p>
-          <a href={rewardsUrl} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-2 px-4 py-2.5 rounded-xl text-sm font-bold text-cyan-400 bg-cyan-500/20 border border-cyan-500/40 hover:bg-cyan-500/30 transition-colors mt-3">
-            فتح صفحة المكافآت
-          </a>
+          {customSectionHtml ? <div className="space-y-5" dangerouslySetInnerHTML={{ __html: customSectionHtml }} /> : null}
         </div>
-        {/* Footer — نفس استقبال MethodologyPopup */}
-        <div className="px-6 py-3 border-t border-slate-700/50 bg-slate-800/40 shrink-0 flex items-center justify-between">
-          <p className="text-[10px] text-slate-600">اللائحة الثابتة هنا؛ قائمة الخصومات والطباعة في صفحة المكافآت</p>
+        <div className="px-6 py-3 border-t border-slate-700/50 bg-slate-800/40 shrink-0 flex flex-wrap items-center justify-between gap-2">
+          <button onClick={handlePrint} className="inline-flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-bold text-cyan-400 bg-cyan-600/20 border border-cyan-500/30 hover:bg-cyan-600/30 transition-colors">
+            <Printer className="w-4 h-4" />
+            طباعة اللائحة
+          </button>
           <button onClick={onClose} className="px-4 py-1.5 rounded-lg text-xs font-medium bg-cyan-600/20 text-cyan-300 hover:bg-cyan-600/30 border border-cyan-500/20 transition-colors">
             فهمت
           </button>
@@ -2865,19 +2991,8 @@ function EmployeeBreakdown({ staffList, data, config, dateRange }: {
     // Short delay so localStorage write is committed before navigation
     setTransferDone(true);
     setTimeout(() => setTransferDone(false), 3000);
-    const params = typeof window !== 'undefined' ? new URLSearchParams(window.location.search) : new URLSearchParams();
-    const adminKey = params.get('admin') || '';
-    const role = params.get('role') || '';
-    const token = params.get('token') || '';
-    const period = params.get('period') || '';
-    const q = new URLSearchParams();
-    if (adminKey) q.set('admin', adminKey);
-    if (role) q.set('role', role);
-    if (token) q.set('token', token);
-    if (period) q.set('period', period);
-    q.set('transfer', '1');
-    q.set('t', String(Date.now()));
-    const rewardsQuery = '?' + q.toString();
+    const adminKey = typeof window !== 'undefined' ? new URLSearchParams(window.location.search).get('admin') || '' : '';
+    const rewardsQuery = adminKey ? `?admin=${encodeURIComponent(adminKey)}&transfer=1&t=${Date.now()}` : `?transfer=1&t=${Date.now()}`;
     setTimeout(() => {
       window.location.href = '/rewards/' + rewardsQuery;
     }, 150);
