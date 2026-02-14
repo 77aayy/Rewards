@@ -407,8 +407,8 @@
                     </div>
                 </div>
                 
-                <!-- Tabs: تمرير أفقي على الجوال -->
-                <div class="flex gap-1 sm:gap-2 mb-4 sm:mb-6 border-b border-white/10 overflow-x-auto -webkit-overflow-scrolling-touch scrollbar-hide" style="scrollbar-width: none;">
+                <!-- Tabs: تمرير أفقي على الجوال (يُخفى للمدير العام) -->
+                <div id="reportsTabsBar" class="flex gap-1 sm:gap-2 mb-4 sm:mb-6 border-b border-white/10 overflow-x-auto -webkit-overflow-scrolling-touch scrollbar-hide" style="scrollbar-width: none;">
                     <button onclick="switchReportsTab('current')" id="reportsTabCurrent" class="flex-shrink-0 px-3 sm:px-4 py-2 text-xs sm:text-sm font-bold text-turquoise border-b-2 border-turquoise transition-colors min-h-[44px]">
                         التقارير الحالية
                     </button>
@@ -456,7 +456,7 @@
                                 <option value="">-- اختر فترة --</option>
                             </select>
                         </div>
-                        <button type="button" id="clearArchivedPeriodsBtn" onclick="if(confirm('هل تريد مسح كل الفترات المغلقة فقط؟ الرصيد التراكمي لن يُمس. لا يمكن التراجع عن المسح.')) { if(typeof clearAllArchivedPeriods==='function') clearAllArchivedPeriods(); }" class="flex-shrink-0 px-4 py-3 rounded-xl text-sm font-bold text-amber-200 bg-amber-500/20 border border-amber-500/40 hover:bg-amber-500/30 transition-colors min-h-[44px]" title="مسح قائمة الفترات المغلقة وملفات periods/ من Firebase فقط — الرصيد التراكمي لا يُحذف أبداً">
+                        <button type="button" id="clearArchivedPeriodsBtn" onclick="if(typeof confirmAndClearArchivedPeriods==='function') confirmAndClearArchivedPeriods();" class="flex-shrink-0 px-4 py-3 rounded-xl text-sm font-bold text-amber-200 bg-amber-500/20 border border-amber-500/40 hover:bg-amber-500/30 transition-colors min-h-[44px]" title="يمسح: الفترات المغلقة (القائمة المنسدلة) + أرشيف الإحصائيات. لا يمسح: الرصيد التراكمي أبداً.">
                             <span>🗑️</span>
                             <span>مسح كل الفترات (بداية جديدة)</span>
                         </button>
@@ -495,7 +495,7 @@
                             </button>
                         </div>
                     </div>
-                    <!-- الرصيد التراكمي من النقاط: عنوان + تنبيه المكافأة الاستثنائية + كروت الموظفين -->
+                    <!-- الرصيد التراكمي من النقاط (يُخفى للمدير العام) -->
                     <div class="mb-8" id="cumulativePointsSection">
                         <button type="button" onclick="toggleCumulativePoints()" class="w-full text-xl font-black text-turquoise mb-2 flex items-center gap-2 cursor-pointer hover:text-white transition-colors group">
                             <span id="cumulativePointsArrow" class="transition-transform duration-300 text-base" style="display:inline-block;">◀</span>
@@ -511,18 +511,26 @@
                                 <li><strong>وجبة عشاء:</strong> عشاء فاخر متكامل.</li>
                                 <li><strong>نظام النقاط:</strong> تُحتسب وتُضاف النقاط للموظفين دورياً مع كل إغلاق فترة.</li>
                             </ul>
+                            <div class="flex flex-wrap items-center gap-3 mb-4">
+                                <button type="button" id="clearCumulativePointsBtn" onclick="if(typeof confirmAndClearCumulativePoints==='function') confirmAndClearCumulativePoints();" class="flex-shrink-0 px-4 py-2.5 rounded-xl text-sm font-bold text-amber-200 bg-amber-500/20 border border-amber-500/40 hover:bg-amber-500/30 transition-colors min-h-[40px]" title="يمسح الرصيد التراكمي من Firebase. مع «مسح كل الفترات» = بداية كاملة (ما يبقى إلا الفترة المفتوحة).">
+                                    <span>🗑️</span>
+                                    <span>مسح الرصيد التراكمي</span>
+                                </button>
+                            </div>
                             <div id="cumulativePointsCards" class="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-3 mb-6">
                                 <!-- كروت الرصيد التراكمي تُملأ ديناميكياً -->
                             </div>
                         </div>
                     </div>
-                    <div class="mb-8">
-                        <h3 class="text-xl font-black text-turquoise mb-4 flex items-center gap-2">
-                            <span>📊</span>
-                            <span id="statisticsSectionTitle">إحصائيات الفترة الحالية</span>
-                        </h3>
-                        <div id="currentPeriodStats" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6 gap-4 mb-6">
-                            <!-- Stats cards will be populated here -->
+                    <div class="mb-8" id="currentPeriodStatsBlock">
+                        <div id="currentPeriodStatsHeaderBlock">
+                            <h3 class="text-xl font-black text-turquoise mb-4 flex items-center gap-2">
+                                <span>📊</span>
+                                <span id="statisticsSectionTitle">إحصائيات الفترة الحالية</span>
+                            </h3>
+                            <div id="currentPeriodStats" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6 gap-4 mb-6">
+                                <!-- Stats cards will be populated here -->
+                            </div>
                         </div>
                         <div class="glass p-4 rounded-xl neon-glow mt-6 relative overflow-visible" id="currentPeriodStatsTableWrap">
                             <h4 class="text-lg font-bold text-white mb-4 flex items-center gap-2 flex-wrap">

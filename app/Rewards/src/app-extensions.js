@@ -61,16 +61,18 @@ if (typeof window !== 'undefined') {
   window.normalizePeriodIdToFirebase = normalizePeriodIdToFirebase;
 }
 
-// مفتاح تخزين الرصيد التراكمي من النقاط: { "اسم الموظف": عدد النقاط التراكمية }
-var CUMULATIVE_POINTS_KEY = 'adora_rewards_cumulativePoints';
-var CUMULATIVE_FIREBASE_PATH = 'config/cumulativePoints.json'; // مصدر واحد من أي جهاز — لا اعتماد على المحلي فقط
+// الرصيد التراكمي: مصدر واحد Firebase فقط — { "اسم الموظف": عدد النقاط } مرتبط بالاسم ولا يُمسح أبداً
+var CUMULATIVE_FIREBASE_PATH = 'config/cumulativePoints.json';
 var CUMULATIVE_REWARD_THRESHOLD = 100000;   // عند الوصول لـ 100,000 نقطة (باكيج التميز)
-var CUMULATIVE_REWARD_AMOUNT = 1000;        // (للمنطق الداخلي؛ العرض: باكيج التميز - قسيمة 1500، إقامة VIP، عشاء)
+var CUMULATIVE_REWARD_AMOUNT = 1000;        // (للمنطق الداخلي؛ العرض: باكيج التميز)
 
-/** جلب الرصيد التراكمي من Firebase وتطبيقه على localStorage — حتى من أي جهاز يكون المصدر واحداً */
+/** جلب الرصيد التراكمي من Firebase فقط — يُخزَّن في الذاكرة (window.__cumulativePointsFromFirebase) للعرض، لا تخزين محلي */
 async function loadCumulativePointsFromFirebase() {
   var st = (typeof window !== 'undefined' && window.storage) || (typeof storage !== 'undefined' ? storage : null);
-  if (!st || typeof st.ref !== 'function') return;
+  if (!st || typeof st.ref !== 'function') {
+    if (typeof window !== 'undefined') window.__cumulativePointsFromFirebase = {};
+    return;
+  }
   try {
     var ref = st.ref(CUMULATIVE_FIREBASE_PATH);
     var text = null;
@@ -91,24 +93,17 @@ async function loadCumulativePointsFromFirebase() {
         if (resp && resp.ok) text = await resp.text();
       } catch (e2) {}
     }
+    var data = {};
     if (text) {
-      var data = JSON.parse(text);
-      if (data && typeof data === 'object' && !Array.isArray(data)) {
-        try { localStorage.setItem(CUMULATIVE_POINTS_KEY, JSON.stringify(data)); } catch (e) {}
-      }
-      return;
+      try {
+        var parsed = JSON.parse(text);
+        if (parsed && typeof parsed === 'object' && !Array.isArray(parsed)) data = parsed;
+      } catch (e) {}
     }
-    // هجرة: لو Firebase فاضي والرصيد التراكمي موجود محلياً — نرفعه مرة واحدة ليكون مصدراً واحداً
-    try {
-      var localRaw = localStorage.getItem(CUMULATIVE_POINTS_KEY) || '{}';
-      var local = {};
-      try { local = JSON.parse(localRaw); } catch (e) {}
-      if (local && typeof local === 'object' && Object.keys(local).length > 0 && typeof saveCumulativePointsToFirebase === 'function') {
-        await saveCumulativePointsToFirebase(local);
-      }
-    } catch (e2) {}
+    if (typeof window !== 'undefined') window.__cumulativePointsFromFirebase = data;
   } catch (e) {
     if (console && console.warn) console.warn('loadCumulativePointsFromFirebase:', e.message || e);
+    if (typeof window !== 'undefined') window.__cumulativePointsFromFirebase = {};
   }
 }
 if (typeof window !== 'undefined') window.loadCumulativePointsFromFirebase = loadCumulativePointsFromFirebase;
@@ -126,6 +121,30 @@ async function saveCumulativePointsToFirebase(cumulative) {
   }
 }
 if (typeof window !== 'undefined') window.saveCumulativePointsToFirebase = saveCumulativePointsToFirebase;
+
+/** رسالة تأكيد مسح الرصيد التراكمي — مع «مسح كل الفترات» يصبح المشروع كيوم برمجته (ما تبقى إلا الفترة المفتوحة) */
+function getClearCumulativePointsConfirmMessage() {
+  return 'سيُمسح الرصيد التراكمي من النقاط لكل الموظفين (من Firebase والذاكرة).\n\nمع زر «مسح كل الفترات» يصبح المشروع كأنه يوم برمجته — لا آثار قديمة إلا الفترة المفتوحة فقط.\n\nلا يمكن التراجع. هل أنت متأكد؟';
+}
+if (typeof window !== 'undefined') window.getClearCumulativePointsConfirmMessage = getClearCumulativePointsConfirmMessage;
+
+/** عرض تأكيد ثم مسح الرصيد التراكمي (Firebase + الذاكرة) وتحديث العرض */
+async function confirmAndClearCumulativePoints() {
+  var msg = typeof getClearCumulativePointsConfirmMessage === 'function'
+    ? getClearCumulativePointsConfirmMessage()
+    : 'سيُمسح الرصيد التراكمي بالكامل. لا يمكن التراجع. هل أنت متأكد؟';
+  if (!confirm(msg)) return;
+  try {
+    if (typeof window !== 'undefined') window.__cumulativePointsFromFirebase = {};
+    if (typeof saveCumulativePointsToFirebase === 'function') await saveCumulativePointsToFirebase({});
+    if (typeof populateCumulativePointsCards === 'function') populateCumulativePointsCards();
+    if (typeof showToast === 'function') showToast('تم مسح الرصيد التراكمي من النقاط.', 'success');
+  } catch (e) {
+    if (console && console.warn) console.warn('confirmAndClearCumulativePoints:', e);
+    if (typeof showToast === 'function') showToast('فشل مسح الرصيد التراكمي: ' + (e.message || ''), 'error');
+  }
+}
+if (typeof window !== 'undefined') window.confirmAndClearCumulativePoints = confirmAndClearCumulativePoints;
 
 // Safe parse of archived periods from localStorage (returns array)
 // مسح مرة واحدة: إزالة فترات الاختبار (لم يكن هناك إغلاق فعلي لأي فترة بعد)
@@ -708,25 +727,54 @@ async function confirmClosePeriod() {
       console.log('✅ Period saved to localStorage (Firebase not available)');
     }
     
-    // تحديث الرصيد التراكمي من النقاط: إضافة رصيد النقاط من الفترة (صافي + 15%) لكل موظف — محلي + Firebase (مصدر واحد من أي جهاز)
+    // الرصيد التراكمي: Firebase فقط — جلب الحالي من Firebase، إضافة أرصدة الفترة (نسخة الجدول)، حفظ على Firebase، تحديث العرض
     try {
-      var pointsThisPeriod = typeof getEmployeePointsBalanceForPeriodDb === 'function' ? getEmployeePointsBalanceForPeriodDb(db) : (typeof getEmployeePointsForPeriodDb === 'function' ? getEmployeePointsForPeriodDb(db) : {});
-      var cumulativeRaw = localStorage.getItem(CUMULATIVE_POINTS_KEY) || '{}';
-      var cumulative = {};
-      try { cumulative = JSON.parse(cumulativeRaw); } catch (e) {}
-      if (typeof cumulative !== 'object') cumulative = {};
+      var pointsThisPeriod = (typeof window !== 'undefined' && window.__lastDisplayedPeriodPoints && typeof window.__lastDisplayedPeriodPoints === 'object' && Object.keys(window.__lastDisplayedPeriodPoints).length > 0)
+        ? window.__lastDisplayedPeriodPoints
+        : (typeof getEmployeePointsBalanceForPeriodDb === 'function' ? getEmployeePointsBalanceForPeriodDb(db) : (typeof getEmployeePointsForPeriodDb === 'function' ? getEmployeePointsForPeriodDb(db) : {}));
+      var cumulative = (typeof window !== 'undefined' && window.__cumulativePointsFromFirebase && typeof window.__cumulativePointsFromFirebase === 'object')
+        ? window.__cumulativePointsFromFirebase
+        : {};
+      if (Object.keys(cumulative).length === 0 && typeof loadCumulativePointsFromFirebase === 'function') {
+        await loadCumulativePointsFromFirebase();
+        cumulative = (typeof window !== 'undefined' && window.__cumulativePointsFromFirebase && typeof window.__cumulativePointsFromFirebase === 'object')
+          ? window.__cumulativePointsFromFirebase
+          : {};
+      }
       for (var empName in pointsThisPeriod) {
         if (!pointsThisPeriod.hasOwnProperty(empName)) continue;
-        cumulative[empName] = (cumulative[empName] || 0) + pointsThisPeriod[empName];
+        var prev = Number(cumulative[empName]) || 0;
+        var add = Number(pointsThisPeriod[empName]) || 0;
+        cumulative[empName] = prev + add;
       }
-      localStorage.setItem(CUMULATIVE_POINTS_KEY, JSON.stringify(cumulative));
       if (typeof saveCumulativePointsToFirebase === 'function') await saveCumulativePointsToFirebase(cumulative);
+      if (typeof window !== 'undefined') {
+        window.__cumulativePointsFromFirebase = cumulative;
+        window.__lastDisplayedPeriodPoints = {};
+      }
+      if (typeof populateCumulativePointsCards === 'function') populateCumulativePointsCards();
     } catch (e) { console.warn('Cumulative points update on close:', e); }
-    
+
     showToast('✅ تم إغلاق الفترة بنجاح', 'success');
-    returnToUpload(true); // مسح بيانات الفترة عند الإغلاق
     closeClosePeriodModal();
-    
+
+    // البقاء في الصفحة والانتقال إلى «الفترات المغلقة» مع تحديد الفترة المغلقة (بدون إعادة توجيه)
+    if (typeof returnToUpload === 'function') {
+      returnToUpload(true, false, true, function () {
+        if (typeof showReportsPage === 'function') showReportsPage();
+        if (typeof switchReportsTab === 'function') switchReportsTab('archived');
+        if (typeof loadArchivedPeriodsList === 'function') {
+          loadArchivedPeriodsList().then(function () {
+            var sel = document.getElementById('archivedPeriodSelect');
+            if (sel && periodId) {
+              sel.value = periodId;
+              if (typeof loadArchivedPeriod === 'function') loadArchivedPeriod(periodId);
+            }
+          });
+        }
+      });
+    }
+
   } catch (error) {
     console.error('❌ Error closing period:', error);
     showToast('❌ خطأ في إغلاق الفترة: ' + error.message, 'error');
@@ -1257,18 +1305,13 @@ async function loadArchivedPeriodsList() {
       }
     }
     
-    // إزالة التكرار: نفس periodId أو نفس periodText (عرض واحد فقط)
+    // إزالة التكرار بالـ periodId فقط (لا ندمج فترتين مختلفتين لمجرد تشابه النص)
     const byId = new Map();
     periods.forEach(function (p) {
       var id = p.periodId || p.id;
-      if (!byId.has(id)) byId.set(id, p);
+      if (id && !byId.has(id)) byId.set(id, p);
     });
-    const byText = new Map();
-    byId.forEach(function (p) {
-      var text = p.periodText || ('فترة ' + (p.periodId || p.id));
-      if (!byText.has(text)) byText.set(text, p);
-    });
-    periods = Array.from(byText.values());
+    periods = Array.from(byId.values());
     periods.sort((a, b) => new Date(b.closedAt || 0) - new Date(a.closedAt || 0));
 
     periods.forEach(period => {
@@ -1398,8 +1441,24 @@ async function loadArchivedPeriod(periodId) {
   }
 }
 
+/** رسالة تأكيد مسح الفترات المغلقة — توضّح ما يُمسح (القائمتان) وما لا يُمسح (الرصيد التراكمي) */
+function getClearArchivedPeriodsConfirmMessage() {
+  return 'سيُمسح:\n• قائمة «اختر فترة» (الفترات المغلقة)\n• قائمة أرشيف الإحصائيات\n(مصدرهما واحد: ملفات الفترات في السحابة)\n\nلن يُمسح:\n• الرصيد التراكمي من النقاط (يبقى على Firebase)\n\nلا يمكن التراجع عن المسح. هل أنت متأكد؟';
+}
+if (typeof window !== 'undefined') window.getClearArchivedPeriodsConfirmMessage = getClearArchivedPeriodsConfirmMessage;
+
+/** عرض رسالة تأكيد ثم مسح كل الفترات المغلقة إن وافق المستخدم */
+function confirmAndClearArchivedPeriods() {
+  var msg = typeof getClearArchivedPeriodsConfirmMessage === 'function'
+    ? getClearArchivedPeriodsConfirmMessage()
+    : 'سيُمسح قائمة الفترات المغلقة وأرشيف الإحصائيات. الرصيد التراكمي لن يُمس. لا يمكن التراجع. هل أنت متأكد؟';
+  if (confirm(msg) && typeof clearAllArchivedPeriods === 'function') clearAllArchivedPeriods();
+}
+if (typeof window !== 'undefined') window.confirmAndClearArchivedPeriods = confirmAndClearArchivedPeriods;
+
 /**
  * مسح كل الفترات المغلقة فقط (من localStorage و Firebase Storage periods/) — الرصيد التراكمي لا يُمس أبداً.
+ * يُمسح مصدر قائمة «اختر فترة» وقائمة أرشيف الإحصائيات (كلتاهما تعتمدان على periods/).
  * يُستدعى من زر في الواجهة أو من الكونسول: clearAllArchivedPeriods()
  * الترتيب: 1) مسح قائمة الفترات المغلقة ووضع علم "تم المسح". 2) حذف ملفات Firebase periods/. 3) تحديث الواجهة.
  */
@@ -2677,14 +2736,20 @@ function toggleCumulativePoints() {
 }
 if (typeof window !== 'undefined') window.toggleCumulativePoints = toggleCumulativePoints;
 
-/** ملء كروت الرصيد التراكمي من النقاط (من localStorage) — كل موظف كارت ديناميكي يزيد عند كل إغلاق فترة */
+/** ملء كروت الرصيد التراكمي من النقاط — من Firebase فقط (عبر الذاكرة بعد التحميل)، مرتبط باسم الموظف، لا يُمسح أبداً */
 function populateCumulativePointsCards() {
   var container = document.getElementById('cumulativePointsCards');
   if (!container) return;
-  var raw = typeof localStorage !== 'undefined' ? localStorage.getItem(CUMULATIVE_POINTS_KEY) || '{}' : '{}';
-  var cumulative = {};
-  try { cumulative = JSON.parse(raw); } catch (e) {}
-  if (typeof cumulative !== 'object') cumulative = {};
+  if (typeof window !== 'undefined' && window.__cumulativePointsFromFirebase === undefined && typeof loadCumulativePointsFromFirebase === 'function') {
+    loadCumulativePointsFromFirebase().then(function () {
+      if (typeof populateCumulativePointsCards === 'function') populateCumulativePointsCards();
+    });
+    container.innerHTML = '<p class="col-span-full text-gray-400 text-center py-4">جاري تحميل الرصيد التراكمي من Firebase...</p>';
+    return;
+  }
+  var cumulative = (typeof window !== 'undefined' && window.__cumulativePointsFromFirebase && typeof window.__cumulativePointsFromFirebase === 'object')
+    ? window.__cumulativePointsFromFirebase
+    : {};
   var entries = [];
   for (var name in cumulative) { if (cumulative.hasOwnProperty(name)) entries.push({ name: name, points: cumulative[name] }); }
   entries.sort(function (a, b) { return (b.points || 0) - (a.points || 0); });
@@ -2692,10 +2757,10 @@ function populateCumulativePointsCards() {
   var rewardAmount = typeof CUMULATIVE_REWARD_AMOUNT !== 'undefined' ? CUMULATIVE_REWARD_AMOUNT : 1000;
   var html = '';
   if (entries.length === 0) {
-    html = '<p class="col-span-full text-gray-400 text-center py-4">لا يوجد رصيد تراكمي بعد. الرصيد يزيد عند كل إغلاق فترة.</p>';
+    html = '<p class="col-span-full text-gray-400 text-center py-4">لا يوجد رصيد تراكمي بعد. الرصيد يزيد عند كل إغلاق فترة ويُحفظ على Firebase فقط.</p>';
   } else {
     entries.forEach(function (e) {
-      var pts = parseInt(e.points, 10) || 0;
+      var pts = parseFloat(e.points) || 0;
       var eligible = pts >= threshold;
       var cardClass = 'glass p-4 rounded-xl border min-h-[80px] flex flex-col justify-center';
       if (eligible) cardClass += ' border-amber-500/50 bg-amber-500/10';
@@ -3433,7 +3498,16 @@ function populateEmployeePerformanceTable() {
 
   // ترتيب من الأعلى رصيد نقاط إلى الأقل (نفس نظام النقاط)
   employeesData.sort((a, b) => (b.pointsBalance || 0) - (a.pointsBalance || 0));
-  
+
+  // نسخة من أرقام الجدول المعروضة — تُستخدم عند إغلاق الفترة للرصيد التراكمي (بدون إعادة حساب، نفس الـ DOM)
+  if (typeof window !== 'undefined') {
+    var pointsMap = {};
+    employeesData.forEach(function (e) {
+      pointsMap[e.name] = (e.pointsBalance != null ? e.pointsBalance : e.net);
+    });
+    window.__lastDisplayedPeriodPoints = pointsMap;
+  }
+
   // Generate table rows: صف بيانات + صف أسباب التقييم تحت كل موظف
   let html = '';
   const maxPointsBalance = employeesData.length ? Math.max(...employeesData.map(e => e.pointsBalance != null ? e.pointsBalance : 0)) : 0;
@@ -3485,11 +3559,6 @@ function populateEmployeePerformanceTable() {
 }
 
 async function loadArchivedStatsPeriodsList() {
-  // إزالة أثر فترات الاختبار: لا توجد فترات مغلقة فعلية بعد
-  try {
-    localStorage.setItem('adora_archived_periods', '[]');
-    localStorage.setItem('adora_archived_just_cleared', '1');
-  } catch (e) {}
   const select = document.getElementById('archivedStatsPeriodSelect');
   const archivedPeriodsContainer = document.getElementById('archivedPeriodsStatsContainer');
   if (!select && !archivedPeriodsContainer) return;

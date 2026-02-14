@@ -998,7 +998,7 @@ function returnToAnalysis() {
   window.location.href = nextUrl;
 }
 
-function returnToUpload(clearPeriodData, forceLogout) {
+function returnToUpload(clearPeriodData, forceLogout, noRedirect, afterNoRedirectCallback) {
 // In transfer mode, don't allow going back to upload page — إلا عند الخروج النهائي (زر خروج)
 if (window.adoraTransferMode && !forceLogout) {
   logVerbose('🚫 returnToUpload blocked — transfer mode active');
@@ -1038,6 +1038,18 @@ if (clearPeriodData) {
   localStorage.removeItem('adora_rewards_discountTypes');
   branchNegativeRatingsCount = {};
   if (typeof window !== 'undefined') window.branchNegativeRatingsCount = branchNegativeRatingsCount;
+  // عند عدم إعادة التوجيه: مسح الذاكرة أيضاً كي لا تظهر «التقارير الحالية» بالبيانات القديمة
+  if (noRedirect) {
+    db = [];
+    if (typeof window !== 'undefined') window.db = db;
+    branches = new Set();
+    reportStartDate = null;
+    currentEvalRate = 20;
+    employeeCodesMap = {};
+    discounts = [];
+    discountTypes = [];
+    if (typeof window !== 'undefined') { window.discounts = discounts; window.discountTypes = discountTypes; }
+  }
 } else if (isAdmin) {
   // خروج الأدمن: مسح جلسة الدخول + بيانات الفترة فقط
   try { localStorage.removeItem(ADMIN_AUTH_SESSION_KEY); } catch (e) {}
@@ -1064,6 +1076,11 @@ if (r && p) {
       localStorage.setItem('adora_admin_tokens', JSON.stringify(obj));
     }
   } catch (e) {}
+}
+// عند عدم إعادة التوجيه (مثلاً بعد إغلاق الفترة): البقاء في الصفحة واستدعاء الـ callback
+if (noRedirect && typeof afterNoRedirectCallback === 'function') {
+  afterNoRedirectCallback();
+  return;
 }
 // إعادة توجيه: الأدمن → clear-session.html?admin=KEY (ثم توجيه ديناميكي لـ /?admin=KEY)؛ غيره → الصفحة الرئيسية
 if (typeof window !== 'undefined' && window.location) {
@@ -6651,12 +6668,60 @@ if (isManager && reportsPage) {
   if (typeof switchReportsTab === 'function') switchReportsTab('statistics');
   if (printAllBtn) printAllBtn.style.display = 'none';
   if (codesBtn) codesBtn.style.display = 'none';
+  // المدير العام (صفحة موجودة): جدول التقييم + كروت النقاط التراكمية فقط + أرشيف الإحصائيات أسفل الجدول — الترويسة (شروط المكافآت فقط) من rewards-rbac
+  var tabsBar = document.getElementById('reportsTabsBar');
+  var cumulativeSection = document.getElementById('cumulativePointsSection');
+  var headerBlock = document.getElementById('currentPeriodStatsHeaderBlock');
+  var archivedStatsSection = document.getElementById('archivedPeriodsSection');
+  var statsContent = document.getElementById('statisticsReportsContent');
+  var statsBlock = document.getElementById('currentPeriodStatsBlock');
+  var clearCumulativeBtn = document.getElementById('clearCumulativePointsBtn');
+  if (tabsBar) tabsBar.style.display = 'none';
+  if (headerBlock) headerBlock.style.display = 'none';
+  if (cumulativeSection) {
+    cumulativeSection.style.display = '';
+    if (clearCumulativeBtn) clearCumulativeBtn.style.display = 'none';
+    var cumulativeBody = document.getElementById('cumulativePointsBody');
+    if (cumulativeBody) { cumulativeBody.style.display = ''; }
+    var arrow = document.getElementById('cumulativePointsArrow');
+    if (arrow) arrow.style.transform = 'rotate(-90deg)';
+  }
+  if (archivedStatsSection) {
+    archivedStatsSection.classList.remove('hidden');
+    archivedStatsSection.setAttribute('aria-hidden', 'false');
+    if (typeof loadArchivedStatsPeriodsList === 'function') loadArchivedStatsPeriodsList();
+  }
+  if (statsContent && statsBlock && cumulativeSection && archivedStatsSection) {
+    statsContent.style.display = 'flex';
+    statsContent.style.flexDirection = 'column';
+    statsBlock.style.order = '1';
+    cumulativeSection.style.order = '2';
+    archivedStatsSection.style.order = '3';
+  }
 } else {
   if (tabCurrent) tabCurrent.style.display = '';
   if (tabArchived) tabArchived.style.display = '';
   if (tabStatistics) tabStatistics.style.display = '';
   if (printAllBtn) printAllBtn.style.display = '';
   if (codesBtn) codesBtn.style.display = '';
+  var tabsBar = document.getElementById('reportsTabsBar');
+  var cumulativeSection = document.getElementById('cumulativePointsSection');
+  var headerBlock = document.getElementById('currentPeriodStatsHeaderBlock');
+  var archivedStatsSection = document.getElementById('archivedPeriodsSection');
+  var statsContent = document.getElementById('statisticsReportsContent');
+  var statsBlock = document.getElementById('currentPeriodStatsBlock');
+  var clearCumulativeBtn = document.getElementById('clearCumulativePointsBtn');
+  if (tabsBar) tabsBar.style.display = '';
+  if (cumulativeSection) { cumulativeSection.style.display = ''; cumulativeSection.style.order = ''; }
+  if (headerBlock) headerBlock.style.display = '';
+  if (archivedStatsSection) {
+    archivedStatsSection.classList.add('hidden');
+    archivedStatsSection.setAttribute('aria-hidden', 'true');
+    archivedStatsSection.style.order = '';
+  }
+  if (statsContent) { statsContent.style.display = ''; statsContent.style.flexDirection = ''; }
+  if (statsBlock) statsBlock.style.order = '';
+  if (clearCumulativeBtn) clearCumulativeBtn.style.display = '';
 }
 // زر «مسح كل الفترات (بداية جديدة)» للأدمن فقط — إخفاؤه عن المدير العام (manager) والحسابات وHR والمشرف
 var clearArchivedBtn = document.getElementById('clearArchivedPeriodsBtn');

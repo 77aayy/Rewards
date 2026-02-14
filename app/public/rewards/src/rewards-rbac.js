@@ -294,6 +294,15 @@ function hideElementsForManager() {
   var uploadBox = document.getElementById('uploadBox');
   if (uploadBox) uploadBox.classList.add('hidden');
 
+  var statsGrid = document.querySelector('.stats-grid-container');
+  if (statsGrid) statsGrid.style.display = 'none';
+  var branchFilters = document.getElementById('branchFilters');
+  if (branchFilters) branchFilters.style.display = 'none';
+  var clearArchivedBtn = document.getElementById('clearArchivedPeriodsBtn');
+  if (clearArchivedBtn) clearArchivedBtn.style.display = 'none';
+  var clearCumulativeBtn = document.getElementById('clearCumulativePointsBtn');
+  if (clearCumulativeBtn) clearCumulativeBtn.style.display = 'none';
+
   var actionBtns = document.getElementById('actionBtns');
   if (actionBtns) {
     actionBtns.style.display = 'flex';
@@ -319,6 +328,37 @@ function hideElementsForManager() {
     setTimeout(function() {
       if (typeof loadStatisticsPage === 'function') loadStatisticsPage();
     }, 350);
+    setTimeout(function() {
+      var tabsBar = document.getElementById('reportsTabsBar');
+      if (tabsBar) tabsBar.style.display = 'none';
+      var headerBlock = document.getElementById('currentPeriodStatsHeaderBlock');
+      var cumulativeSection = document.getElementById('cumulativePointsSection');
+      var archivedStatsSection = document.getElementById('archivedPeriodsSection');
+      var statsContent = document.getElementById('statisticsReportsContent');
+      var statsBlock = document.getElementById('currentPeriodStatsBlock');
+      var clearCumulativeBtn = document.getElementById('clearCumulativePointsBtn');
+      if (headerBlock) headerBlock.style.display = 'none';
+      if (cumulativeSection) {
+        cumulativeSection.style.display = '';
+        if (clearCumulativeBtn) clearCumulativeBtn.style.display = 'none';
+        var body = document.getElementById('cumulativePointsBody');
+        if (body) body.style.display = '';
+        var arrow = document.getElementById('cumulativePointsArrow');
+        if (arrow) arrow.style.transform = 'rotate(-90deg)';
+      }
+      if (archivedStatsSection) {
+        archivedStatsSection.classList.remove('hidden');
+        archivedStatsSection.setAttribute('aria-hidden', 'false');
+        if (typeof loadArchivedStatsPeriodsList === 'function') loadArchivedStatsPeriodsList();
+      }
+      if (statsContent && statsBlock && cumulativeSection && archivedStatsSection) {
+        statsContent.style.display = 'flex';
+        statsContent.style.flexDirection = 'column';
+        statsBlock.style.order = '1';
+        cumulativeSection.style.order = '2';
+        archivedStatsSection.style.order = '3';
+      }
+    }, 400);
   }
 }
 

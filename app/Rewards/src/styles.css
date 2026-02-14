@@ -1334,6 +1334,42 @@ body.role-manager .max-w-full.mx-auto {
   padding-top: 5.25rem;
 }
 
+/* المدير العام: إخفاء الـ dashboard (جدول + شبكة إحصائيات + فلاتر) وزرّي المسح */
+body.role-manager #dashboard {
+  display: none !important;
+}
+body.role-manager .stats-grid-container,
+body.role-manager #branchFilters {
+  display: none !important;
+}
+body.role-manager #clearArchivedPeriodsBtn,
+body.role-manager #clearCumulativePointsBtn {
+  display: none !important;
+}
+/* إخفاء كتلة العنوان والكروت العليا في صفحة الإحصائيات وإظهار كروت النقاط التراكمية فقط */
+body.role-manager #currentPeriodStatsHeaderBlock {
+  display: none !important;
+}
+body.role-manager #cumulativePointsSection {
+  display: block !important;
+}
+body.role-manager #cumulativePointsBody {
+  display: block !important;
+}
+body.role-manager #clearCumulativePointsBtn {
+  display: none !important;
+}
+body.role-manager #reportsTabsBar {
+  display: none !important;
+}
+body.role-manager #statisticsReportsContent {
+  display: flex !important;
+  flex-direction: column;
+}
+body.role-manager #currentPeriodStatsBlock { order: 1; }
+body.role-manager #cumulativePointsSection { order: 2; }
+body.role-manager #archivedPeriodsSection { order: 3; display: block !important; }
+
 /* محاذاة أعمدة صفحة HR (التش ار) — تناسق الترويسة مع الخلايا */
 body.role-hr #targetTable {
   table-layout: fixed;
