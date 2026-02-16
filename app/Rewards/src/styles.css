@@ -299,6 +299,17 @@ display: table-cell !important;
 #targetTable thead tr.main-header-row th.col-net {
   text-align: center !important;
 }
+/* مؤشر الفرز عند النقر على عمود الترويسة */
+#targetTable thead tr.main-header-row th[data-sort-key].sort-asc::after {
+  content: ' ▲';
+  opacity: 0.9;
+  font-size: 0.7em;
+}
+#targetTable thead tr.main-header-row th[data-sort-key].sort-desc::after {
+  content: ' ▼';
+  opacity: 0.9;
+  font-size: 0.7em;
+}
 
 /* صف «تقييمات سلبية» — شكل وخط مميزان */
 .negative-ratings-header-row {
@@ -1369,6 +1380,54 @@ body.role-manager #statisticsReportsContent {
 body.role-manager #currentPeriodStatsBlock { order: 1; }
 body.role-manager #cumulativePointsSection { order: 2; }
 body.role-manager #archivedPeriodsSection { order: 3; display: block !important; }
+
+/* المشرف: إخفاء الحضور + التقارير + الطباعة + إغلاق الفترة (نسخة CSS احتياطية) */
+body.role-supervisor .attendance-toggle,
+body.role-supervisor .attendance-days-input {
+  display: none !important;
+}
+body.role-supervisor #actionBtns button[onclick*="showReportsPage"],
+body.role-supervisor #actionBtns button[onclick*="smartPrint"],
+body.role-supervisor #actionBtns button[onclick*="printConditions"],
+body.role-supervisor #actionBtns button[onclick*="showClosePeriodModal"],
+body.role-supervisor #actionBtns #printAllBtn,
+body.role-supervisor #actionBtns #printSelectedBtn {
+  display: none !important;
+}
+
+/* HR: إخفاء التقييمات + الخصم + التقارير + الطباعة + إغلاق الفترة (نسخة CSS احتياطية) */
+body.role-hr .eval-input {
+  display: none !important;
+}
+body.role-hr #actionBtns button[onclick*="showDiscountsModal"],
+body.role-hr #actionBtns button[onclick*="showReportsPage"],
+body.role-hr #actionBtns button[onclick*="smartPrint"],
+body.role-hr #actionBtns button[onclick*="printConditions"],
+body.role-hr #actionBtns button[onclick*="showClosePeriodModal"],
+body.role-hr #actionBtns #printAllBtn,
+body.role-hr #actionBtns #printSelectedBtn {
+  display: none !important;
+}
+
+/* الحسابات: إخفاء التقييمات + الحضور + الخصم + إغلاق الفترة + إدارة الإداريين (يرى شروط المكافآت + الطباعة فقط) */
+body.role-accounting .eval-input,
+body.role-accounting .attendance-toggle,
+body.role-accounting .attendance-days-input {
+  display: none !important;
+}
+body.role-accounting #actionBtns button[onclick*="showDiscountsModal"],
+body.role-accounting #actionBtns button[onclick*="showClosePeriodModal"],
+body.role-accounting #actionBtns button[onclick*="showAdminManagementModal"],
+body.role-accounting #actionBtns button[onclick*="showReportsPage"],
+body.role-accounting #actionBtns #btnReturnToAnalysis,
+body.role-accounting #actionBtns #refreshLiveBtn,
+body.role-accounting #actionBtns #btnLogoutRewards {
+  display: none !important;
+}
+body.role-accounting #clearArchivedPeriodsBtn,
+body.role-accounting #clearCumulativePointsBtn {
+  display: none !important;
+}
 
 /* محاذاة أعمدة صفحة HR (التش ار) — تناسق الترويسة مع الخلايا */
 body.role-hr #targetTable {

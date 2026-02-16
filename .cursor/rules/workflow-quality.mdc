@@ -1,0 +1,23 @@
+---
+description: Workflow and quality - no guessing, verify, update without disagreements
+alwaysApply: true
+---
+
+# Workflow and Quality
+
+## Before editing
+- **Read before code**: Read the full function and ~30 lines around it before suggesting a change.
+- **Scope check**: Ensure any variable used is in scope (avoid ReferenceError).
+- **No guessing**: If context is missing, say "INSUFFICIENT CONTEXT - specify X" and do not build on assumptions.
+
+## While editing
+- **Update over create**: Modify existing code for consistency. Do not build from scratch unless explicitly requested.
+- **Security**: Do not hardcode secrets (API keys, tokens). If found, warn immediately and suggest secure Firebase rules and dynamic config.
+
+## After editing
+- **Linter verification**: Do not say "no errors" without running read_lints on modified files.
+- **Definition of done**: A task is not done until read_lints is clean, scope/context is verified, and user has confirmed any major logic change.
+
+## Interaction
+- **Language**: Code, comments, logs in English; replies and explanations in Arabic (Egyptian is fine).
+- **Output**: Deliver working code. Explain "basics" only when there is a specific trick or technical reason.

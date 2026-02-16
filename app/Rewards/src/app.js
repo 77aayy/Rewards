@@ -544,7 +544,7 @@ function toggleBreakdownColumns(showBreakdown) {
       var vipHtml = '';
       window.adoraActiveVipRooms.forEach(function(num, vipIdx) {
         var isLastVip = vipIdx === window.adoraActiveVipRooms.length - 1;
-        vipHtml += '<th class="col-breakdown col-breakdown-vip ' + (isLastVip ? 'th-section-start ' : '') + 'text-center text-amber-300 text-xs font-bold" style="' + (isLastVip ? 'border-left:2px solid rgba(139,92,246,0.25);' : '') + '">' +
+        vipHtml += '<th class="col-breakdown col-breakdown-vip ' + (isLastVip ? 'th-section-start ' : '') + 'text-center text-amber-300 text-xs font-bold cursor-pointer hover:bg-white/10 transition-colors select-none" style="' + (isLastVip ? 'border-left:2px solid rgba(139,92,246,0.25);' : '') + '" data-sort-key="vip_' + num + '" title="فرز حسب ' + num + '">' +
           '<svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="display:inline-block;vertical-align:middle;margin-left:2px;margin-top:-2px;"><path d="M11.562 3.266a.5.5 0 0 1 .876 0L15.39 8.87a1 1 0 0 0 1.516.294L21.183 5.5a.5.5 0 0 1 .798.519l-2.834 10.246a1 1 0 0 1-.956.734H5.81a1 1 0 0 1-.957-.734L2.02 6.02a.5.5 0 0 1 .798-.519l4.276 3.664a1 1 0 0 0 1.516-.294z"/><path d="M5.75 17h12.5a1 1 0 0 1 1 1v1a1 1 0 0 1-1 1H5.75a1 1 0 0 1-1-1v-1a1 1 0 0 1 1-1z"/></svg>' +
           num + '</th>';
       });
@@ -1097,13 +1097,30 @@ console.error('❌ Error clearing:', error);
 })();
 }
 let currentSort = { key: 'net', order: 'desc' }; // Default: sort by net (highest first)
-// === Sorting ===
-// Sorting is now automatic by employee name (ascending) - no manual sorting needed
-function toggleSort(key) {
-// Disabled - sorting is always by name ascending
+// === Table header sort: click on column header to sort by that column ===
+var _tableHeaderSortDelegateAttached = false;
+function setupTableHeaderSort() {
+  if (_tableHeaderSortDelegateAttached) return;
+  var tbl = document.getElementById('targetTable');
+  if (!tbl) return;
+  _tableHeaderSortDelegateAttached = true;
+  tbl.addEventListener('click', function (e) {
+    var th = e.target && e.target.closest('th[data-sort-key]');
+    if (!th) return;
+    var key = th.getAttribute('data-sort-key');
+    if (!key) return;
+    currentSort.order = (currentSort.key === key) ? (currentSort.order === 'asc' ? 'desc' : 'asc') : 'desc';
+    currentSort.key = key;
+    if (typeof renderUI === 'function' && typeof currentFilter !== 'undefined') renderUI(currentFilter);
+  });
 }
-function updateSortIcons() {
-// Disabled - no sort icons needed
+function updateTableHeaderSortIndicator() {
+  var mainRow = document.querySelector('.main-header-row');
+  if (!mainRow) return;
+  mainRow.querySelectorAll('th[data-sort-key]').forEach(function (th) {
+    th.classList.remove('sort-asc', 'sort-desc');
+    if (th.getAttribute('data-sort-key') === currentSort.key) th.classList.add(currentSort.order === 'asc' ? 'sort-asc' : 'sort-desc');
+  });
 }
 // === Initialize Particles ===
 function createParticles() {
@@ -3988,11 +4005,11 @@ viewLosers.evalGoogle.ids.push(s.id);
 if (s.count > 0 && s.count < viewLosers.book.val) { viewLosers.book.val = s.count; viewLosers.book.ids = [s.id]; }
 else if (s.count > 0 && s.count === viewLosers.book.val) { viewLosers.book.ids.push(s.id); }
 });
-// خريطة صافي مُجمّع لكل اسم (للفرز عند عرض «الكل»)
+// خريطة صافي مُجمّع لكل اسم (للفرز عند عرض «الكل») — nameAgg يجب أن يكون في scope الفرز لاحقاً حتى عند filter !== 'الكل'
 let nameToAggNet = {};
+let nameAgg = {}; // فارغ عند فرع معيّن؛ يُملأ عند «الكل» فقط
 // عند «الكل»: كروت الفائزين من إجماليات مُجمّعة لكل اسم (ليس أعلى صف فقط)
 if (filter === 'الكل') {
-  const nameAgg = {};
   const seenNames = new Set();
   filtered.forEach(emp => {
     if (seenNames.has(emp.name)) return;
@@ -4017,7 +4034,27 @@ if (filter === 'الكل') {
     const agg = getAggregatedStats(emp.name);
     const firstId = allEmpBranches[0].id;
     const hasAttendance26 = allEmpBranches.some(b => b.attendance26Days === true);
-    nameAgg[emp.name] = { aggNet, aggEval: agg.totalEvalBooking, aggCount: agg.totalCount, totalEvalGoogle: agg.totalEvalGoogle, hasAttendance26, firstId };
+    let aggBreakdown = {};
+    if (window.adoraTransferMode && allEmpBranches.length > 0) {
+      aggBreakdown = {
+        aggStaffCount: allEmpBranches.reduce((s, e) => s + (e._staffCount || 0), 0),
+        aggReception: allEmpBranches.reduce((s, e) => s + (e._reception || 0), 0),
+        aggBooking: allEmpBranches.reduce((s, e) => s + (e._booking || 0), 0),
+        aggMorning: allEmpBranches.reduce((s, e) => s + (e._morning || 0), 0),
+        aggEvening: allEmpBranches.reduce((s, e) => s + (e._evening || 0), 0),
+        aggNight: allEmpBranches.reduce((s, e) => s + (e._night || 0), 0),
+        aggAlertCount: allEmpBranches.reduce((s, e) => s + (e._alertCount || 0), 0),
+        aggAlertTotal: allEmpBranches.reduce((s, e) => s + (e._alertTotal || 0), 0),
+        aggVipRooms: {}
+      };
+      const activeVips = window.adoraActiveVipRooms || [];
+      activeVips.forEach(function (num) {
+        aggBreakdown.aggVipRooms[num] = allEmpBranches.reduce(function (s, e) {
+          return s + ((e._vipRooms && e._vipRooms[num]) || 0);
+        }, 0);
+      });
+    }
+    nameAgg[emp.name] = { aggNet, aggEval: agg.totalEvalBooking, aggCount: agg.totalCount, totalEvalGoogle: agg.totalEvalGoogle, hasAttendance26, firstId, ...aggBreakdown };
   });
   Object.keys(nameAgg).forEach(n => { nameToAggNet[n] = nameAgg[n].aggNet; });
   const nameToPoints = {};
@@ -4104,33 +4141,43 @@ document.getElementById('topRatedName').innerText = getWinnerName(viewWinners.ev
 document.getElementById('topRatedValue').innerText = viewWinners.eval.val > 0 ? viewWinners.eval.val + ' تقييم' : '-';
 document.getElementById('topBookerName').innerText = getWinnerName(viewWinners.book, nameOnly);
 document.getElementById('topBookerValue').innerText = viewWinners.book.val > 0 ? viewWinners.book.val + ' حجز' : '-';
-// Apply Sort — عند «الكل» الفرز بالصافي المُجمّع للموظف (من كل الفروع)، وإلا صافي الفرع
-filtered.sort((a, b) => {
-let valA, valB;
-if (currentSort.key === 'net') {
-  if (filter === 'الكل' && nameToAggNet[a.name] != null && nameToAggNet[b.name] != null) {
-    valA = nameToAggNet[a.name];
-    valB = nameToAggNet[b.name];
-  } else {
-    valA = calcStats(a).net;
-    valB = calcStats(b).net;
+// Apply Sort — عند «الكل» الفرز بالصافي المُجمّع للموظف (من كل الفروع)، وإلا صافي الفرع. دعم فرز حسب أي عمود من الترويسة.
+function getSortValue(emp, key, nameAgg, filter, nameCounts) {
+  const isDup = filter === 'الكل' && (nameCounts[emp.name] || 0) > 1;
+  const agg = nameAgg[emp.name];
+  if (key === 'net') {
+    return isDup && agg ? agg.aggNet : calcStats(emp).net;
   }
-} else if (currentSort.key === 'evaluations') {
-valA = a.evaluations || 0;
-valB = b.evaluations || 0;
-} else if (currentSort.key === 'name') {
-valA = a.name;
-valB = b.name;
-} else {
-valA = a[currentSort.key];
-valB = b[currentSort.key];
+  if (key === 'name') return emp.name;
+  if (key === 'evaluations') return emp.evaluations || 0;
+  if (key === 'count') return isDup && agg ? (agg.aggCount || 0) : (emp.count || 0);
+  if (key === 'evaluationsBooking') return isDup && agg ? (agg.aggEval || 0) : (emp.evaluationsBooking || 0);
+  if (key === 'evaluationsGoogle') return isDup && agg ? (agg.totalEvalGoogle || 0) : (emp.evaluationsGoogle || 0);
+  if (key === 'attendance26Days') return (isDup && agg ? agg.hasAttendance26 : emp.attendance26Days === true) ? 1 : 0;
+  if (key === 'staffCount') return isDup && agg && agg.aggStaffCount != null ? agg.aggStaffCount : (emp._staffCount || 0);
+  if (key === 'reception') return isDup && agg && agg.aggReception != null ? agg.aggReception : (emp._reception || 0);
+  if (key === 'booking') return isDup && agg && agg.aggBooking != null ? agg.aggBooking : (emp._booking || 0);
+  if (key === 'morning') return isDup && agg && agg.aggMorning != null ? agg.aggMorning : (emp._morning || 0);
+  if (key === 'evening') return isDup && agg && agg.aggEvening != null ? agg.aggEvening : (emp._evening || 0);
+  if (key === 'night') return isDup && agg && agg.aggNight != null ? agg.aggNight : (emp._night || 0);
+  if (key === 'alertCount') return isDup && agg && agg.aggAlertCount != null ? agg.aggAlertCount : (emp._alertCount || 0);
+  if (key === 'alertTotal') return isDup && agg && agg.aggAlertTotal != null ? agg.aggAlertTotal : (emp._alertTotal || 0);
+  if (key.indexOf('vip_') === 0) {
+    const num = key.replace('vip_', '');
+    if (isDup && agg && agg.aggVipRooms && agg.aggVipRooms[num] != null) return agg.aggVipRooms[num];
+    return (emp._vipRooms && emp._vipRooms[num]) || 0;
+  }
+  return emp[key] != null ? emp[key] : 0;
 }
-if (currentSort.key === 'name') {
-return currentSort.order === 'asc' ? valA.localeCompare(valB, 'ar') : valB.localeCompare(valA, 'ar');
-}
-const cmp = currentSort.order === 'asc' ? valA - valB : valB - valA;
-if (currentSort.key === 'net' && cmp === 0) return a.name.localeCompare(b.name, 'ar');
-return cmp;
+filtered.sort((a, b) => {
+  const valA = getSortValue(a, currentSort.key, nameAgg, filter, nameCounts);
+  const valB = getSortValue(b, currentSort.key, nameAgg, filter, nameCounts);
+  if (currentSort.key === 'name') {
+    return currentSort.order === 'asc' ? valA.localeCompare(valB, 'ar') : valB.localeCompare(valA, 'ar');
+  }
+  const cmp = currentSort.order === 'asc' ? valA - valB : valB - valA;
+  if (cmp === 0) return a.name.localeCompare(b.name, 'ar');
+  return cmp;
 });
 let totalFund = 0, totalNet = 0, totalBookings = 0, totalEval = 0;
 let totalNetNoEval = 0;
@@ -5126,6 +5173,8 @@ function updateNegativeRatingsHeader() {
 }
 
 function runAfterTableRender() {
+  if (typeof setupTableHeaderSort === 'function') setupTableHeaderSort();
+  if (typeof updateTableHeaderSortIndicator === 'function') updateTableHeaderSortIndicator();
   if (typeof updateNegativeRatingsHeader === 'function') updateNegativeRatingsHeader();
   // تحديث colspan الـ footer بعد بناء الجدول
   setTimeout(updateFooterSummaryColspans, 80);

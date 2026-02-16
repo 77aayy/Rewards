@@ -1,0 +1,20 @@
+---
+description: أدوار المكافآت (RBAC) والواجهة — تطابق JS و CSS وتجنب الخلافات
+globs: app/Rewards/**/*.js,app/Rewards/**/*.css,app/Rewards/**/*.html
+alwaysApply: false
+---
+
+# RBAC والواجهة في المكافآت
+
+## مصدر الحقيقة
+- منطق الإخفاء/الإظهار لكل دور في `rewards-rbac.js`: `hideElementsForSupervisor`, `hideElementsForHR`, `hideElementsForAccounting`, `hideElementsForManager`.
+- أي تغيير في ما يراه دور معيّن يُطبَّق أولاً في الـ JS، ثم يُراجع.
+
+## قواعد CSS احتياطية
+- لكل دور (supervisor, hr, accounting, manager): أضف قواعد في `styles.css` تحت `body.role-<الدور>` تخفي **نفس** العناصر التي يخفيها الـ JS.
+- الهدف: لو تأخر تنفيذ الـ JS، الواجهة تبقى صحيحة (لا يظهر زر أو قسم غير مسموح به).
+- عند إضافة أو تعديل إخفاء في `rewards-rbac.js` لدور ما، حدّث الـ CSS المقابل في `styles.css` في نفس التعديل أو فورًا بعده.
+
+## التزامن بين الملفات
+- مصدر التعديلات: `app/Rewards/`. لا تعدّل `public/rewards/` يدويًا — استخدم `npm run sync:rewards` من مجلد `app`.
+- عند المراجعة: قارن قائمة العناصر المخفاة في الـ JS بقواعد الـ CSS؛ لا تنتهِ بدون تطابق.
