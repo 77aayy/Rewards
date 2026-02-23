@@ -24,6 +24,7 @@ function parseEnv(content) {
 }
 
 let hasWarnings = false;
+let env = {};
 
 console.log('\n=== فحص قبل النشر (Pre-deploy Check) ===\n');
 
@@ -38,8 +39,7 @@ if (!fs.existsSync(envPath)) {
     hasWarnings = true;
   }
 } else {
-  const envContent = fs.readFileSync(envPath, 'utf8');
-  const env = parseEnv(envContent);
+  env = parseEnv(fs.readFileSync(envPath, 'utf8'));
   const adminKey = env.VITE_ADMIN_SECRET_KEY || '';
   if (!adminKey || adminKey === DEFAULT_ADMIN_KEY) {
     console.warn('⚠️  VITE_ADMIN_SECRET_KEY غير مضبوط أو لا يزال القيمة الافتراضية.');
@@ -50,27 +50,35 @@ if (!fs.existsSync(envPath)) {
   }
 }
 
-// 2. Rewards admin key
+// 2. Rewards admin key (يُحقَن من .env عبر inject-firebase-config عند البناء/المزامنة)
 const rewardsAppPath = path.join(appRoot, 'Rewards', 'src', 'app.js');
 if (fs.existsSync(rewardsAppPath)) {
   const content = fs.readFileSync(rewardsAppPath, 'utf8');
   const m = content.match(/ADMIN_SECRET_KEY\s*=\s*['"]([^'"]+)['"]/);
-  if (m && m[1] === DEFAULT_ADMIN_KEY) {
+  const appJsHasDefault = m && m[1] === DEFAULT_ADMIN_KEY;
+  const envHasNonDefaultKey = env.VITE_ADMIN_SECRET_KEY && env.VITE_ADMIN_SECRET_KEY !== DEFAULT_ADMIN_KEY;
+  if (appJsHasDefault && !envHasNonDefaultKey) {
     console.warn('⚠️  ADMIN_SECRET_KEY في Rewards/src/app.js لا يزال القيمة الافتراضية.');
     console.warn('   عدّل app.js ليقرأ من مصدر موحد أو حدّث يدوياً ثم npm run sync:rewards.');
     hasWarnings = true;
+  } else if (appJsHasDefault && envHasNonDefaultKey) {
+    console.log('✓ مفتاح الأدمن في .env غير الافتراضي — شغّل npm run sync:rewards أو npm run build لحقن القيمة في الملفات.');
   }
 }
 
 // 3. shared/firebase-config.json — تذكير إذا بقي apiKey التطوير
+const knownDevApiKey = 'AIzaSyAKpUAnc_EJXxGrhPPfTAgnFB13Qvs_ogk';
 if (fs.existsSync(firebaseConfigPath)) {
   try {
     const fc = JSON.parse(fs.readFileSync(firebaseConfigPath, 'utf8'));
-    const knownDevApiKey = 'AIzaSyAKpUAnc_EJXxGrhPPfTAgnFB13Qvs_ogk';
-    if (fc.apiKey === knownDevApiKey) {
+    const envApiKey = (env.VITE_FIREBASE_API_KEY || '').trim();
+    const productionFirebaseKey = envApiKey && envApiKey !== knownDevApiKey;
+    if (fc.apiKey === knownDevApiKey && !productionFirebaseKey) {
       console.warn('⚠️  shared/firebase-config.json لا يزال يحتوي على apiKey التطوير المعروف.');
-      console.warn('   للإنتاج: غيّر القيم في الملف أو احقنها من .env عند البناء. راجع SECURITY.md.');
+      console.warn('   للإنتاج: غيّر القيم في الملف أو ضع VITE_FIREBASE_API_KEY في .env ثم أعد البناء. راجع SECURITY.md.');
       hasWarnings = true;
+    } else if (productionFirebaseKey) {
+      console.log('✓ VITE_FIREBASE_API_KEY في .env (مفتاح غير التطوير) — البناء سيحقن من .env');
     }
   } catch (_) {}
 }

@@ -5575,6 +5575,8 @@ employeesToPrint = filter === 'الكل' ? [...db] : db.filter(e => e.branch ===
 }
 // Sort by name
 employeesToPrint.sort((a, b) => a.name.localeCompare(b.name, 'ar'));
+// Pricing config for calcStats (مطلوب لحساب الإجمالي والصافي في التقرير)
+const _pricingRenderUI = getPricingConfig();
 // Calculate totals
 let totalFund = 0, totalNet = 0, totalEval = 0, totalBookings = 0, totalNetNoEval = 0;
 let totalExcellenceBonus = 0, totalCommitmentBonus = 0;
@@ -5948,22 +5950,24 @@ alert('لا توجد بيانات للطباعة. يرجى التأكد من ت�
 return;
 }
 
-// Generate HTML — عند طباعة الكل تكون الصفحة بالعرض (landscape)
+// Generate HTML — عند طباعة الكل تكون الصفحة بالعرض (landscape) وتقرير محاسبي بصفوف ضيقة بدون أيقونات
 const printWindow = window.open('', '_blank');
 const reportTitle = filter === 'الكل' ? 'جميع الفروع' : filter;
 const useLandscape = !onlySelected && filter === 'الكل';
+const accountingStyle = !onlySelected && filter === 'الكل';
 const printContent = generatePrintHTML(reportTitle, periodText, reportDate, printRows, {
 totalFund, totalNet, totalEval, totalBookings, totalNetNoEval,
 totalExcellenceBonus, totalCommitmentBonus
-}, useLandscape);
+}, useLandscape, accountingStyle);
 printWindow.document.write(printContent);
 printWindow.document.close();
 setTimeout(() => {
 printWindow.print();
 }, 250);
 }
-function generatePrintHTML(reportTitle, periodText, reportDate, rows, totals, useLandscape) {
+function generatePrintHTML(reportTitle, periodText, reportDate, rows, totals, useLandscape, accountingStyle) {
 const pageOrientation = (useLandscape === true) ? 'landscape' : 'portrait';
+const compact = accountingStyle === true;
 return `<!DOCTYPE html>
 <html dir="rtl" lang="ar">
 <head>
@@ -5973,7 +5977,7 @@ return `<!DOCTYPE html>
 <style>
 @page {
   size: A4 ${pageOrientation};
-  margin: 10mm;
+  margin: ${compact ? '6mm' : '10mm'};
 }
 * { margin: 0; padding: 0; box-sizing: border-box; }
 body {
@@ -5981,42 +5985,42 @@ body {
   direction: rtl;
   background: #fff;
   color: #111;
-  padding: 4mm;
-  font-size: 10px;
-  line-height: 1.35;
+  padding: ${compact ? '2mm' : '4mm'};
+  font-size: ${compact ? '8px' : '10px'};
+  line-height: ${compact ? '1.2' : '1.35'};
 }
 .header {
   border-bottom: 2px solid #0d9488;
-  padding-bottom: 8px;
-  margin-bottom: 8px;
+  padding-bottom: ${compact ? '4px' : '8px'};
+  margin-bottom: ${compact ? '4px' : '8px'};
   text-align: center;
   page-break-after: avoid;
 }
-.header h1 { font-size: 16px; font-weight: 900; margin-bottom: 4px; color: #111; }
-.header h2 { font-size: 12px; font-weight: 700; color: #333; margin-bottom: 4px; }
+.header h1 { font-size: ${compact ? '14px' : '16px'}; font-weight: 900; margin-bottom: 2px; color: #111; }
+.header h2 { font-size: ${compact ? '10px' : '12px'}; font-weight: 700; color: #333; margin-bottom: 2px; }
 .header .info {
-  font-size: 10px;
+  font-size: ${compact ? '8px' : '10px'};
   color: #444;
-  margin-top: 6px;
+  margin-top: 4px;
   display: flex;
   justify-content: space-between;
   align-items: center;
   flex-wrap: wrap;
-  gap: 4px;
+  gap: 2px;
 }
 table {
   width: 100%;
   border-collapse: collapse;
-  margin: 6px 0;
-  font-size: 9px;
+  margin: ${compact ? '2px 0' : '6px 0'};
+  font-size: ${compact ? '7px' : '9px'};
   page-break-inside: auto;
 }
 thead { display: table-header-group; background: #f0fdfa; border-bottom: 2px solid #0d9488; }
 thead th {
-  padding: 5px 3px;
+  padding: ${compact ? '2px 1px' : '5px 3px'};
   text-align: center;
   font-weight: 800;
-  font-size: 9px;
+  font-size: ${compact ? '7px' : '9px'};
   color: #0f766e;
   border: 1px solid #99f6e4;
   background: #ccfbf1;
@@ -6024,43 +6028,43 @@ thead th {
 tbody tr { border-bottom: 1px solid #e5e7eb; page-break-inside: avoid; }
 tbody tr:nth-child(even) { background: #f8fafc; }
 tbody td {
-  padding: 4px 3px;
+  padding: ${compact ? '2px 1px' : '4px 3px'};
   text-align: center;
   border: 1px solid #e2e8f0;
-  font-size: 9px;
+  font-size: ${compact ? '7px' : '9px'};
   vertical-align: middle;
 }
-td.name-col { text-align: right; font-weight: 700; padding-right: 6px; color: #111; }
-td.branch-col { text-align: center; color: #475569; font-size: 8.5px; }
-td.badge-col { text-align: right; padding-right: 6px; font-size: 8px; }
+td.name-col { text-align: right; font-weight: 700; padding-right: ${compact ? '3px' : '6px'}; color: #111; }
+td.branch-col { text-align: center; color: #475569; font-size: ${compact ? '6.5px' : '8.5px'}; }
+td.badge-col { text-align: right; padding-right: ${compact ? '2px' : '6px'}; font-size: ${compact ? '6px' : '8px'}; }
 td.badge-col span {
   display: inline-block;
   background: #e0f2fe;
   color: #0369a1;
-  padding: 2px 4px;
+  padding: ${compact ? '1px 2px' : '2px 4px'};
   margin: 1px;
   border-radius: 2px;
   font-weight: 600;
 }
 td.number-col { font-weight: 700; font-family: 'IBM Plex Sans Arabic', 'Courier New', monospace; }
-td.bonus-col { color: #047857; font-weight: 800; }
+td.bonus-col { color: #047857; font-weight: 800; font-size: ${compact ? '6px' : 'inherit'}; }
 tfoot { background: #f0fdfa; border-top: 2px solid #0d9488; }
 tfoot tr.summary-row { background: #ccfbf1; font-weight: 800; }
 tfoot td {
-  padding: 5px 4px;
-  font-size: 10px;
+  padding: ${compact ? '3px 2px' : '5px 4px'};
+  font-size: ${compact ? '8px' : '10px'};
   font-weight: 900;
   border: 1px solid #0d9488;
   text-align: center;
   color: #111;
 }
-tfoot td.label-col { text-align: right; padding-right: 8px; font-size: 10px; }
+tfoot td.label-col { text-align: right; padding-right: ${compact ? '4px' : '8px'}; }
 .footer {
-  margin-top: 10px;
-  padding-top: 6px;
+  margin-top: ${compact ? '4px' : '10px'};
+  padding-top: ${compact ? '3px' : '6px'};
   border-top: 1px solid #cbd5e1;
   text-align: center;
-  font-size: 9px;
+  font-size: ${compact ? '7px' : '9px'};
   color: #64748b;
 }
 .approval-stamp-inline {
@@ -7890,85 +7894,92 @@ setTimeout(function () {
 function getEmployeeReportPrintStyles(forAllReports) {
   return `@page {
   size: A4 portrait;
-  margin: 6mm;
+  margin: 8mm;
 }
 * { margin: 0; padding: 0; box-sizing: border-box; }
-html, body { height: auto; overflow: visible; }
+html, body { height: auto; min-height: 100%; overflow: visible; width: 100%; }
 body {
   font-family: 'IBM Plex Sans Arabic', Arial, sans-serif;
   direction: rtl;
   background: #fff;
-  color: #111;
+  color: #0c0c0c;
   padding: 0;
   font-size: 10px;
-  line-height: 1.35;
+  line-height: 1.32;
+  max-width: 190mm;
+  margin: 0 auto;
 }
 @page { size: A4 portrait; margin: 10mm; }
 .print-page {
   width: 100%;
+  max-width: 190mm;
   page-break-inside: avoid;
   page-break-after: always;
   padding: 4mm 5mm;
+  padding-bottom: 12mm;
 }
-.print-page:last-child { page-break-after: avoid; }
+.print-page:last-child { page-break-after: avoid; padding-bottom: 18mm; }
+.detail-section.final-summary-section { padding-bottom: 8mm; margin-bottom: 0; }
 .header {
   border-bottom: 2px solid #0d9488;
-  padding-bottom: 6px;
-  margin-bottom: 6px;
+  padding-bottom: 5px;
+  margin-bottom: 5px;
   display: flex;
   justify-content: space-between;
   align-items: flex-end;
 }
-.header h1 { font-size: 14px; font-weight: 900; color: #111; }
-.header p { font-size: 9px; color: #333; margin: 1px 0; line-height: 1.3; }
+.header h1 { font-size: 13px; font-weight: 900; color: #0c0c0c; }
+.header p { font-size: 9px; color: #1c1c1c; margin: 1px 0; line-height: 1.25; }
 .header-right { text-align: left; }
 .detail-section {
-  margin-bottom: 6px;
-  padding: 8px 10px;
-  border: 1px solid #e2e8f0;
+  margin-bottom: 5px;
+  padding: 6px 8px;
+  border: 1px solid #cbd5e1;
   border-radius: 4px;
   background: #f8fafc;
   page-break-inside: avoid;
 }
 .detail-section h3 {
-  font-size: 11px;
+  font-size: 10px;
   font-weight: 800;
-  color: #111;
-  margin-bottom: 4px;
+  color: #0c0c0c;
+  margin-bottom: 3px;
   border-bottom: 1px solid #0d9488;
-  padding-bottom: 3px;
+  padding-bottom: 2px;
 }
 .summary-box {
   background: linear-gradient(135deg, #0d9488 0%, #0f766e 100%);
   color: #fff;
-  padding: 10px 12px;
+  padding: 8px 10px;
   border-radius: 6px;
   text-align: center;
-  margin: 8px 0;
+  margin: 6px 0;
   page-break-inside: avoid;
 }
-.summary-box h2 { font-size: 11px; font-weight: 800; margin-bottom: 2px; }
-.summary-box .amount { font-size: 18px; font-weight: 900; margin-top: 2px; }
+.summary-box h2 { font-size: 10px; font-weight: 800; margin-bottom: 2px; }
+.summary-box .amount { font-size: 16px; font-weight: 900; margin-top: 2px; }
 .row {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  padding: 3px 0;
-  border-bottom: 0.5px solid #e2e8f0;
+  padding: 2px 0;
+  border-bottom: 0.5px solid #cbd5e1;
   font-size: 9px;
-  line-height: 1.3;
+  line-height: 1.25;
+  color: #0c0c0c;
 }
 .row:last-child { border-bottom: none; }
 .row > div { flex: 1; min-width: 0; }
-.row > div > span:first-child { display: block; font-weight: 600; color: #111; }
-.row > div > span:last-child { display: block; font-size: 8px; color: #475569; line-height: 1.2; }
+.row > div > span:first-child { display: block; font-weight: 700; color: #0c0c0c; }
+.row > div > span:last-child { display: block; font-size: 8px; color: #334155; line-height: 1.2; }
+.row strong { color: #0c0c0c; font-weight: 800; }
 .total-row {
   font-weight: 900;
   font-size: 10px;
   border-top: 1.5px solid #0d9488;
   padding-top: 3px;
   margin-top: 3px;
-  color: #111;
+  color: #0c0c0c;
 }
 .approval-stamp {
   margin: 4mm auto 0;
@@ -7988,7 +7999,7 @@ body {
 .approval-stamp .checkmark { color: #047857; font-size: 18px; font-weight: 900; line-height: 1; }
 .approval-stamp .department { color: #991b1b; font-size: 8px; font-weight: 700; line-height: 1.1; }
 .approval-stamp .approved { color: #991b1b; font-size: 9px; font-weight: 800; line-height: 1.1; }
-.fund-note { font-size: 8px; color: #475569; margin-top: 2px; line-height: 1.25; }
+.fund-note { font-size: 8px; color: #334155; margin-top: 2px; line-height: 1.25; }
 `;
 }
 
@@ -8192,7 +8203,7 @@ ${discountDetails.map(discount => {
 <span>${label}:</span>
 <span style="display: block; font-size: 8px; color: #666; margin-top: 1px; margin-right: 10px;">${sub}</span>
 </div>
-<span><strong style="color: #ef4444;">-${discountAmount.toFixed(2)} ${unit}</strong></span>
+<span><strong style="color: #b91c1c;">-${discountAmount.toFixed(2)} ${unit}</strong></span>
 </div>
 `;
 }).join('')}
@@ -8202,7 +8213,7 @@ ${discountDetails.map(discount => {
 </div>
 </div>
 ` : ''}
-<div class="detail-section">
+<div class="detail-section final-summary-section">
 <h3>ملخص الحساب النهائي</h3>
 <div class="row">
 <span>إجمالي المكافآت:</span>
@@ -8249,7 +8260,7 @@ ${discountDetails.map(discount => {
   return `
 <div class="row">
 <span>${label}:</span>
-<span><strong style="color: #ef4444;">-${discountAmount.toFixed(2)} ${unit}</strong></span>
+<span><strong style="color: #b91c1c;">-${discountAmount.toFixed(2)} ${unit}</strong></span>
 </div>
 `;
 }).join('')}
@@ -8378,12 +8389,12 @@ function buildEmployeeReportBodyContentMultiBranch(report, periodText, reportDat
   if (!attendance26Days && !hasExcellenceBonus && !hasCommitmentBonus) rest += '<div class="row"><span>لا توجد حوافز إضافية</span><span>—</span></div>';
   rest += '</div>';
   var nbf = gross - fund;
-  rest += '<div class="detail-section"><h3>ملخص الحساب النهائي</h3><div class="row"><span>إجمالي المكافآت</span><span><strong>' + gross.toFixed(2) + ' ' + unit + '</strong></span></div><div class="row"><span>' + fundLabel + '</span><span><strong style="color: #ef4444;">' + fundSign + fund.toFixed(2) + ' ' + unit + '</strong></span></div><div class="row"><span>الصافي قبل الحوافز</span><span><strong>' + nbf.toFixed(2) + ' ' + unit + '</strong></span></div>';
-  if (attendanceBonus > 0) rest += '<div class="row"><span>+ حافز تحدي الظروف</span><span><strong style="color: #10b981;">+' + attendanceBonus.toFixed(2) + ' ' + unit + '</strong></span></div>';
+  rest += '<div class="detail-section final-summary-section"><h3>ملخص الحساب النهائي</h3><div class="row"><span>إجمالي المكافآت</span><span><strong>' + gross.toFixed(2) + ' ' + unit + '</strong></span></div><div class="row"><span>' + fundLabel + '</span><span><strong style="color: #b91c1c;">' + fundSign + fund.toFixed(2) + ' ' + unit + '</strong></span></div><div class="row"><span>الصافي قبل الحوافز</span><span><strong>' + nbf.toFixed(2) + ' ' + unit + '</strong></span></div>';
+  if (attendanceBonus > 0) rest += '<div class="row"><span>+ حافز تحدي الظروف</span><span><strong style="color: #047857;">+' + attendanceBonus.toFixed(2) + ' ' + unit + '</strong></span></div>';
   if (excellenceBonus > 0) rest += '<div class="row"><span>+ حافز التفوق</span><span><strong>+' + excellenceBonus.toFixed(2) + ' ' + unit + '</strong></span></div>';
   if (commitmentBonus > 0) rest += '<div class="row"><span>+ حافز الالتزام</span><span><strong>+' + commitmentBonus.toFixed(2) + ' ' + unit + '</strong></span></div>';
-  if (totalDiscountAmount > 0) rest += '<div class="row"><span>− الخصومات</span><span><strong style="color: #ef4444;">-' + totalDiscountAmount.toFixed(2) + ' ' + unit + '</strong></span></div>';
-  rest += '<div class="row total-row" style="background: #f0fdf4;"><span>' + summaryTitle + '</span><span><strong style="font-size: 13px; color: #10b981;">' + mainTotal.toFixed(2) + ' ' + unit + '</strong></span></div></div>';
+  if (totalDiscountAmount > 0) rest += '<div class="row"><span>− الخصومات</span><span><strong style="color: #b91c1c;">-' + totalDiscountAmount.toFixed(2) + ' ' + unit + '</strong></span></div>';
+  rest += '<div class="row total-row" style="background: #f0fdf4;"><span>' + summaryTitle + '</span><span><strong style="font-size: 13px; color: #047857;">' + mainTotal.toFixed(2) + ' ' + unit + '</strong></span></div></div>';
   rest += '<div class="approval-stamp"><span class="checkmark">✓</span><div class="department">إدارة التشغيل</div><div class="approved">معتمد</div></div>';
   return '<div class="print-page">' + header + summary + breakdownBlock + discountBlock + bookingsSection + evalsSection + rest + '</div>';
 }
@@ -8448,14 +8459,14 @@ function generateEmployeeReportPdfBlob() {
     var wrapper = document.createElement('div');
     wrapper.setAttribute('dir', 'rtl');
     wrapper.setAttribute('lang', 'ar');
-    wrapper.style.cssText = 'width: 210mm; max-width: 100%; margin: 0; padding: 0; background: #fff; color: #111; font-family: "IBM Plex Sans Arabic", Arial, sans-serif; box-sizing: border-box;';
+    wrapper.style.cssText = 'width: 190mm; max-width: 100%; margin: 0 auto; padding: 0 0 20mm 0; background: #fff; color: #0c0c0c; font-family: "IBM Plex Sans Arabic", Arial, sans-serif; box-sizing: border-box; min-height: auto; overflow: visible;';
     wrapper.innerHTML = '<style>' + printStyles + '</style>' + bodyContent;
     document.body.appendChild(wrapper);
     var opt = {
-      margin: 10,
+      margin: [10, 10, 16, 10],
       filename: fileName,
       image: { type: 'jpeg', quality: 0.98 },
-      html2canvas: { scale: 2, useCORS: true, logging: false },
+      html2canvas: { scale: 1.8, useCORS: true, logging: false },
       jsPDF: { unit: 'mm', format: 'a4', orientation: 'portrait' },
       pagebreak: { mode: 'auto', avoid: ['.row', '.detail-section', '.summary-box', '.approval-stamp', '.header'] }
     };
