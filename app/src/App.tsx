@@ -446,7 +446,7 @@ function clearAnalysisStorage() {
 
 export default function App() {
   const [authState, setAuthState] = useState<'checking' | 'signed_out' | 'signed_in'>('checking');
-  const [_authUserEmail, setAuthUserEmail] = useState('');
+  const [, setAuthUserEmail] = useState('');
   const [loginEmail, setLoginEmail] = useState(() => {
     try {
       return (localStorage.getItem(ADMIN_LAST_EMAIL_KEY) || '').toLowerCase();
@@ -591,8 +591,8 @@ export default function App() {
     // Email is strict: lowercase latin only. Block Arabic/uppercase immediately.
     const hasArabic = /[\u0600-\u06FF]/.test(rawValue);
     const hasUpper = /[A-Z]/.test(rawValue);
-    const hasDisallowed = /[^a-z0-9@._\-]/.test(rawValue);
-    const normalized = rawValue.toLowerCase().replace(/[^a-z0-9@._\-]/g, '');
+    const hasDisallowed = /[^a-z0-9@._-]/.test(rawValue);
+    const normalized = rawValue.toLowerCase().replace(/[^a-z0-9@._-]/g, '');
     const warning = (hasArabic || hasUpper || hasDisallowed)
       ? 'مسموح فقط: حروف إنجليزية صغيرة + أرقام + @ . _ - (بدون عربي أو Capital).'
       : '';
@@ -633,7 +633,7 @@ export default function App() {
       if (!payload) return;
       try {
         (ev.source as Window).postMessage(payload, ev.origin || '*');
-      } catch (_) { /* ignore */ }
+      } catch { /* ignore */ }
     };
     window.addEventListener('message', onMessage);
     return () => window.removeEventListener('message', onMessage);
@@ -2746,7 +2746,7 @@ const ARABIC_DAYS = ['الأحد', 'الإثنين', 'الثلاثاء', 'الأ
 function formatRegistrationTime(dateTimeStr: string): string {
   const m = dateTimeStr.match(/(\d{1,2})\/(\d{1,2})\/(\d{4})[,\s]+(\d{1,2}):(\d{2})\s*(AM|PM)/i);
   if (!m) return '—';
-  let hour = parseInt(m[4], 10);
+  const hour = parseInt(m[4], 10);
   const minute = m[5];
   const ampm = m[6].toUpperCase();
 
@@ -2878,6 +2878,7 @@ function EmployeeBreakdown({ staffList, data, config, dateRange }: {
         isRoomTransfer: d.isRoomTransfer,
       })),
     });
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- VIP_ROOMS is stable config
   }, [countedData]);
 
   /** مصدر موثّق واحد: جدول "ملخص المكافآت لكل موظف". كل الأرقام (المرجع، استقبال، بوكينج، صباح، مساء، ليل، VIP) تُحسب هنا فقط. الـ payload للتقرير = نفس rows. */
@@ -3156,7 +3157,8 @@ function EmployeeBreakdown({ staffList, data, config, dateRange }: {
     setTransferDone(true);
     setTimeout(() => setTransferDone(false), 3000);
     const adminKey = typeof window !== 'undefined' ? new URLSearchParams(window.location.search).get('admin') || '' : '';
-    const rewardsQuery = adminKey ? `?admin=${encodeURIComponent(adminKey)}&transfer=1&t=${Date.now()}` : `?transfer=1&t=${Date.now()}`;
+    const ts = Date.now();
+    const rewardsQuery = adminKey ? `?admin=${encodeURIComponent(adminKey)}&transfer=1&t=${ts}` : `?transfer=1&t=${ts}`;
     // حد أدنى لعرض طبقة الانتقال (400ms) ثم الانتقال — تجربة أكثر سلاسة
     const minOverlayMs = 400;
     const navDelay = Math.max(150, minOverlayMs);

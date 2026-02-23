@@ -1,5 +1,7 @@
 # Cloud Build & Firebase App Hosting
 
+> **ملاحظة:** إذا فشل البناء من **جذر المستودع**، راجع أيضاً **APP_HOSTING_ROOT.md** في جذر المستودع (ضبط Root directory = `app`).
+
 إذا ظهرت أخطاء البناء مثل:
 
 - `fail: google.nodejs.runtime` — "neither package.json nor any .js files found"

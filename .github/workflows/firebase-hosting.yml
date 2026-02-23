@@ -1,18 +1,19 @@
-# نشر تلقائي على Firebase Hosting عند كل push إلى main
-# الموقع: rewards-63e43.web.app
-# المصدر: app/ (التطبيق الكامل: React + Rewards)
+# نشر آمن على Firebase Hosting عند push إلى main
+# الموقع: rewards-63e43.web.app | المصدر: app/
 name: Deploy to Firebase Hosting
 on:
   push:
     branches: [main]
 jobs:
-  deploy:
+  build:
+    name: Build & Lint
     runs-on: ubuntu-latest
     defaults:
       run:
         working-directory: app
     steps:
-      - uses: actions/checkout@v4
+      - name: Checkout
+        uses: actions/checkout@v4
 
       - name: Setup Node.js
         uses: actions/setup-node@v4
@@ -24,15 +25,50 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
+      - name: Pre-deploy check (non-blocking in CI)
+        run: npm run pre-deploy-check || true
+        env:
+          CHECK_SECRETS: '0'
+
+      - name: Build
+        run: npm run build
+
+      - name: Lint
+        run: npm run lint
+
+      - name: Upload dist
+        uses: actions/upload-artifact@v4
+        with:
+          name: dist
+          path: dist
+
+  deploy:
+    name: Deploy to Firebase
+    needs: build
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Download dist
+        uses: actions/download-artifact@v4
+        with:
+          name: dist
+
+      - name: Place dist in app
+        run: mv dist app/dist
+
       - name: Install Firebase CLI
         run: npm install -g firebase-tools
 
-      - name: Build and deploy
+      - name: Deploy to Firebase Hosting
+        working-directory: app
         env:
           FIREBASE_TOKEN: ${{ secrets.FIREBASE_TOKEN }}
         run: |
           if [ -z "$FIREBASE_TOKEN" ]; then
-            echo "::error::أضف السر: Repo → Settings → Secrets and variables → Actions → FIREBASE_TOKEN"
+            echo "::error::FIREBASE_TOKEN غير مضبوط. أضفه: Repo → Settings → Secrets and variables → Actions → FIREBASE_TOKEN"
             exit 1
           fi
-          npm run deploy
+          firebase deploy --only hosting --non-interactive
+        timeout-minutes: 5

@@ -302,7 +302,7 @@ export function loadConfig(): AppConfig {
       }
     }
     // Migrate old rateVipByBranch (Record<string, Record<string, number>>) to new shape
-    let vipByBranch: Record<string, Record<string, VipSourceRate>> = {};
+    const vipByBranch: Record<string, Record<string, VipSourceRate>> = {};
     if (savedPricing?.rateVipByBranch) {
       for (const [branch, rooms] of Object.entries(savedPricing.rateVipByBranch)) {
         vipByBranch[branch] = {};
