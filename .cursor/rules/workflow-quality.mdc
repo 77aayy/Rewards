@@ -18,6 +18,12 @@ alwaysApply: true
 - **Linter verification**: Do not say "no errors" without running read_lints on modified files.
 - **Definition of done**: A task is not done until read_lints is clean, scope/context is verified, and user has confirmed any major logic change.
 
+## Bugbot & PR Review Triggers
+- **Run only on explicit trigger**: Do not run the bugbot debug workflow or full @cursor review unless the user comment contains one of:
+  - `bugbot run`
+  - `@cursor review`
+- When invoked from a PR comment without these phrases, do not start instrumentation or debugging; respond according to the actual request only.
+
 ## Interaction
 - **Language**: Code, comments, logs in English; replies and explanations in Arabic (Egyptian is fine).
 - **Output**: Deliver working code. Explain "basics" only when there is a specific trick or technical reason.

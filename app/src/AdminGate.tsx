@@ -30,8 +30,11 @@ export function AdminGate({ gateKey, setGateKey, onSubmit }: AdminGateProps) {
   const arabicInKey = hasArabic(gateKey);
 
   return (
-    <div dir="rtl" className="min-h-screen text-slate-100 relative flex items-center justify-center px-4 py-8">
-      <div className="glass rounded-2xl border border-white/15 p-6 sm:p-8 max-w-md w-full">
+    <div
+      dir="rtl"
+      className="min-h-screen relative flex items-center justify-center px-4 py-8 bg-gradient-to-br from-slate-50 via-slate-100 to-slate-200"
+    >
+      <div className="relative w-full max-w-md rounded-[28px] overflow-hidden shadow-[0_20px_60px_rgba(0,0,0,0.12)] bg-gradient-to-r from-slate-100 to-slate-300/90 border border-slate-200/80 p-6 sm:p-8">
         <div className="text-center mb-6">
           <img
             src="/rewards/unnamed.png"
@@ -39,12 +42,12 @@ export function AdminGate({ gateKey, setGateKey, onSubmit }: AdminGateProps) {
             className="w-14 h-14 sm:w-16 sm:h-16 object-contain rounded-lg mx-auto mb-3"
             onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; }}
           />
-          <h2 className="text-xl font-black text-turquoise mb-2">بوابة الإدارة</h2>
-          <p className="text-sm text-slate-300">أدخل مفتاح الدخول ثم ستظهر لك صفحة تسجيل الدخول (البريد وكلمة المرور).</p>
+          <h2 className="text-xl font-black text-slate-800 mb-2">بوابة الإدارة</h2>
+          <p className="text-sm text-slate-600">أدخل مفتاح الدخول ثم ستظهر لك صفحة تسجيل الدخول (البريد وكلمة المرور).</p>
         </div>
         <form onSubmit={onSubmit} className="space-y-4">
           <div>
-            <label className="text-xs text-slate-300 block mb-1">مفتاح بوابة الإدارة</label>
+            <label className="text-sm text-slate-600 block mb-1">مفتاح بوابة الإدارة</label>
             <input
               type="text"
               dir="ltr"
@@ -55,22 +58,25 @@ export function AdminGate({ gateKey, setGateKey, onSubmit }: AdminGateProps) {
               onKeyUp={handleKeyUp}
               onBlur={() => setShowCapsWarning(false)}
               placeholder="أدخل المفتاح"
-              className="w-full px-4 py-3 rounded-xl bg-white/10 border border-white/20 text-white placeholder:text-slate-500 focus:outline-none focus:border-[#14b8a6] focus:ring-2 focus:ring-[#14b8a6]/30"
+              className="w-full px-4 py-3 rounded-xl bg-white border border-slate-200 text-slate-800 placeholder:text-slate-400 focus:outline-none focus:border-teal-500 focus:ring-2 focus:ring-teal-500/20 transition-all"
             />
             {showCapsWarning && capsLockOn && (
-              <p className="mt-1.5 text-amber-400 text-xs flex items-center gap-1.5" role="alert">
+              <p className="mt-1.5 text-amber-600 text-sm flex items-center gap-1.5" role="alert">
                 <span aria-hidden>⚠️</span>
                 <span>الكابتل لوك (Caps Lock) مفعّل — قد يكون المفتاح بحروف صغيرة.</span>
               </p>
             )}
             {arabicInKey && (
-              <p className="mt-1.5 text-amber-400 text-xs flex items-center gap-1.5" role="alert">
+              <p className="mt-1.5 text-amber-600 text-sm flex items-center gap-1.5" role="alert">
                 <span aria-hidden>⚠️</span>
                 <span>يبدو أنك أدخلت حروفاً عربية. المفتاح عادة بالإنجليزي من الرابط.</span>
               </p>
             )}
           </div>
-          <button type="submit" className="w-full py-3 rounded-xl font-bold bg-[#14b8a6] hover:bg-[#0ea5a5] text-slate-950 transition-colors">
+          <button
+            type="submit"
+            className="w-full py-3.5 rounded-xl font-bold bg-gradient-to-b from-teal-500 to-teal-600 hover:from-teal-600 hover:to-teal-700 text-white shadow-md shadow-teal-500/25 transition-all"
+          >
             دخول
           </button>
         </form>

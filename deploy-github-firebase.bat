@@ -1,10 +1,17 @@
 @echo off
+REM Full deploy: sync + build + Firebase + git commit + push. Run from project root only.
 chcp 65001 >nul
 setlocal
 
 cd /d "%~dp0"
 set "ROOT=%~dp0"
 set "APP=%ROOT%app"
+
+if not exist "%APP%\package.json" (
+  echo ERROR: app\package.json not found. Run this script from the project root.
+  pause
+  exit /b 1
+)
 
 echo ========================================
 echo   Deploy: GitHub + Firebase
@@ -14,12 +21,6 @@ echo Before upload: check app\PRE-DEPLOY-STEPS.md (API key + test).
 echo(
 echo [1/3] Sync + Build + Firebase deploy (from app)...
 cd /d "%APP%"
-if not exist "package.json" (
-  echo ERROR: app\package.json not found.
-  pause
-  exit /b 1
-)
-
 call npm run deploy
 if errorlevel 1 (
   echo ERROR: Deploy failed. Check: firebase login or FIREBASE_TOKEN, and npm run build.

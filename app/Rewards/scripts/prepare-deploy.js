@@ -67,7 +67,8 @@ const appRoot = path.resolve(root, '..');
 const sharedOutDir = path.join(outDir, 'shared');
 const sharedSources = [
   { name: 'headerButtonsConfig.json', dest: 'headerButtonsConfig.json' },
-  { name: 'conditions-content.json', dest: 'conditions-content.json' }
+  { name: 'conditions-content.json', dest: 'conditions-content.json' },
+  { name: 'theme.js', dest: 'theme.js' }
 ];
 sharedSources.forEach(function (entry) {
   const src = path.join(appRoot, 'shared', entry.name);

@@ -1,21 +1,29 @@
 @echo off
+REM Start local Vite server and open admin page. Run from project root only.
 chcp 65001 >nul
+cd /d "%~dp0"
+
+if not exist "app\package.json" (
+  echo ERROR: app\package.json not found. Run this script from the project root.
+  pause
+  exit /b 1
+)
+
 cd /d "%~dp0app"
 
 echo ========================================
-echo   السيرفر المحلي + صفحة الأدمن
+echo   Local server + Admin page
 echo ========================================
-echo.
+echo/
 
 start "Vite Dev Server" cmd /k "npm run dev"
 
-echo انتظار تشغيل السيرفر...
+echo Waiting for server on port 5173...
 timeout /t 6 /nobreak >nul
 
 start "" "http://localhost:5173/?admin=ayman5255"
 
-echo.
-echo تم فتح المتصفح على صفحة الأدمن.
-echo نافذة السيرفر تبقى مفتوحة؛ للإيقاف اغلقها.
-echo.
+echo/
+echo Browser opened. Close the server window to stop.
+echo/
 pause

@@ -1,7 +1,13 @@
 /* مصدر واحد لأزرار الترويسة — يجب أن يكون @import في بداية الملف */
 @import url('../../shared/action-header-buttons.css');
 
-:root {
+:root,
+[data-theme="dark"] {
+--adora-font-sans: 'IBM Plex Sans Arabic', 'Segoe UI', Tahoma, sans-serif;
+--adora-text-h1: clamp(1.2rem, 2.5vw, 1.5rem);
+--adora-text-h2: clamp(1rem, 2vw, 1.2rem);
+--adora-text-body: 0.9375rem;
+--adora-text-small: 0.875rem;
 --turquoise: #40E0D0;
 --turquoise-light: #7FFFD4;
 --primary-500: #14b8a6;
@@ -9,6 +15,27 @@
 --dark-bg: #0a0e1a;
 --dark-card: #0f1729;
 --glow-turquoise: rgba(64, 224, 208, 0.4);
+--adora-bg: #0a0e1a;
+--adora-bg-card: #0f1729;
+--adora-text: #e2e8f0;
+--adora-text-secondary: #94a3b8;
+--adora-accent: #14b8a6;
+--adora-border: rgba(255, 255, 255, 0.1);
+--adora-hover-bg: rgba(20, 184, 166, 0.15);
+--adora-active-bg: rgba(20, 184, 166, 0.25);
+--adora-focus-border: rgba(20, 184, 166, 0.5);
+--adora-disabled: rgba(148, 163, 184, 0.5);
+--adora-success: #22c55e;
+--adora-warning: #eab308;
+--adora-error: #ef4444;
+--adora-scrollbar-track: rgba(15, 23, 41, 0.6);
+--adora-scrollbar-thumb: rgba(64, 224, 208, 0.4);
+--adora-scrollbar-thumb-hover: rgba(64, 224, 208, 0.6);
+--adora-modal-bg: rgba(15, 23, 41, 0.98);
+--adora-modal-header-bg: rgba(30, 41, 59, 0.6);
+--adora-input-bg: #1e293b;
+--adora-table-header-bg: rgba(15, 23, 41, 0.6);
+--adora-section-bg: linear-gradient(to bottom right, rgba(15, 23, 41, 0.8), rgba(30, 41, 59, 0.6), rgba(15, 23, 41, 0.8));
 
 /* ====== Fluid Column Widths — change here, whole table adapts ====== */
 --col-checkbox-w: 28px;
@@ -23,9 +50,692 @@
 --col-breakdown-w: 44px;
 --col-breakdown-vip-w: 40px;
 }
+/* صفحات قائمة بذاتها — ألوان هادئة مريحة للعين */
+:root {
+  --adora-page-bg: linear-gradient(to bottom right, #f8fafc, #f1f5f9, #e2e8f0);
+  --adora-standalone-card-radius: 28px;
+  --adora-standalone-card-shadow: 0 20px 60px rgba(0, 0, 0, 0.08);
+}
+
+[data-theme="light"] {
+--dark-bg: #f1f5f9;
+--dark-card: #f8fafc;
+--turquoise: #0f766e;
+--turquoise-light: #0d9488;
+--glow-turquoise: rgba(15, 118, 110, 0.2);
+--adora-bg: #f1f5f9;
+--adora-bg-card: #f8fafc;
+--adora-text: #334155;
+--adora-text-secondary: #475569;
+--adora-accent: #0f766e;
+--adora-border: rgba(100, 116, 139, 0.25);
+--adora-hover-bg: rgba(148, 163, 184, 0.15);
+--adora-active-bg: rgba(148, 163, 184, 0.2);
+--adora-focus-border: rgba(15, 118, 110, 0.5);
+--adora-disabled: rgba(71, 85, 105, 0.5);
+--adora-success: #166534;
+--adora-warning: #854d0e;
+--adora-error: #991b1b;
+--adora-scrollbar-track: rgba(100, 116, 139, 0.1);
+--adora-scrollbar-thumb: rgba(100, 116, 139, 0.3);
+--adora-scrollbar-thumb-hover: rgba(100, 116, 139, 0.45);
+--adora-modal-bg: #f1f5f9;
+--adora-modal-header-bg: #e2e8f0;
+--adora-input-bg: #f8fafc;
+--adora-table-header-bg: #e2e8f0;
+--adora-section-bg: linear-gradient(135deg, #f8fafc 0%, #f1f5f9 50%, #e2e8f0 100%);
+}
+
+/* خلفية الوضع الفاتح: ألوان هادئة مريحة للعين */
+[data-theme="light"] body {
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  background: linear-gradient(135deg, #f8fafc 0%, #f1f5f9 30%, #e2e8f0 70%, #f1f5f9 100%) !important;
+  background-attachment: fixed;
+}
+[data-theme="light"] body::before {
+  content: "";
+  position: fixed;
+  inset: 0;
+  z-index: 0;
+  pointer-events: none;
+  background-image:
+    radial-gradient(ellipse 80% 50% at 20% 0%, rgba(100, 116, 139, 0.03) 0%, transparent 50%),
+    radial-gradient(ellipse 60% 40% at 80% 100%, rgba(100, 116, 139, 0.02) 0%, transparent 50%),
+    linear-gradient(180deg, transparent 0%, rgba(100, 116, 139, 0.01) 50%, transparent 100%);
+  opacity: 1;
+}
+
+html {
+transition: background-color 0.3s ease, color 0.3s ease, border-color 0.3s ease;
+}
+
+[data-theme="light"] {
+font-size: 106.25%;
+}
+
+body {
+  font-family: var(--adora-font-sans);
+  font-size: var(--adora-text-body);
+  line-height: 1.55;
+  color: var(--adora-text);
+}
+
+/* Typography: readability — +35–40% for data/numbers across Rewards app */
+.text-\[9px\] { font-size: 12px !important; }
+.text-\[10px\] { font-size: 14px !important; }
+.text-\[11px\] { font-size: 15px !important; }
+.text-\[12px\] { font-size: 15px !important; }
+.text-xs { font-size: 0.875rem !important; }
+.number-display { font-size: clamp(0.85rem, 2vw, 1rem) !important; }
+.footer-summary-val { font-size: 0.875rem !important; }
+
+[data-theme="light"] .glass {
+  background: linear-gradient(135deg, rgba(255, 255, 255, 0.98) 0%, rgba(240, 253, 250, 0.95) 100%);
+  border: 1px solid rgba(13, 148, 136, 0.18);
+  box-shadow: 0 10px 40px rgba(13, 148, 136, 0.08), 0 4px 12px rgba(0, 0, 0, 0.06), inset 0 1px 0 rgba(255, 255, 255, 0.9);
+}
+
+/* هوية بصرية مميزة للترويسة في الوضع الفاتح — حد تيل واضح مع توهج خفيف */
+[data-theme="light"] header .glass {
+  border-right-width: 4px !important;
+  border-right-color: var(--adora-accent) !important;
+  box-shadow: 4px 0 20px rgba(15, 118, 110, 0.1), 0 8px 24px rgba(0, 0, 0, 0.05);
+}
+[data-theme="light"] header h1 {
+  color: var(--adora-text) !important;
+}
+[data-theme="light"] header .text-gray-300 {
+  color: var(--adora-text-secondary) !important;
+}
+
+.theme-toggle-btn {
+padding: 0.5rem;
+border-radius: 0.75rem;
+border: 1px solid var(--adora-border);
+background: var(--adora-bg-card);
+color: var(--adora-text);
+transition: background-color 0.3s ease, color 0.3s ease, border-color 0.3s ease;
+}
+.theme-toggle-btn:hover {
+background: var(--adora-hover-bg);
+}
+.theme-toggle-btn .theme-icon svg {
+color: var(--adora-accent);
+}
+
+/* ========== Rewards Light Mode Overrides (tabs, inputs, pills, tables) ========== */
+[data-theme="light"] #reportsTabsBar {
+border-color: var(--adora-border);
+}
+[data-theme="light"] #reportsTabArchived,
+[data-theme="light"] #reportsTabStatistics {
+color: var(--adora-text-secondary);
+}
+[data-theme="light"] #reportsTabArchived:hover,
+[data-theme="light"] #reportsTabStatistics:hover {
+color: var(--adora-text);
+}
+[data-theme="light"] #reportsEmployeeSearch {
+background: var(--adora-input-bg) !important;
+border-color: var(--adora-border) !important;
+color: var(--adora-text) !important;
+}
+[data-theme="light"] #reportsEmployeeSearch::placeholder {
+color: var(--adora-text-secondary);
+}
+[data-theme="light"] #reportsEmployeeSearch:focus {
+border-color: var(--adora-focus-border) !important;
+background: var(--adora-input-bg) !important;
+}
+[data-theme="light"] #archivedPeriodSelect {
+background: var(--adora-input-bg) !important;
+border-color: var(--adora-border) !important;
+color: var(--adora-text) !important;
+}
+[data-theme="light"] .filter-reports-pill:not(.active),
+[data-theme="light"] .filter-pill:not(.active) {
+background: var(--adora-input-bg);
+color: var(--adora-text);
+border: 1px solid var(--adora-border);
+}
+[data-theme="light"] .filter-reports-pill:not(.active):hover,
+[data-theme="light"] .filter-pill:not(.active):hover {
+background: var(--adora-hover-bg);
+border-color: var(--adora-accent);
+}
+[data-theme="light"] .filter-pill.active,
+[data-theme="light"] .filter-reports-pill.active {
+  background: linear-gradient(135deg, var(--adora-accent) 0%, #115e59 100%) !important;
+  color: #f8fafc !important;
+  border-color: transparent !important;
+  box-shadow: 0 2px 10px rgba(15, 118, 110, 0.25);
+  font-weight: 700;
+}
+/* حاوية الفلاتر — خلفية هادئة */
+[data-theme="light"] #branchFilters {
+  background: #f8fafc !important;
+  border: 1px solid rgba(100, 116, 139, 0.2);
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.04);
+}
+[data-theme="light"] .text-turquoise { color: var(--adora-accent) !important; }
+[data-theme="light"] .border-turquoise { border-color: var(--adora-accent) !important; }
+[data-theme="light"] #statEmployees,
+[data-theme="light"] .stats-card .text-turquoise,
+[data-theme="light"] .number-display.text-turquoise { color: var(--adora-accent) !important; }
+[data-theme="light"] #reportsTabCurrent.text-turquoise,
+[data-theme="light"] #reportsPage .text-turquoise { color: var(--adora-accent) !important; }
+[data-theme="light"] #reportsPage .border-turquoise { border-color: var(--adora-accent) !important; }
+[data-theme="light"] #currentPeriodStatsBlock .text-turquoise,
+[data-theme="light"] #currentPeriodStats .text-lg.font-black.text-turquoise { color: var(--adora-accent) !important; }
+[data-theme="light"] .glass .border-white\/10,
+[data-theme="light"] .glass .border-white\/15,
+[data-theme="light"] .glass [class*="border-white"] {
+border-color: var(--adora-border) !important;
+}
+[data-theme="light"] .glass .text-white:not(button):not(.active),
+[data-theme="light"] .glass h3.text-white,
+[data-theme="light"] .glass .text-white\/50,
+[data-theme="light"] .glass .text-white\/90 {
+color: var(--adora-text) !important;
+}
+[data-theme="light"] .glass .text-gray-400,
+[data-theme="light"] .glass .text-gray-500 {
+color: var(--adora-text-secondary) !important;
+}
+[data-theme="light"] .glass thead th,
+[data-theme="light"] table thead th {
+background: var(--adora-table-header-bg);
+color: var(--adora-text);
+border-color: var(--adora-border);
+font-size: 0.975rem !important;
+}
+[data-theme="light"] #targetTable tbody td,
+[data-theme="light"] #targetTable tfoot td {
+font-size: 0.975rem !important;
+}
+/* شارة مزامنة Firebase — ألوان هادئة */
+[data-theme="light"] #adoraFirebaseSyncBadge div {
+  background: rgba(100, 116, 139, 0.1) !important;
+  border-color: rgba(100, 116, 139, 0.2) !important;
+  color: var(--adora-accent) !important;
+}
+[data-theme="light"] #adoraFirebaseSyncBadge svg,
+[data-theme="light"] #adoraFirebaseSyncBadge svg path {
+  color: var(--adora-accent) !important;
+  stroke: var(--adora-accent) !important;
+}
+[data-theme="light"] .glass .text-\[9px\],
+[data-theme="light"] .glass .text-\[10px\],
+[data-theme="light"] .glass .text-\[11px\] {
+font-size: 0.75rem !important;
+}
+[data-theme="light"] input[type="text"].theme-input,
+[data-theme="light"] input[type="search"].theme-input,
+[data-theme="light"] select.theme-input {
+background: var(--adora-input-bg);
+border: 1px solid var(--adora-border);
+color: var(--adora-text);
+}
+[data-theme="light"] .btn-secondary,
+[data-theme="light"] .btn-modern:not(.primary) {
+background: var(--adora-input-bg);
+color: var(--adora-text);
+border-color: var(--adora-border);
+}
+[data-theme="light"] .btn-secondary:hover,
+[data-theme="light"] .btn-modern:not(.primary):hover {
+background: var(--adora-hover-bg);
+border-color: var(--adora-accent);
+}
+
+/* ========== الوضع الفاتح: ألوان هادئة مريحة للعين ========== */
+[data-theme="light"] .neon-glow {
+  border: 1px solid rgba(100, 116, 139, 0.3);
+  box-shadow: 0 4px 24px rgba(0, 0, 0, 0.06), 0 1px 3px rgba(0, 0, 0, 0.04);
+}
+/* كروت الإحصائيات — ظلال ناعمة وشريط علوي باهت */
+[data-theme="light"] .stats-grid-container .glass {
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.05), 0 1px 3px rgba(0, 0, 0, 0.03);
+  border: 1px solid rgba(100, 116, 139, 0.25);
+  position: relative;
+  overflow: hidden;
+}
+[data-theme="light"] .stats-grid-container .glass::before {
+  content: "";
+  position: absolute;
+  top: 0;
+  right: 0;
+  left: 0;
+  height: 3px;
+  background: linear-gradient(90deg, var(--adora-accent), rgba(15, 118, 110, 0.4));
+  opacity: 0.6;
+}
+[data-theme="light"] .stats-card .text-white,
+[data-theme="light"] .stats-card .font-black.text-white {
+  color: var(--adora-text) !important;
+}
+[data-theme="light"] #targetTable tbody tr:nth-child(odd) {
+background: var(--adora-table-header-bg);
+}
+[data-theme="light"] #targetTable tbody tr:nth-child(even) {
+  background: rgba(148, 163, 184, 0.06);
+}
+[data-theme="light"] #targetTable tbody tr {
+  transition: background 0.2s ease;
+}
+[data-theme="light"] #targetTable tbody tr:hover {
+  background: var(--adora-hover-bg);
+}
+[data-theme="light"] #targetTable tr.breakdown-group-row th {
+background: var(--adora-table-header-bg) !important;
+border-left: 1px solid var(--adora-border) !important;
+border-bottom: 1px solid var(--adora-border) !important;
+color: var(--adora-text) !important;
+}
+[data-theme="light"] #targetTable tr.breakdown-group-row th span {
+font-size: 0.9rem !important;
+color: var(--adora-text) !important;
+}
+[data-theme="light"] #targetTable tr.breakdown-group-row th span[style] {
+background: transparent !important;
+border-color: var(--adora-border) !important;
+}
+[data-theme="light"] .negative-ratings-header-row {
+  background: linear-gradient(90deg, rgba(254, 249, 195, 0.6) 0%, rgba(254, 226, 226, 0.4) 100%);
+  border-bottom: 1px solid rgba(202, 138, 4, 0.2);
+}
+[data-theme="light"] .negative-ratings-label-cell {
+  color: var(--adora-text);
+  font-weight: 700;
+  font-size: 12px;
+}
+[data-theme="light"] [id$="Modal"] .glass {
+  background: var(--adora-modal-bg) !important;
+  border: 1px solid rgba(100, 116, 139, 0.25) !important;
+  box-shadow: 0 24px 64px rgba(0, 0, 0, 0.08), 0 8px 24px rgba(0, 0, 0, 0.05);
+}
+[data-theme="light"] [id$="Modal"] .glass .text-gray-300,
+[data-theme="light"] [id$="Modal"] .glass .text-gray-400,
+[data-theme="light"] [id$="Modal"] .glass .text-gray-500,
+[data-theme="light"] [id$="Modal"] .glass .text-white:not(button):not(.btn):not([role="button"]) {
+  color: var(--adora-text) !important;
+}
+[data-theme="light"] [id$="Modal"] .glass .text-white\/90,
+[data-theme="light"] [id$="Modal"] .glass .text-white\/80 {
+  color: var(--adora-text-secondary) !important;
+}
+[data-theme="light"] #employeeReportModal {
+  background: rgba(0, 0, 0, 0.35) !important;
+}
+[data-theme="light"] #employeeReportModal > div[class*="rounded"] {
+  background: #f1f5f9 !important;
+  border: 1px solid rgba(100, 116, 139, 0.25) !important;
+  box-shadow: 0 25px 70px rgba(0, 0, 0, 0.1), 0 4px 20px rgba(0, 0, 0, 0.06) !important;
+}
+[data-theme="light"] #employeeReportModal .text-gray-300,
+[data-theme="light"] #employeeReportModal .text-gray-400,
+[data-theme="light"] #employeeReportModal .text-white:not(button):not(.btn) {
+  color: #334155 !important;
+}
+[data-theme="light"] #employeeReportModal h2.text-turquoise,
+[data-theme="light"] #employeeReportModal .text-turquoise {
+  color: #0f766e !important;
+}
+[data-theme="light"] #employeeReportModal .text-gray-400:hover {
+  color: var(--adora-text) !important;
+}
+/* ملخص الحساب — خلفية رمادية فاتحة مريحة للعين */
+[data-theme="light"] #employeeReportModal .employee-report-content [class*="from-slate"] {
+  background: linear-gradient(to right, #e2e8f0, #f1f5f9) !important;
+  border-color: rgba(100, 116, 139, 0.3) !important;
+  color: #334155 !important;
+}
+[data-theme="light"] #employeeReportModal .employee-report-content [class*="from-slate"] h5,
+[data-theme="light"] #employeeReportModal .employee-report-content [class*="from-slate"] .text-white,
+[data-theme="light"] #employeeReportModal .employee-report-content [class*="from-slate"] .text-gray-300 {
+  color: #334155 !important;
+}
+[data-theme="light"] #employeeReportModal .employee-report-content .border-white\/10 {
+  border-color: rgba(100, 116, 139, 0.2) !important;
+}
+/* صناديق الهيدر والملخص (from-turquoise) — تفتيح هادئ */
+[data-theme="light"] #employeeReportModal .employee-report-content [class*="from-turquoise"] {
+  background: linear-gradient(to right, #f0fdfa, #f8fafc) !important;
+  border-color: rgba(13, 148, 136, 0.2) !important;
+}
+/* صناديق ملونة — ألوان هادئة غير صاخبة */
+[data-theme="light"] #employeeReportModal [class*="bg-orange-500"] {
+  background: #fff7ed !important;
+  border-color: rgba(194, 65, 12, 0.25) !important;
+}
+[data-theme="light"] #employeeReportModal [class*="bg-purple-500"] {
+  background: #faf5ff !important;
+  border-color: rgba(126, 34, 206, 0.25) !important;
+}
+[data-theme="light"] #employeeReportModal [class*="bg-yellow-500"] {
+  background: #fefce8 !important;
+  border-color: rgba(161, 98, 7, 0.25) !important;
+}
+[data-theme="light"] #employeeReportModal [class*="bg-green-500"] {
+  background: #f0fdf4 !important;
+  border-color: rgba(21, 128, 61, 0.25) !important;
+}
+[data-theme="light"] #employeeReportModal [class*="bg-turquoise"] {
+  background: #f0fdfa !important;
+  border-color: rgba(13, 148, 136, 0.25) !important;
+}
+[data-theme="light"] #employeeReportModal .text-orange-400,
+[data-theme="light"] #employeeReportModal .text-orange-300,
+[data-theme="light"] #employeeReportModal [class*="text-orange-300"] {
+  color: #9a3412 !important;
+}
+[data-theme="light"] #employeeReportModal .text-purple-400,
+[data-theme="light"] #employeeReportModal .text-purple-300 {
+  color: #6b21a8 !important;
+}
+[data-theme="light"] #employeeReportModal .text-yellow-400,
+[data-theme="light"] #employeeReportModal .text-yellow-300,
+[data-theme="light"] #employeeReportModal .text-yellow-200 {
+  color: #854d0e !important;
+}
+[data-theme="light"] #employeeReportModal .text-green-400 {
+  color: #166534 !important;
+}
+[data-theme="light"] #employeeReportModal .text-red-400 {
+  color: #991b1b !important;
+}
+/* أزرار التقرير — ألوان هادئة */
+[data-theme="light"] #employeeReportModal .glass {
+  background: #e2e8f0 !important;
+  border: 1px solid rgba(100, 116, 139, 0.3) !important;
+}
+[data-theme="light"] #employeeReportModal button.glass {
+  color: #334155 !important;
+  background: #cbd5e1 !important;
+  border: 1px solid rgba(100, 116, 139, 0.35) !important;
+}
+[data-theme="light"] #employeeReportModal button.glass:hover,
+[data-theme="light"] #employeeReportModal button.glass.hover\:bg-white\/10:hover {
+  background: #94a3b8 !important;
+  color: #0f172a !important;
+}
+[data-theme="light"] #employeeReportModal button.text-white,
+[data-theme="light"] #employeeReportModal button.glass .text-white {
+  color: #334155 !important;
+}
+[data-theme="light"] #employeeReportModal button.text-gray-300 {
+  color: #475569 !important;
+}
+[data-theme="light"] #reportsPage .text-gray-300,
+[data-theme="light"] #reportsPage .text-gray-400,
+[data-theme="light"] #reportsPage .text-gray-500 {
+  color: var(--adora-text) !important;
+}
+[data-theme="light"] #reportsPage .text-white:not(button):not(.btn):not(.filter-reports-pill):not(.filter-pill):not(.active) {
+  color: var(--adora-text) !important;
+}
+[data-theme="light"] #reportsPage .filter-reports-pill:not(.active),
+[data-theme="light"] #reportsPage .filter-pill:not(.active) {
+  color: var(--adora-text-secondary) !important;
+}
+[data-theme="light"] #employeePerformanceTable tbody td,
+[data-theme="light"] #employeePerformanceTableBody td {
+  color: var(--adora-text) !important;
+}
+[data-theme="light"] #employeePerformanceTable tbody td.text-gray-300,
+[data-theme="light"] #employeePerformanceTableBody td.text-gray-300 {
+  color: var(--adora-text-secondary) !important;
+}
+[data-theme="light"] #employeePerformanceTable .text-turquoise,
+[data-theme="light"] #employeePerformanceTableBody .text-turquoise {
+  color: var(--adora-accent) !important;
+}
+[data-theme="light"] #currentPeriodStats .text-gray-300,
+[data-theme="light"] #currentPeriodStatsBlock .text-gray-300,
+[data-theme="light"] #currentPeriodStatsHeaderBlock .text-gray-300,
+[data-theme="light"] #statisticsReportsContent .text-gray-300 {
+  color: var(--adora-text) !important;
+}
+[data-theme="light"] #statisticsSectionTitle,
+[data-theme="light"] #cumulativePointsBody,
+[data-theme="light"] #cumulativePointsSection .text-turquoise,
+[data-theme="light"] #reportsPage h2 .text-turquoise,
+[data-theme="light"] #reportsPage h3 .text-turquoise {
+  color: var(--adora-accent) !important;
+}
+[data-theme="light"] #cumulativePointsSection button span {
+  color: var(--adora-text) !important;
+}
+[data-theme="light"] #reportsPage label.text-gray-300,
+[data-theme="light"] #archivedReportsContent label.text-gray-300 {
+  color: var(--adora-text) !important;
+}
+[data-theme="light"] #reportsEmployeesGrid .text-turquoise {
+  color: var(--adora-accent) !important;
+}
+[data-theme="light"] #reportsPage .text-green-400,
+[data-theme="light"] #reportsPage .text-green-500 {
+  color: var(--adora-success) !important;
+}
+/* تقارير: أي نص رمادي داخل الصفحة — ثيم فاتح */
+[data-theme="light"] #reportsPage [class*="text-gray-300"],
+[data-theme="light"] #reportsPage [class*="text-gray-400"],
+[data-theme="light"] #statisticsReportsContent div.text-sm,
+[data-theme="light"] #currentPeriodStatsBlock div.text-sm,
+[data-theme="light"] #currentPeriodStatsTableWrap td {
+  color: var(--adora-text) !important;
+}
+
+/* نافذة إدارة الإداريين — ثيم فاتح: خلفية وحدود ونصوص واضحة */
+[data-theme="light"] #adminManagementModal .glass {
+  background: var(--adora-modal-bg) !important;
+  border: 1px solid var(--adora-border) !important;
+}
+[data-theme="light"] #adminManagementModal .text-gray-300,
+[data-theme="light"] #adminManagementModal .text-gray-400,
+[data-theme="light"] #adminManagementModal .text-white:not(button) {
+  color: var(--adora-text) !important;
+}
+[data-theme="light"] #adminManagementModal button.text-gray-400:hover {
+  color: var(--adora-text) !important;
+}
+[data-theme="light"] #adminManagementModal button.text-gray-300,
+[data-theme="light"] #adminManagementModal .glass button {
+  color: var(--adora-text) !important;
+}
+[data-theme="light"] #adminManagementModal button:hover {
+  background: var(--adora-hover-bg) !important;
+}
+[data-theme="light"] #adminManagementModal .border-white\/10,
+[data-theme="light"] #adminManagementModal [class*="border-white"] {
+  border-color: var(--adora-border) !important;
+}
+[data-theme="light"] #adminManagementModal p[style*="color"],
+[data-theme="light"] #adminManagementModal div[style*="color"] {
+  color: var(--adora-text) !important;
+}
+
+/* نافذة كيفية حساب التقييم — ثيم فاتح: نصوص وحدود وخلفيات واضحة */
+[data-theme="light"] #ratingExplanationModal .glass {
+  background: var(--adora-modal-bg) !important;
+  border: 1px solid var(--adora-border) !important;
+}
+[data-theme="light"] #ratingExplanationModal .text-gray-200,
+[data-theme="light"] #ratingExplanationModal .text-gray-300,
+[data-theme="light"] #ratingExplanationModal .text-gray-400,
+[data-theme="light"] #ratingExplanationModal .text-white {
+  color: var(--adora-text) !important;
+}
+[data-theme="light"] #ratingExplanationModal .text-turquoise,
+[data-theme="light"] #ratingExplanationModal .text-turquoise\/90 {
+  color: var(--adora-accent) !important;
+}
+[data-theme="light"] #ratingExplanationModal .text-green-300,
+[data-theme="light"] #ratingExplanationModal .text-green-400 {
+  color: var(--adora-success) !important;
+}
+[data-theme="light"] #ratingExplanationModal .text-yellow-400,
+[data-theme="light"] #ratingExplanationModal .text-orange-400 {
+  color: var(--adora-warning) !important;
+}
+[data-theme="light"] #ratingExplanationModal .text-red-400 {
+  color: var(--adora-error) !important;
+}
+[data-theme="light"] #ratingExplanationModal button.text-gray-400:hover,
+[data-theme="light"] #ratingExplanationModal .hover\:text-white:hover {
+  color: var(--adora-text) !important;
+}
+[data-theme="light"] #ratingExplanationModal .hover\:bg-white\/10:hover {
+  background: var(--adora-hover-bg) !important;
+}
+[data-theme="light"] #ratingExplanationModal .border-white\/10,
+[data-theme="light"] #ratingExplanationModal [class*="border-white"] {
+  border-color: var(--adora-border) !important;
+}
+[data-theme="light"] #ratingExplanationModal .bg-white\/5 {
+  background: var(--adora-hover-bg) !important;
+}
+[data-theme="light"] #ratingExplanationModal .bg-turquoise\/5,
+[data-theme="light"] #ratingExplanationModal .bg-turquoise\/10 {
+  background: rgba(20, 184, 166, 0.08) !important;
+}
+[data-theme="light"] #ratingExplanationModal .border-turquoise\/20,
+[data-theme="light"] #ratingExplanationModal .border-turquoise\/30 {
+  border-color: rgba(13, 148, 136, 0.35) !important;
+}
+
+[data-theme="light"] .footer-summary,
+[data-theme="light"] .footer-summary-final {
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.98) 0%, var(--adora-table-header-bg) 100%) !important;
+  border-top: 2px solid rgba(13, 148, 136, 0.25);
+  color: var(--adora-text);
+  box-shadow: 0 -4px 20px rgba(13, 148, 136, 0.05);
+}
+[data-theme="light"] .footer-summary td,
+[data-theme="light"] .footer-summary-final td,
+[data-theme="light"] #bonusesCombinedRow td {
+background: var(--adora-table-header-bg) !important;
+}
+[data-theme="light"] #footerRowFinalTotal td {
+background: var(--adora-table-header-bg) !important;
+}
+[data-theme="light"] .footer-summary-label,
+[data-theme="light"] .footer-summary-val {
+color: var(--adora-text);
+font-size: 0.875rem !important;
+}
+[data-theme="light"] .footer-summary-net {
+color: var(--adora-accent);
+}
+[data-theme="light"] .footer-summary-final .footer-summary-net {
+color: var(--adora-accent) !important;
+}
+[data-theme="light"] .footer-summary .text-turquoise,
+[data-theme="light"] .footer-summary-final .text-turquoise {
+color: var(--adora-accent) !important;
+}
+[data-theme="light"] .footer-summary .text-orange-400 {
+color: #9a3412 !important;
+}
+[data-theme="light"] .footer-summary .text-white\/30 {
+color: var(--adora-text-secondary) !important;
+}
+[data-theme="light"] #bonusesCombinedRow .rounded-lg {
+  background: linear-gradient(135deg, rgba(255, 255, 255, 0.95) 0%, rgba(240, 253, 250, 0.9) 100%) !important;
+  box-shadow: 0 4px 16px rgba(13, 148, 136, 0.08), inset 0 1px 0 rgba(255, 255, 255, 0.9);
+  border: 1px solid rgba(13, 148, 136, 0.22);
+}
+[data-theme="light"] #bonusesCombinedRow .rounded-lg .text-turquoise {
+  color: var(--adora-accent) !important;
+}
+[data-theme="light"] #bonusesCombinedRow .text-white {
+color: var(--adora-text) !important;
+}
+[data-theme="light"] #bonusesCombinedRow .text-turquoise.font-bold,
+[data-theme="light"] #bonusesCombinedRow .rounded-lg > .text-turquoise {
+  color: var(--adora-accent) !important;
+}
+[data-theme="light"] #bonusesCombinedRow .rounded-md {
+background: rgba(15, 23, 42, 0.06) !important;
+border-color: var(--adora-border) !important;
+}
+[data-theme="light"] #targetTable th,
+[data-theme="light"] #targetTable td {
+border-color: var(--adora-border) !important;
+}
+[data-theme="light"] #targetTable thead tr.main-header-row th {
+  background: linear-gradient(180deg, #f0fdfa 0%, #e6fffa 100%) !important;
+  color: #0c1222 !important;
+  font-weight: 700 !important;
+  border-bottom: 1px solid rgba(13, 148, 136, 0.2) !important;
+}
+[data-theme="light"] .footer-summary-label,
+[data-theme="light"] .footer-summary-val {
+font-size: 1.125rem !important;
+font-weight: 600 !important;
+}
+[data-theme="light"] .badges-wrapper span {
+font-size: 0.8rem !important;
+}
+[data-theme="light"] .glass .badges-wrapper .text-yellow-400,
+[data-theme="light"] .glass .badges-wrapper .text-yellow-500,
+[data-theme="light"] .glass .badges-wrapper .text-blue-400,
+[data-theme="light"] .glass .badges-wrapper .text-blue-500,
+[data-theme="light"] .glass .badges-wrapper .text-green-400,
+[data-theme="light"] .glass .badges-wrapper .text-green-500,
+[data-theme="light"] .glass .badges-wrapper .text-red-400,
+[data-theme="light"] .glass .badges-wrapper .text-red-500 {
+color: var(--adora-text) !important;
+}
+
+/* تباين الأرقام والنصوص داخل الجدول — الوضع الفاتح (ألوان أغمق) */
+[data-theme="light"] .glass #targetTable .text-amber-300,
+[data-theme="light"] .glass #targetTable .text-yellow-300,
+[data-theme="light"] .glass #targetTable .text-yellow-400 {
+color: #92400e !important;
+}
+[data-theme="light"] .glass #targetTable .text-blue-400,
+[data-theme="light"] .glass #targetTable .text-indigo-300 {
+color: #1e40af !important;
+}
+[data-theme="light"] .glass #targetTable .text-red-300,
+[data-theme="light"] .glass #targetTable .text-red-400 {
+color: var(--adora-error) !important;
+}
+[data-theme="light"] .glass #targetTable .text-green-400 {
+color: var(--adora-success) !important;
+}
+[data-theme="light"] .glass #targetTable .text-primary-500 {
+color: var(--adora-accent) !important;
+}
+[data-theme="light"] .glass #targetTable .text-gray-700,
+[data-theme="light"] .glass #targetTable .text-gray-400 {
+color: var(--adora-text-secondary) !important;
+}
+[data-theme="light"] .glass #targetTable thead .text-amber-300,
+[data-theme="light"] .glass #targetTable thead .text-yellow-300,
+[data-theme="light"] .glass #targetTable thead .text-red-300,
+[data-theme="light"] .glass #targetTable thead .text-violet-300 {
+color: var(--adora-text) !important;
+}
+[data-theme="light"] .glass #targetTable .text-orange-100,
+[data-theme="light"] .glass #targetTable .text-orange-300,
+[data-theme="light"] .glass #targetTable .text-orange-400 {
+color: #9a3412 !important;
+}
+
+/* Theme utility classes for JS-generated HTML (use in app.js / app-extensions.js) */
+.theme-text { color: var(--adora-text); }
+.theme-text-secondary { color: var(--adora-text-secondary); }
+.theme-bg { background-color: var(--adora-bg-card); }
+.theme-bg-subtle { background: var(--adora-input-bg); }
+.theme-border { border-color: var(--adora-border); }
+
 /* ترويسة موحدة مع التحليل — لون الحد والخط */
 .border-turquoise { border-color: var(--turquoise); }
 .text-turquoise { color: var(--turquoise); }
+#headerPeriodRange { color: var(--adora-accent) !important; }
 /* ========== Mobile First: عرض الجوال أولاً، تنكمش وتتمدد حسب الشاشة ========== */
 html {
 overflow-x: hidden;
@@ -70,6 +780,8 @@ margin-left: auto;
 margin-right: auto;
 }
 [id="conditionsModal"] [class*="max-w-2xl"] { max-width: min(100%, 42rem); }
+[id="discountsModal"] [class*="max-w-3xl"],
+[id="discountsModal"] .glass.rounded-xl { max-width: min(100%, 33.6rem) !important; }
 [id="instructionsModal"] [class*="max-w-3xl"] { max-width: min(100%, 48rem); }
 [id="employeeReportModal"] [class*="max-w-4xl"] { max-width: min(100%, 56rem); }
 /* Hide fund column (العمال) in table body - value is shown in footer */
@@ -111,7 +823,7 @@ display: table-cell !important;
 #targetTable td.col-breakdown {
   min-width: 38px;
   white-space: nowrap;
-  font-size: 0.7rem;
+  font-size: 0.84rem;
   padding: 0.25rem 0.2rem !important;
   text-align: center;
 }
@@ -171,7 +883,7 @@ display: table-cell !important;
   text-align: right;
   white-space: nowrap;
   padding: 0.3rem 0.4rem !important;
-  font-size: 0.8rem;
+  font-size: 0.96rem;
   line-height: 1.3;
 }
 #targetTable tbody td.col-name > div {
@@ -183,7 +895,7 @@ display: table-cell !important;
 /* توحيد الحشو والارتفاع في الهيدر والجسم — Compact readable */
 #targetTable thead th {
   padding: 0.4rem 0.3rem;
-  font-size: 0.7rem;
+  font-size: 0.84rem;
   font-weight: 600;
   vertical-align: middle;
   min-height: 2rem;
@@ -195,18 +907,18 @@ display: table-cell !important;
 /* Breakdown mode headers — slightly smaller but readable */
 #targetTable.adora-breakdown-mode thead th {
   padding: 0.3rem 0.2rem;
-  font-size: 0.65rem;
+  font-size: 0.78rem;
   line-height: 1.2;
 }
 #targetTable.adora-breakdown-mode thead th.col-breakdown,
 #targetTable.adora-breakdown-mode thead th.col-breakdown-vip {
-  font-size: 0.625rem;
+  font-size: 0.75rem;
   padding: 0.25rem 0.15rem;
 }
 #targetTable tbody td {
   padding: 0.35rem 0.3rem;
   vertical-align: middle;
-  font-size: 0.8rem;
+  font-size: 0.96rem;
   line-height: 1.35;
 }
 #targetTable tbody td.col-breakdown,
@@ -214,13 +926,93 @@ display: table-cell !important;
 #targetTable tbody td.col-rate {
   padding: 0.3rem 0.2rem;
   vertical-align: middle;
-  font-size: 0.8rem;
+  font-size: 0.96rem;
 }
 #targetTable.adora-breakdown-mode tbody td.col-breakdown,
 #targetTable.adora-breakdown-mode tbody td.col-breakdown-vip {
   padding: 0.25rem 0.15rem;
-  font-size: 0.75rem;
+  font-size: 0.9rem;
 }
+
+/* ========== جدول موحد — خط واحد، لون بيانات واحد، صافي بلون العلامة (تجربة بصرية احترافية) ========== */
+#targetTable thead tr.main-header-row th {
+  font-size: 0.975rem !important;
+  font-weight: 600 !important;
+  padding: 0.4rem 0.35rem !important;
+}
+#targetTable tbody td {
+  font-size: 0.875rem !important;
+  line-height: 1.4;
+  padding: 0.4rem 0.35rem !important;
+}
+#targetTable tbody td.col-net {
+  font-size: 0.9rem !important;
+  font-weight: 700 !important;
+}
+#targetTable tbody td.col-count,
+#targetTable tbody td.col-breakdown,
+#targetTable tbody td.col-eval-booking,
+#targetTable tbody td.col-eval-google,
+#targetTable tbody td.col-fund {
+  font-size: 0.875rem !important;
+  font-weight: 600 !important;
+}
+#targetTable tbody td.col-attendance {
+  font-size: 0.875rem !important;
+  font-weight: 600 !important;
+}
+#targetTable tbody td.col-attendance * {
+  font-size: 0.875rem !important;
+}
+#targetTable tbody td.col-attendance .text-\[9px\],
+#targetTable tbody td.col-attendance .text-\[10px\] {
+  font-size: 0.75rem !important;
+}
+#targetTable .badges-wrapper span {
+  font-size: 0.8rem !important;
+  padding: 0.12rem 0.35rem !important;
+}
+#targetTable tbody td.col-name {
+  font-size: 0.875rem !important;
+}
+#targetTable tbody td.col-name .text-\[10px\] {
+  font-size: 0.75rem !important;
+  line-height: 1.35;
+}
+#targetTable tbody td.col-m {
+  font-size: 0.8125rem !important;
+}
+/* لون موحد للأرقام — لون النص الأساسي؛ الصافي فقط بلون العلامة */
+#targetTable tbody td.col-count,
+#targetTable tbody td.col-breakdown,
+#targetTable tbody td.col-eval-booking,
+#targetTable tbody td.col-eval-google,
+#targetTable tbody td.col-fund {
+  color: var(--adora-text) !important;
+}
+#targetTable tbody td.col-count *,
+#targetTable tbody td.col-breakdown *,
+#targetTable tbody td.col-eval-booking *,
+#targetTable tbody td.col-eval-google *,
+#targetTable tbody td.col-fund * {
+  color: inherit !important;
+}
+#targetTable tbody td.col-net,
+#targetTable tbody td.col-net * {
+  color: var(--adora-accent) !important;
+}
+#targetTable tbody td.col-attendance {
+  color: var(--adora-text) !important;
+}
+#targetTable tbody td.col-attendance .text-green-400,
+#targetTable tbody td.col-attendance .text-green-500 {
+  color: var(--adora-success) !important;
+}
+#targetTable tbody td.col-attendance .text-red-400,
+#targetTable tbody td.col-attendance .text-red-500 {
+  color: var(--adora-error) !important;
+}
+
 /* عمود الاختيار: compact — ثابت صغير */
 #targetTable th.checkbox-col,
 #targetTable td.checkbox-col {
@@ -235,17 +1027,17 @@ display: table-cell !important;
   border-top-left-radius: 0;
   border-bottom: 1px solid rgba(255, 255, 255, 0.08);
 }
-/* فواصل بصرية بين الأقسام — كل قسم مميز بخاناته */
+/* فواصل بصرية بين الأقسام — كل قسم مميز بخاناته لتمييز الفرز البصري */
 #targetTable th.th-section-start,
 #targetTable td.td-section-start {
-  border-left: 2px solid rgba(64, 224, 208, 0.35);
-  padding-left: 0.375rem;
-  box-shadow: inset 1px 0 0 rgba(64, 224, 208, 0.08);
+  border-left: 2px solid rgba(64, 224, 208, 0.5);
+  padding-left: 0.5rem;
+  box-shadow: inset 2px 0 0 rgba(64, 224, 208, 0.12);
 }
 #targetTable.adora-breakdown-mode th.col-breakdown.th-section-start,
 #targetTable.adora-breakdown-mode td.col-breakdown.td-section-start {
-  border-left-color: rgba(64, 224, 208, 0.4);
-  box-shadow: inset 2px 0 0 rgba(64, 224, 208, 0.15);
+  border-left-color: rgba(64, 224, 208, 0.55);
+  box-shadow: inset 2px 0 0 rgba(64, 224, 208, 0.18);
 }
 /* حد بين بيانات الموظف وقسم الحجوزات — على يمين عمود العقود (بين الموظف والعقود) */
 #targetTable th.th-section-end,
@@ -264,32 +1056,48 @@ display: table-cell !important;
 #targetTable td.col-eval-google {
   border-left: 2px solid rgba(251, 191, 36, 0.3);
 }
-/* عمود الصافي — بدون خط طولي لتفادي المظهر الغريب على أقصى اليمين */
+/* عمود الصافي — بدون خط طولي؛ النص في وسط الخانة */
 #targetTable th.col-net.th-section-start,
 #targetTable td.col-net {
   border-left: none;
 }
-/* صف التجميع: compact وواضح */
+#targetTable tbody td.col-net,
+#targetTable tfoot td.col-net {
+  text-align: center !important;
+}
+/* صف التجميع: أوضح لتمييز الأقسام والفرز البصري — حجم خط متناسق */
 #targetTable tr.breakdown-group-row th {
-  padding: 0.35rem 0.4rem;
-  font-size: 0.7rem;
-  font-weight: 700;
-  letter-spacing: 0.02em;
-  border-bottom: 1px solid rgba(255, 255, 255, 0.06);
-  background: rgba(0, 0, 0, 0.15);
+  padding: 0.5rem 0.5rem;
+  min-height: 2.25rem;
+  font-size: 0.8rem;
+  font-weight: 800;
+  letter-spacing: 0.04em;
+  border-bottom: 2px solid rgba(255, 255, 255, 0.1);
   vertical-align: middle;
 }
 #targetTable tr.breakdown-group-row th span {
-  padding: 0.2rem 0.5rem !important;
-  font-size: 0.625rem !important;
+  padding: 0.25rem 0.5rem !important;
+  font-size: 0.8rem !important;
+  font-weight: 800 !important;
+  letter-spacing: 0.03em;
 }
 #targetTable tr.breakdown-group-row th:not([colspan="2"]):not([colspan="1"]) {
-  border-left: 1px solid rgba(255, 255, 255, 0.06);
+  border-left: 2px solid rgba(255, 255, 255, 0.12);
 }
 /* ترويسة الجدول: خلفية وفاصل موحّد */
 .table-head-theme {
   background: linear-gradient(135deg, rgba(255,255,255,0.07) 0%, rgba(255,255,255,0.03) 100%);
   border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+}
+/* تصغير نص الترويسة — مقياس موحد: لا 0.7em عشوائي؛ مستوى أول 0.8rem، مستوى ثانٍ 0.75rem */
+#targetTable thead th {
+  font-size: 0.75rem !important;
+}
+#targetTable thead tr:first-child th:not([colspan]) {
+  font-size: 0.8rem !important;
+}
+#targetTable thead tr.main-header-row th {
+  font-size: 0.8rem !important;
 }
 #targetTable thead tr.main-header-row th {
   border-bottom: 1px solid rgba(255, 255, 255, 0.08);
@@ -299,7 +1107,6 @@ display: table-cell !important;
 #targetTable thead tr.main-header-row th.col-net {
   text-align: center !important;
 }
-/* مؤشر الفرز عند النقر على عمود الترويسة */
 #targetTable thead tr.main-header-row th[data-sort-key].sort-asc::after {
   content: ' ▲';
   opacity: 0.9;
@@ -311,37 +1118,76 @@ display: table-cell !important;
   font-size: 0.7em;
 }
 
-/* صف «تقييمات سلبية» — شكل وخط مميزان */
+/* صف «تقييمات سلبية» — الصف كله مخصص لها: توزيع المحتوى (افرد) */
 .negative-ratings-header-row {
   background: linear-gradient(90deg, rgba(239, 68, 68, 0.08) 0%, rgba(251, 191, 36, 0.05) 100%);
   border-bottom: 1px solid rgba(239, 68, 68, 0.2);
   border-top: 1px solid rgba(255, 255, 255, 0.06);
 }
+.negative-ratings-header-row td {
+  vertical-align: middle !important;
+}
+.negative-ratings-row-cell {
+  padding: 0 !important;
+  border: none !important;
+  width: 100%;
+}
+.negative-ratings-row-inner {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.5rem 1.25rem;
+  width: 100%;
+  padding: 8px 16px;
+  min-height: 2.5rem;
+}
 .negative-ratings-label-cell {
-  padding: 6px 12px;
+  flex: 1 1 auto;
+  min-width: 0;
+  text-align: right;
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 0.03em;
+  color: rgba(251, 191, 36, 1);
+  text-shadow: 0 0 1px rgba(0, 0, 0, 0.3);
+  border-right: 3px solid rgba(239, 68, 68, 0.5);
+  padding-right: 12px;
+  margin-left: 12px;
+  line-height: 1.45;
+  white-space: normal;
+}
+.negative-ratings-data-cell,
+#negativeRatingsCell {
+  display: flex !important;
+  flex-wrap: wrap;
+  justify-content: flex-start;
+  align-items: center;
+  gap: 0.5rem 1.25rem;
+  padding: 0 0 0 8px !important;
   text-align: center;
-  font-size: 11px;
-  font-weight: 600;
-  letter-spacing: 0.02em;
-  color: rgba(251, 191, 36, 0.95);
-  border-right: 3px solid rgba(239, 68, 68, 0.35);
-  line-height: 1.4;
+  flex-shrink: 0;
+}
+#negativeRatingsCell > span {
+  white-space: nowrap;
 }
 
-/* عمود م: compact — ثابت صغير */
+/* عمود م: compact — مقروء */
 #targetTable th.col-m,
 #targetTable td.col-m {
   width: var(--col-m-w);
   max-width: var(--col-m-w);
   text-align: center;
   padding: 0.25rem 0.125rem;
-  font-size: 0.6875rem;
+  font-size: 0.75rem;
 }
 
 /* Prevent unnecessary word wrapping in bonus rows and footer labels */
 #commitmentBonusText,
 #excellenceBonusText {
 white-space: normal;
+font-size: 0.75rem !important;
+line-height: 1.4 !important;
 }
 #commitmentBonusText span,
 #excellenceBonusText span {
@@ -358,8 +1204,8 @@ box-sizing: border-box;
 }
 body {
 font-family: 'IBM Plex Sans Arabic', sans-serif;
-background: linear-gradient(135deg, #0a0e1a 0%, #1a1f35 100%);
-color: #e2e8f0;
+background: linear-gradient(135deg, var(--adora-bg) 0%, var(--dark-card) 100%);
+color: var(--adora-text);
 min-height: 100vh;
 overflow-x: hidden;
 -webkit-text-size-adjust: 100%;
@@ -521,25 +1367,25 @@ padding: 1rem !important;
 }
 /* Better badge display on mobile */
 .badges-wrapper {
-gap: 2px 4px !important;
+gap: 2px 3px !important;
 max-height: 20px;
 }
 .badges-wrapper span {
-font-size: 7px !important;
-padding: 1px 5px !important;
+font-size: 9px !important;
+padding: 0 5px !important;
 }
 /* Attendance column text on mobile */
 .col-attendance span {
-font-size: clamp(8px, 2.2vw, 10px) !important;
+font-size: clamp(0.65rem, 1.55vw, 0.75rem) !important;
 line-height: 1.3 !important;
 }
 }
 
-/* صف أسباب التقييم — يطبق على كل الشاشات (كان داخل media جوال فقط) */
+/* صف أسباب التقييم — مقروء */
 #employeePerformanceTable tbody tr.reasons-row td,
 #employeePerformanceTableBody tr.reasons-row td {
-  font-size: 9px !important;
-  line-height: 1.3 !important;
+  font-size: 10px !important;
+  line-height: 1.4 !important;
   padding: 4px 12px !important;
   color: #9ca3af !important;
 }
@@ -634,53 +1480,36 @@ padding: 1px 8px 2px !important;
 width: 100%;
 box-sizing: border-box;
 }
-/* Wrapper: سطر واحد مرئي — عند hover يتوسع بسلاسة */
+/* Wrapper: سطر واحد مرئي — عند hover يتوسع بسلاسة (حجم أصغر 20%) */
 .badges-wrapper {
 display: flex !important;
 flex-wrap: wrap !important;
-gap: 3px 5px !important;
+gap: 2px 4px !important;
 align-items: center;
 padding: 1px 0;
 direction: rtl;
-max-height: 22px;
+max-height: 18px;
 overflow: hidden;
 transition: max-height 0.35s ease, padding 0.3s ease;
 position: relative;
 }
 /* عدم تغيير ارتفاع الصف عند الـ hover — إلغاء التمدد المشتت */
 .badges-row:hover .badges-wrapper {
-max-height: 20px;
+max-height: 16px;
 padding: 0;
 }
-/* Fade hint — يشير أن هناك شارات مخفية (يختفي عند hover) */
-.badges-wrapper::after {
-content: '';
-position: absolute;
-left: 0;
-top: 0;
-bottom: 0;
-width: 40px;
-background: linear-gradient(to right, rgba(15, 23, 41, 0.85), transparent);
-pointer-events: none;
-opacity: 1;
-transition: opacity 0.3s ease;
-z-index: 1;
-}
-.badges-row:hover .badges-wrapper::after {
-opacity: 0;
-}
-/* Badge pills — حجم صغير موحد */
+/* Badge pills — حجم مقروء ومتناسق */
 .badges-wrapper span {
 display: inline-flex;
 align-items: center;
-padding: 1px 7px;
-border-radius: 10px;
+padding: 2px 6px;
+border-radius: 8px;
 white-space: nowrap;
 border: 1px solid rgba(255, 255, 255, 0.1);
 background: rgba(0, 0, 0, 0.22);
 backdrop-filter: blur(4px);
 transition: all 0.2s ease;
-font-size: 9px !important;
+font-size: 0.65rem !important;
 line-height: 1.4;
 }
 .badges-wrapper span:hover {
@@ -730,7 +1559,7 @@ border: 1px solid #000;
 transform: translateX(19px);
 }
 .col-attendance span {
-font-size: 9px !important;
+font-size: 6px !important;
 font-weight: 900 !important;
 color: #000 !important;
 }
@@ -741,7 +1570,7 @@ page-break-inside: avoid;
 }
 .badges-row td {
 padding: 3px 8px !important;
-font-size: 9px !important;
+font-size: 10px !important;
 }
 .badges-wrapper {
 display: flex !important;
@@ -751,7 +1580,7 @@ direction: rtl !important;
 }
 .badges-wrapper span {
 font-size: 8px !important;
-padding: 3px 6px !important;
+padding: 2px 5px !important;
 margin: 0 !important;
 border: 1px solid #000 !important;
 border-radius: 4px !important;
@@ -765,7 +1594,7 @@ border-bottom: 1px solid #ddd !important;
 }
 .badges-row td {
 padding: 4px 8px !important;
-font-size: 9px !important;
+font-size: 10px !important;
 }
 }
 /* Animated Background Particles */
@@ -798,6 +1627,23 @@ opacity: 0.3;
 transform: translate(50px, -50px) scale(1.5);
 opacity: 0.8;
 }
+}
+/* الوضع الفاتح: أنيميشن النقاط أوضح ومرئي على الخلفية الفاتحة */
+[data-theme="light"] .particles {
+  opacity: 0.9;
+}
+[data-theme="light"] .particle {
+  background: #0d9488;
+  box-shadow: 0 0 10px rgba(13, 148, 136, 0.5), 0 0 4px rgba(13, 148, 136, 0.4);
+  width: 4px;
+  height: 4px;
+}
+[data-theme="light"] .particle {
+  animation: floatLight 20s infinite ease-in-out;
+}
+@keyframes floatLight {
+0%, 100% { transform: translate(0, 0) scale(1); opacity: 0.5; }
+50% { transform: translate(50px, -50px) scale(1.4); opacity: 0.9; }
 }
 /* Premium Glassmorphism Cards */
 .glass {
@@ -1109,6 +1955,9 @@ background: rgba(15, 23, 41, 0.95) !important;
 font-size: 0.9rem !important;
 color: #5eead4 !important;
 }
+#footerRowFinalTotal td {
+background: rgba(15, 23, 41, 0.95) !important;
+}
 tbody tr {
 border-bottom: 1px solid rgba(255, 255, 255, 0.1) !important;
 background: rgba(255, 255, 255, 0.01);
@@ -1169,8 +2018,8 @@ overflow: hidden;
 padding: 0.2rem 0.3rem !important;
 text-align: right !important;
 direction: rtl !important;
-font-size: 0.72rem;
-line-height: 1.3;
+font-size: 0.8125rem;
+line-height: 1.35;
 }
 /* ترويسة عمود الموظف: توسيط النص فقط في الهيدر (تتجاوز .col-name أعلاه) */
 #targetTable thead tr.main-header-row th.col-name {
@@ -1198,16 +2047,17 @@ white-space: nowrap;
 min-width: 65px;
 white-space: nowrap;
 padding: 0.2rem 0.25rem !important;
-font-size: 0.8rem;
+font-size: 0.875rem;
 }
 /* Net column body rows — readable */
 #targetTable tbody td.col-net {
-font-size: 0.8rem !important;
+font-size: 0.9rem !important;
 font-weight: 900;
+text-align: center !important;
 }
 /* Keep footer net column larger */
 #targetTable tfoot td.col-net {
-font-size: 0.9rem;
+font-size: 0.95rem;
 font-weight: 900;
 }
 .col-attendance {
@@ -1216,8 +2066,8 @@ max-width: 80px;
 white-space: normal;
 text-align: center;
 padding: 0.15rem 0.1rem !important;
-font-size: 0.6rem;
-line-height: 1.2;
+font-size: 0.75rem;
+line-height: 1.3;
 overflow: hidden;
 }
 /* Compact attendance internals */
@@ -1233,8 +2083,8 @@ display: flex;
 justify-content: center;
 }
 .col-attendance .attendance-indicator span {
-font-size: 0.55rem !important;
-line-height: 1 !important;
+font-size: 0.7rem !important;
+line-height: 1.2 !important;
 }
 .col-attendance .attendance-indicator label {
 gap: 3px !important;
@@ -1249,15 +2099,15 @@ min-height: 0 !important;
 height: 22px !important;
 border-width: 1px !important;
 }
-/* Branch name text inside attendance */
+/* Branch / small labels inside attendance — مقروءة */
 .col-attendance .text-\[10px\],
 .col-attendance .text-\[9px\] {
-font-size: 0.5rem !important;
-line-height: 1 !important;
+font-size: 0.7rem !important;
+line-height: 1.25 !important;
 }
 /* Total days display */
 .col-attendance .text-green-400.font-bold {
-font-size: 0.55rem !important;
+font-size: 0.75rem !important;
 }
 /* mt-1 gap reducer + centering */
 .col-attendance .mt-1 {
@@ -1291,7 +2141,7 @@ border-width: 1px !important;
 .col-eval-google .text-xs,
 .col-eval-booking .text-\[10px\],
 .col-eval-google .text-\[10px\] {
-font-size: 0.5rem !important;
+font-size: 0.7rem !important;
 line-height: 1 !important;
 }
 
@@ -1464,7 +2314,7 @@ body.role-hr #targetTable td.col-attendance {
   box-sizing: border-box;
 }
 body.role-hr #targetTable th.col-attendance {
-  font-size: 0.65rem;
+  font-size: 0.455rem;
   line-height: 1.25;
   padding: 0.35rem 0.25rem;
   white-space: normal;
@@ -1680,17 +2530,27 @@ flex-direction: row;
 flex-wrap: wrap;
 }
 }
-/* صف الحوافز: حافز الجمع بين الحضور والتميز | حافز الأفضل تقييماً + الأكثر حجوزات */
+/* صف الحوافز — مدمج ومضغوط (~80% أصغر) */
 tfoot tr#bonusesCombinedRow td {
-vertical-align: top !important;
+  vertical-align: top !important;
+  padding: 4px 8px !important;
 }
 tfoot tr#bonusesCombinedRow td[colspan] {
-width: auto !important;
-max-width: none !important;
+  width: auto !important;
+  max-width: none !important;
 }
 #commitmentBonusBlock,
 #excellenceBonusBlock {
-min-width: 0;
+  min-width: 0;
+}
+.bonuses-compact #commitmentBonusText,
+.bonuses-compact #excellenceBonusText {
+  line-height: 1.4;
+  max-height: 3.2em;
+  overflow: hidden;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
 }
 /* Ensure bonus value cell doesn't break layout */
 tfoot tr.footer-row td.col-net {
@@ -1862,14 +2722,19 @@ display: block !important;
 width: 100% !important;
 max-width: 100% !important;
 box-sizing: border-box !important;
-padding: 10px 5px !important;
-margin-top: 15px !important;
+padding: 14px 12px !important;
+margin-top: 16px !important;
+border-top: 2px solid #0d9488 !important;
+background: #f8fafc !important;
 }
 .print-conditions > div {
 width: 100% !important;
 max-width: 100% !important;
 box-sizing: border-box !important;
-padding: 10px !important;
+padding: 12px !important;
+font-size: 10px !important;
+line-height: 1.4 !important;
+color: #111 !important;
 }
 /* Show print-only elements */
 .print-only {
@@ -1887,9 +2752,9 @@ display: table-row !important;
 }
 .print-header {
 display: flex !important;
-border-bottom: 4px solid #000;
-padding: 10px 5px 15px 5px !important;
-margin-bottom: 15px !important;
+border-bottom: 3px solid #0d9488 !important;
+padding: 12px 10px 16px !important;
+margin-bottom: 12px !important;
 background: #fff !important;
 page-break-after: avoid !important;
 width: 100% !important;
@@ -1899,26 +2764,40 @@ box-sizing: border-box !important;
 .print-header > div {
 flex: 1 !important;
 min-width: 0 !important;
-padding: 0 5px !important;
+padding: 0 8px !important;
 }
-/* Reduce row height and padding when printing "الكل" (All) */
+.print-header h1 {
+font-size: 22px !important;
+font-weight: 900 !important;
+color: #111 !important;
+margin: 0 !important;
+padding-bottom: 6px !important;
+line-height: 1.2 !important;
+}
+.print-header p {
+font-size: 13px !important;
+color: #333 !important;
+margin: 4px 0 0 !important;
+font-weight: 600 !important;
+line-height: 1.3 !important;
+}
 body.print-all-view table {
-font-size: 6px !important;
+font-size: 7px !important;
 table-layout: fixed !important;
 width: 100% !important;
 max-width: 100% !important;
 }
 body.print-all-view th, 
 body.print-all-view td {
-padding: 2px 2px !important;
-font-size: 6px !important;
-line-height: 1.1 !important;
+padding: 3px 2px !important;
+font-size: 7px !important;
+line-height: 1.15 !important;
 white-space: normal !important;
 word-wrap: break-word !important;
 overflow: hidden !important;
 }
 body.print-all-view .col-name {
-font-size: 5px !important;
+font-size: 6.5px !important;
 }
 body.print-all-view .print-header {
 padding-bottom: 10px !important;
@@ -1960,27 +2839,28 @@ page-break-after: avoid !important;
 tbody {
 page-break-inside: avoid !important;
 }
+/* تحسين وضوح الطباعة: حد أدنى لحجم الخط وتباين جيد */
 th {
-background: linear-gradient(135deg, #1e293b 0%, #334155 100%) !important;
-border: none !important;
-padding: 4px 3px !important;
-font-size: 7px !important;
+background: linear-gradient(135deg, #0f766e 0%, #0d9488 100%) !important;
+border: 1.5px solid #0a5c54 !important;
+padding: 5px 4px !important;
+font-size: 8px !important;
 font-weight: 900 !important;
 color: #fff !important;
 white-space: normal !important;
 word-wrap: break-word !important;
 text-align: center !important;
-line-height: 1.2 !important;
+line-height: 1.25 !important;
 }
 td {
-border: none !important;
-padding: 3px 3px !important;
-font-size: 7px !important;
-color: #000 !important;
+border: 1px solid #333 !important;
+padding: 4px 3px !important;
+font-size: 8px !important;
+color: #111 !important;
 white-space: normal !important;
 word-wrap: break-word !important;
 background: #fff !important;
-line-height: 1.2 !important;
+line-height: 1.25 !important;
 overflow: hidden !important;
 text-overflow: ellipsis !important;
 }
@@ -1988,16 +2868,16 @@ text-overflow: ellipsis !important;
 @media print {
 table {
 border-collapse: collapse !important;
-border: 3px solid #000 !important;
+border: 2px solid #111 !important;
 }
 th {
-border: 3px solid #000 !important;
+border: 1.5px solid #0a5c54 !important;
 }
 td {
-border: 2px solid #000 !important;
+border: 1px solid #333 !important;
 }
 tbody tr {
-border-bottom: 2px solid #000 !important;
+border-bottom: none !important;
 box-shadow: none !important;
 }
 }
@@ -2009,9 +2889,9 @@ td.number-display,
 .col-fund,
 .col-net,
 .col-m {
-font-size: 7px !important;
+font-size: 8px !important;
 font-weight: 900 !important;
-color: #000 !important;
+color: #111 !important;
 }
 /* Force all text colors to black in print (except headers and footers) */
 td, p, span, div, h1, h2, h3, h4, h5, h6 {
@@ -2195,30 +3075,29 @@ font-weight: 900 !important;
 .print-header {
 display: none;
 }
-/* Scrollbar Styling — Unified Adora Theme */
+/* Scrollbar — theme variables, fixed size */
 ::-webkit-scrollbar {
 width: 8px;
 height: 8px;
 }
 ::-webkit-scrollbar-track {
-background: rgba(15, 23, 41, 0.6);
+background: var(--adora-scrollbar-track);
 border-radius: 4px;
 }
 ::-webkit-scrollbar-thumb {
-background: rgba(64, 224, 208, 0.4);
+background: var(--adora-scrollbar-thumb);
 border-radius: 4px;
-border: 1px solid rgba(64, 224, 208, 0.15);
+border: 1px solid transparent;
 }
 ::-webkit-scrollbar-thumb:hover {
-background: rgba(64, 224, 208, 0.6);
+background: var(--adora-scrollbar-thumb-hover);
 }
 ::-webkit-scrollbar-corner {
-background: rgba(15, 23, 41, 0.6);
+background: var(--adora-scrollbar-track);
 }
-/* Firefox scrollbar */
 * {
   scrollbar-width: thin;
-  scrollbar-color: rgba(64, 224, 208, 0.4) rgba(15, 23, 41, 0.6);
+  scrollbar-color: var(--adora-scrollbar-thumb) var(--adora-scrollbar-track);
 }
 /* ===== Global Select & Option Styling — Unified Adora Theme ===== */
 select {
@@ -2453,6 +3332,25 @@ header img:hover {
   color-scheme: dark;
 }
 
+/* منع خروج محتوى الخصومات عن إطار النافذة */
+#discountsModal .glass.rounded-xl {
+  min-width: 0;
+  overflow: hidden;
+}
+#discountsList {
+  min-width: 0;
+  overflow-wrap: break-word;
+  word-break: break-word;
+}
+#discountsList .glass {
+  min-width: 0;
+  overflow: hidden;
+}
+#discountsList .break-words {
+  overflow-wrap: break-word;
+  word-break: break-word;
+}
+
 /* Discount Modal Select Styling - Dark Theme */
 #discountsModal select,
 #manageDiscountTypesModal select {
@@ -2676,6 +3574,8 @@ header img:hover {
 }
 @media print {
   .admin-entry-zone { animation: none !important; }
+  html, body { background: #fff !important; color: #000 !important; }
+  .glass { background: #fff !important; border-color: #ddd !important; box-shadow: none !important; }
 }
 
 /* مؤشر مزامنة الفترة الحية (أسفل اليمين) */

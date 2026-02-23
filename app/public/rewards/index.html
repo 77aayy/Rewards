@@ -2,9 +2,14 @@
 <html lang="ar" dir="rtl">
 
 <head>
+    <base href="/rewards/">
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
     <meta name="theme-color" content="#14b8a6">
+    <script>
+      (function(){var v=localStorage.getItem('adora_theme');if(v!=='dark'&&v!=='light')v=typeof window!=='undefined'&&window.matchMedia&&window.matchMedia('(prefers-color-scheme: light)').matches?'light':'dark';document.documentElement.setAttribute('data-theme',v);})();
+    </script>
+    <script type="module" src="shared/theme.js"></script>
     <meta name="description" content="نظام إدارة مكافآت فندق إليت">
     <title>إليت | كشف المكافآت النهائي</title>
     <!-- تقني: تسريع الاتصال بـ Firebase عند فتح رابط الإداري -->
@@ -16,13 +21,13 @@
 
     <!-- Libraries -->
     <!-- Tailwind CDN: للتطوير/النماذج فقط. للإنتاج: استخدم PostCSS أو Tailwind CLI (راجع https://tailwindcss.com/docs/installation) -->
-    <script src="https://cdn.tailwindcss.com"></script>
-    <!-- SheetJS من المصدر الرسمي (cdn.sheetjs.com) — إصدار 0.20.3. تحقق الحجم والنوع قبل XLSX.read في app.js. -->
-    <script src="https://cdn.sheetjs.com/xlsx-0.20.3/package/dist/xlsx.full.min.js"></script>
-    <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-app-compat.js"></script>
-    <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-auth-compat.js"></script>
-    <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-storage-compat.js"></script>
+    <script defer src="https://cdn.tailwindcss.com"></script>
+    <!-- SheetJS و html2pdf يُحمّلان عند الطلب من app.js (تحسين أداء التحميل الأولي) -->
+    <script src="https://www.gstatic.com/firebasejs/10.14.0/firebase-app-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/10.14.0/firebase-auth-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/10.14.0/firebase-storage-compat.js"></script>
     <script src="src/firebase-config.js"></script>
+    <script src="src/admin-config.js"></script>
     <script>
       (function () {
         if (typeof firebase === 'undefined' || !window.firebaseConfig) return;
@@ -37,13 +42,14 @@
       })();
     </script>
     <!-- لا نحمّل هنا getBlob المعياري — حزمة firebase-storage تستدعي getApp() داخلياً ولا ترى تطبيق compat فتُرمي خطأ. الاعتماد على التحميل الديناميكي داخل fetchStorageJson فقط. -->
-    <script src="https://cdn.jsdelivr.net/npm/qrcodejs@1.0.0/qrcode.min.js"></script>
-    <!-- PDF: تحويل تقرير الموظف إلى PDF للمشاركة أو التحويل لواتساب -->
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.1/html2pdf.bundle.min.js"></script>
+    <script defer src="https://cdn.jsdelivr.net/npm/qrcodejs@1.0.0/qrcode.min.js"></script>
+    <!-- PDF: يُحمّل عند الطلب من app.js عند أول طلب تحميل/مشاركة PDF -->
 
     <!-- Arabic Font -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link
-        href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans+Arabic:wght@300;400;500;600;700;800;900&display=swap"
+        href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans+Arabic:wght@400;600;700&display=swap"
         rel="stylesheet">
 
     <!-- Custom Styles (v=dropdowns = نافذة الخصومات + قوائم منسدلة داكنة) -->
@@ -73,6 +79,10 @@
                             </p>
                         </div>
                     </div>
+                    <button type="button" id="themeToggleBtn" class="theme-toggle-btn no-print" title="تبديل الوضع الفاتح/الداكن" aria-label="تبديل الثيم">
+                            <span class="theme-icon theme-icon-sun" aria-hidden="true"><svg class="w-5 h-5" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="4"/><path d="M12 2v2"/><path d="M12 20v2"/><path d="m4.93 4.93 1.41 1.41"/><path d="m17.66 17.66 1.41 1.41"/><path d="M2 12h2"/><path d="M20 12h2"/><path d="m6.34 17.66-1.41 1.41"/><path d="m19.07 4.93-1.41 1.41"/></svg></span>
+                            <span class="theme-icon theme-icon-moon hidden" aria-hidden="true"><svg class="w-5 h-5" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3a6 6 0 0 0 9 9 9 9 0 1 1-9-9Z"/></svg></span>
+                        </button>
                     <div class="flex flex-wrap gap-1.5 sm:gap-2 w-full sm:w-auto justify-end items-center action-header-btns-container" id="actionBtns" style="display: flex;">
                         <!-- زرار الرجوع لنظام التحليل (المشروع الأول) -->
                         <button type="button" id="btnReturnToAnalysis" onclick="returnToAnalysis()"
@@ -195,36 +205,36 @@
                 <div class="stats-card glass rounded-md sm:rounded-lg md:rounded-xl p-1 sm:p-1.5 md:p-2 text-center flex flex-col justify-center min-h-0">
                     <div class="text-sm sm:text-base md:text-lg mb-0.5" style="font-size: clamp(0.75rem, 1.5vw, 1rem);">👥</div>
                     <div class="text-xs sm:text-sm md:text-base font-black text-turquoise number-display" id="statEmployees" style="font-size: clamp(0.65rem, 1.8vw, 0.9375rem);">0</div>
-                    <div class="text-[7px] sm:text-[8px] md:text-[9px] text-gray-400 mt-0.5 font-semibold leading-tight">إجمالي الموظفين</div>
+                    <div class="text-[12px] sm:text-[13px] md:text-[16px] text-gray-400 mt-0.5 font-semibold leading-tight">إجمالي الموظفين</div>
                 </div>
                 <div class="stats-card glass rounded-md sm:rounded-lg md:rounded-xl p-1 sm:p-1.5 md:p-2 text-center flex flex-col justify-center min-h-0">
                     <div class="text-sm sm:text-base md:text-lg mb-0.5" style="font-size: clamp(0.75rem, 1.5vw, 1rem);">📊</div>
                     <div class="text-xs sm:text-sm md:text-base font-black text-orange-400 number-display" id="statBookings" style="font-size: clamp(0.65rem, 1.8vw, 0.9375rem);">0</div>
-                    <div class="text-[7px] sm:text-[8px] md:text-[9px] text-gray-400 mt-0.5 font-semibold leading-tight">إجمالي الحجوزات</div>
+                    <div class="text-[12px] sm:text-[13px] md:text-[16px] text-gray-400 mt-0.5 font-semibold leading-tight">إجمالي الحجوزات</div>
                 </div>
                 <div class="stats-card glass rounded-md sm:rounded-lg md:rounded-xl p-1 sm:p-1.5 md:p-2 text-center flex flex-col justify-center min-h-0">
                     <div class="text-sm sm:text-base md:text-lg mb-0.5" style="font-size: clamp(0.75rem, 1.5vw, 1rem);">💰</div>
                     <div class="text-xs sm:text-sm md:text-base font-black text-green-400 number-display" id="statTotal" style="font-size: clamp(0.65rem, 1.8vw, 0.9375rem);">0</div>
-                    <div class="text-[7px] sm:text-[8px] md:text-[9px] text-gray-400 mt-0.5 font-semibold leading-tight">إجمالي المستحقات</div>
+                    <div class="text-[12px] sm:text-[13px] md:text-[16px] text-gray-400 mt-0.5 font-semibold leading-tight">إجمالي المستحقات</div>
                 </div>
                 <!-- New Cards -->
                 <div class="stats-card glass rounded-md sm:rounded-lg md:rounded-xl p-1 sm:p-1.5 md:p-2 text-center relative overflow-hidden flex flex-col justify-center min-h-0">
                     <div class="absolute top-0 right-0 w-full h-0.5 bg-gradient-to-r from-yellow-500 to-transparent"></div>
-                    <div class="text-[7px] sm:text-[8px] md:text-[9px] text-yellow-500 mb-0.5 font-bold">⭐ الأكثر مكافأة</div>
+                    <div class="text-[12px] sm:text-[13px] md:text-[16px] text-yellow-500 mb-0.5 font-bold">⭐ الأكثر مكافأة</div>
                     <div class="text-[9px] sm:text-[10px] md:text-xs font-black text-white truncate px-0.5" id="topEarnerName" style="font-size: clamp(0.5625rem, 1.4vw, 0.75rem);">-</div>
-                    <div class="text-[7px] sm:text-[8px] md:text-[9px] text-gray-400 mt-0 number-display" id="topEarnerValue">0</div>
+                    <div class="text-[12px] sm:text-[13px] md:text-[16px] text-gray-400 mt-0 number-display" id="topEarnerValue">0</div>
                 </div>
                 <div class="stats-card glass rounded-md sm:rounded-lg md:rounded-xl p-1 sm:p-1.5 md:p-2 text-center relative overflow-hidden flex flex-col justify-center min-h-0">
                     <div class="absolute top-0 right-0 w-full h-0.5 bg-gradient-to-r from-turquoise to-transparent"></div>
-                    <div class="text-[7px] sm:text-[8px] md:text-[9px] text-turquoise mb-0.5 font-bold">👍 الأكثر تقييماً</div>
+                    <div class="text-[12px] sm:text-[13px] md:text-[16px] text-turquoise mb-0.5 font-bold">👍 الأكثر تقييماً</div>
                     <div class="text-[9px] sm:text-[10px] md:text-xs font-black text-white truncate px-0.5" id="topRatedName" style="font-size: clamp(0.5625rem, 1.4vw, 0.75rem);">-</div>
-                    <div class="text-[7px] sm:text-[8px] md:text-[9px] text-gray-400 mt-0 number-display" id="topRatedValue">0</div>
+                    <div class="text-[12px] sm:text-[13px] md:text-[16px] text-gray-400 mt-0 number-display" id="topRatedValue">0</div>
                 </div>
                 <div class="stats-card glass rounded-md sm:rounded-lg md:rounded-xl p-1 sm:p-1.5 md:p-2 text-center relative overflow-hidden flex flex-col justify-center min-h-0">
                     <div class="absolute top-0 right-0 w-full h-0.5 bg-gradient-to-r from-turquoise to-transparent"></div>
-                    <div class="text-[7px] sm:text-[8px] md:text-[9px] text-turquoise mb-0.5 font-bold">📅 الأكثر حجوزات</div>
+                    <div class="text-[12px] sm:text-[13px] md:text-[16px] text-turquoise mb-0.5 font-bold">📅 الأكثر حجوزات</div>
                     <div class="text-[9px] sm:text-[10px] md:text-xs font-black text-white truncate px-0.5" id="topBookerName" style="font-size: clamp(0.5625rem, 1.4vw, 0.75rem);">-</div>
-                    <div class="text-[7px] sm:text-[8px] md:text-[9px] text-gray-400 mt-0 number-display" id="topBookerValue">0</div>
+                    <div class="text-[12px] sm:text-[13px] md:text-[16px] text-gray-400 mt-0 number-display" id="topBookerValue">0</div>
                 </div>
             </div>
 
@@ -251,56 +261,65 @@
                                 <th class="col-name text-center cursor-pointer hover:bg-white/10 transition-colors select-none" data-sort-key="name" title="فرز حسب الموظف">الموظف</th>
                                 <th class="col-count col-count-single text-center cursor-pointer hover:bg-white/10 transition-colors select-none" data-sort-key="count" title="فرز حسب الحجوزات">الحجوزات</th>
                                 <!-- Breakdown: قسم الحجوزات — حد فاصل بين الموظف والعقود (على يمين العقود في RTL) -->
-                                <th class="col-breakdown th-section-end text-center text-cyan-300 text-xs font-bold cursor-pointer hover:bg-white/10 transition-colors select-none" style="display:none;" data-sort-key="staffCount" title="فرز حسب العقود">العقود</th>
-                                <th class="col-breakdown text-center text-emerald-300 text-xs font-semibold cursor-pointer hover:bg-white/10 transition-colors select-none" style="display:none;" data-sort-key="reception" title="فرز حسب استقبال">استقبال</th>
-                                <th class="col-breakdown th-section-start text-center text-orange-300 text-xs font-semibold cursor-pointer hover:bg-white/10 transition-colors select-none" style="display:none;" data-sort-key="booking" title="فرز حسب بوكينج">بوكينج</th>
+                                <th class="col-breakdown th-section-end text-center text-cyan-300 text-sm font-semibold cursor-pointer hover:bg-white/10 transition-colors select-none" style="display:none;" data-sort-key="staffCount" title="فرز حسب العقود">العقود</th>
+                                <th class="col-breakdown text-center text-emerald-300 text-sm font-semibold cursor-pointer hover:bg-white/10 transition-colors select-none" style="display:none;" data-sort-key="reception" title="فرز حسب استقبال">استقبال</th>
+                                <th class="col-breakdown th-section-start text-center text-orange-300 text-sm font-semibold cursor-pointer hover:bg-white/10 transition-colors select-none" style="display:none;" data-sort-key="booking" title="فرز حسب بوكينج">بوكينج</th>
                                 <!-- قسم الشفتات — border-left على آخر عمود (ليل = أيسر بصرياً) -->
-                                <th class="col-breakdown text-center text-amber-300 text-xs font-semibold cursor-pointer hover:bg-white/10 transition-colors select-none" style="display:none;" data-sort-key="morning" title="فرز حسب صباح">صباح</th>
-                                <th class="col-breakdown text-center text-indigo-300 text-xs font-semibold cursor-pointer hover:bg-white/10 transition-colors select-none" style="display:none;" data-sort-key="evening" title="فرز حسب مساء">مساء</th>
-                                <th class="col-breakdown th-section-start text-center text-gray-300 text-xs font-semibold cursor-pointer hover:bg-white/10 transition-colors select-none" style="display:none;" data-sort-key="night" title="فرز حسب ليل">ليل</th>
+                                <th class="col-breakdown text-center text-amber-300 text-sm font-semibold cursor-pointer hover:bg-white/10 transition-colors select-none" style="display:none;" data-sort-key="morning" title="فرز حسب صباح">صباح</th>
+                                <th class="col-breakdown text-center text-indigo-300 text-sm font-semibold cursor-pointer hover:bg-white/10 transition-colors select-none" style="display:none;" data-sort-key="evening" title="فرز حسب مساء">مساء</th>
+                                <th class="col-breakdown th-section-start text-center text-gray-300 text-sm font-semibold cursor-pointer hover:bg-white/10 transition-colors select-none" style="display:none;" data-sort-key="night" title="فرز حسب ليل">ليل</th>
                                 <!-- VIP: يُحقن ديناميكياً مع class th-section-start لأول عمود -->
-                                <th class="col-breakdown col-breakdown-vip-placeholder text-center text-amber-300 text-xs font-bold" style="display:none;" id="vipColumnsPlaceholder"></th>
+                                <th class="col-breakdown col-breakdown-vip-placeholder text-center text-amber-300 text-sm font-semibold" style="display:none;" id="vipColumnsPlaceholder"></th>
                                 <!-- قسم التنبيهات — border-left على آخر عمود (نقص SAR = أيسر بصرياً) -->
-                                <th class="col-breakdown text-center text-red-300 text-xs font-semibold cursor-pointer hover:bg-white/10 transition-colors select-none" style="display:none;" data-sort-key="alertCount" title="فرز حسب تنبيه">تنبيه</th>
-                                <th class="col-breakdown th-section-start text-center text-red-300 text-xs font-semibold cursor-pointer hover:bg-white/10 transition-colors select-none" style="display:none;" data-sort-key="alertTotal" title="فرز حسب نقص SAR">نقص SAR</th>
+                                <th class="col-breakdown text-center text-red-300 text-sm font-semibold cursor-pointer hover:bg-white/10 transition-colors select-none" style="display:none;" data-sort-key="alertCount" title="فرز حسب تنبيه">تنبيه</th>
+                                <th class="col-breakdown th-section-start text-center text-red-300 text-sm font-semibold cursor-pointer hover:bg-white/10 transition-colors select-none" style="display:none;" data-sort-key="alertTotal" title="فرز حسب نقص SAR">نقص SAR</th>
                                 <!-- بداية قسم الحضور والتقييمات -->
-                                <th class="col-attendance th-section-start text-center cursor-pointer hover:bg-white/10 transition-colors select-none" data-sort-key="attendance26Days" title="فرز حسب بطل تحدي الظروف"><span class="block text-xs">بطل تحدي الظروف</span><span class="text-[9px] font-normal text-gray-400">(26+ يوم)</span></th>
+                                <th class="col-attendance th-section-start text-center cursor-pointer hover:bg-white/10 transition-colors select-none" data-sort-key="attendance26Days" title="فرز حسب بطل تحدي الظروف"><span class="block text-xs">بطل تحدي الظروف</span><span class="text-[12px] font-normal text-gray-400">(26+ يوم)</span></th>
                                 <th class="col-rate text-center">الفئة</th>
                                 <th class="col-eval-booking text-center text-turquoise cursor-pointer hover:bg-white/10 transition-colors select-none" data-sort-key="evaluationsBooking" title="فرز حسب BOOKING">
                                     <div class="flex flex-col items-center justify-center gap-0">
-                                        <span class="text-[10px] font-bold">BOOKING</span>
-                                        <span class="text-[8px] text-gray-400">20 ر.س</span>
+                                        <span class="text-[13px] font-bold">BOOKING</span>
+                                        <span class="text-[13px] text-gray-400">20 ر.س</span>
                                     </div>
                                 </th>
                                 <th class="col-eval-google text-center text-green-400 cursor-pointer hover:bg-white/10 transition-colors select-none" data-sort-key="evaluationsGoogle" title="فرز حسب GOOGLE">
                                     <div class="flex flex-col items-center justify-center gap-0">
-                                        <span class="text-[10px] font-bold">GOOGLE</span>
-                                        <span class="text-[8px] text-gray-400">10 ر.س</span>
+                                        <span class="text-[13px] font-bold">GOOGLE</span>
+                                        <span class="text-[13px] text-gray-400">10 ر.س</span>
                                     </div>
                                 </th>
                                 <th class="col-net text-center th-section-start bg-turquoise/10 text-white font-bold cursor-pointer hover:bg-white/10 transition-colors select-none" data-sort-key="net" title="فرز حسب الصافي">الصافي</th>
                             </tr>
                             <tr id="negativeRatingsHeaderRow" class="negative-ratings-header-row no-print">
-                                <td colspan="6" class="negative-ratings-label-cell">تقييمات سلبية (أقل من تقييم الفندق) + فقدان فرص حجز نتيجة المكالمات التي لم يتم الرد عليها</td>
-                                <td colspan="2" id="negativeRatingsCell" class="py-1 px-1.5 text-center align-middle"></td>
-                                <td class="py-1 px-2"></td>
+                                <td colspan="100" class="negative-ratings-row-cell">
+                                    <div class="negative-ratings-row-inner">
+                                        <span class="negative-ratings-label-cell">تقييمات سلبية (أقل من تقييم الفندق) + فقدان فرص حجز نتيجة المكالمات التي لم يتم الرد عليها</span>
+                                        <div id="negativeRatingsCell" class="negative-ratings-data-cell"></div>
+                                    </div>
+                                </td>
                             </tr>
                         </thead>
                         <tbody id="mainTable" class="divide-y divide-white/10"></tbody>
                         <tfoot class="bg-white/[0.06] font-black border-t-2 border-white/20">
                             <!-- صف الحوافز: حافز الالتزام والانجاز | خبير إرضاء العميل في الفرع -->
                             <tr id="bonusesCombinedRow" class="footer-row text-white border-b border-white/10" style="display: none;">
-                                <td colspan="100" class="p-2 sm:p-3 text-right align-top">
-                                    <div class="flex flex-col sm:flex-row gap-2 sm:gap-3 flex-wrap" style="direction: rtl;">
-                                        <div id="commitmentBonusBlock" class="flex-1 min-w-0 rounded-lg bg-white/5 border border-turquoise/30 p-2">
-                                            <div class="text-turquoise font-bold text-[11px] sm:text-xs mb-1">حافز الالتزام والانجاز</div>
-                                            <div id="commitmentBonusText" class="space-y-1.5 text-[10px] sm:text-xs" style="direction: rtl; white-space: normal;"></div>
-                                            <div id="commitmentBonusValue" class="text-turquoise font-bold mt-1 number-display text-xs hidden">+0.00</div>
+                                <td colspan="100" class="px-2 py-1 text-right align-top">
+                                    <div class="flex flex-col sm:flex-row gap-1.5 flex-wrap bonuses-compact" style="direction: rtl;">
+                                        <div id="commitmentBonusBlock" class="flex-1 min-w-0 rounded px-1.5 py-1 bg-white/[0.03] border border-turquoise/20">
+                                            <div class="flex items-center gap-1.5 flex-wrap">
+                                                <span class="text-turquoise font-semibold text-[9px] shrink-0">حافز الالتزام</span>
+                                                <span id="commitmentBonusValue" class="text-turquoise font-bold text-[9px] number-display"></span>
+                                            </div>
+                                            <p class="text-[8px] text-white/50 mt-0.5 leading-tight" title="من أتم 26 يوم دوام وتميز بحجوزات أو تقييم">من أتم 26 يوم وتميز بحجوزات أو تقييم</p>
+                                            <div id="commitmentBonusText" class="text-[10.5px] leading-tight mt-0.5" style="direction: rtl;"></div>
                                         </div>
-                                        <div id="excellenceBonusBlock" class="flex-1 min-w-0 rounded-lg bg-white/5 border border-turquoise/30 p-2">
-                                            <div class="text-turquoise font-bold text-[11px] sm:text-xs mb-1">خبير إرضاء العميل في الفرع</div>
-                                            <div id="excellenceBonusText" class="space-y-1.5 text-[10px] sm:text-xs" style="direction: rtl; white-space: normal;"></div>
-                                            <div id="excellenceBonusValue" class="text-turquoise font-bold mt-1 number-display text-xs hidden">+0.00</div>
+                                        <div id="excellenceBonusBlock" class="flex-1 min-w-0 rounded px-1.5 py-1 bg-white/[0.03] border border-turquoise/20">
+                                            <div class="flex items-center gap-1.5 flex-wrap">
+                                                <span class="text-turquoise font-semibold text-[9px] shrink-0">خبير إرضاء العميل</span>
+                                                <span id="excellenceBonusValue" class="text-turquoise font-bold text-[9px] number-display"></span>
+                                            </div>
+                                            <p class="text-[8px] text-white/50 mt-0.5 leading-tight" title="الأكثر تقييماً والأكثر حجوزات في الفرع">الأكثر تقييماً والأكثر حجوزات في الفرع</p>
+                                            <div id="excellenceBonusText" class="text-[10.5px] leading-tight mt-0.5" style="direction: rtl;"></div>
                                         </div>
                                     </div>
                                 </td>
@@ -312,17 +331,17 @@
                                 <td class="col-name p-2 text-right text-sm font-black text-gray-400">
                                     الإجمالي (العدد)
                                 </td>
-                                <td id="footBookingCount" class="col-count col-count-single p-2 text-center text-white/70 text-base number-display font-bold">0</td>
+                                <td id="footBookingCount" class="col-count col-count-single p-2 text-center font-mono text-sm text-white/70 number-display font-semibold">0</td>
                                 <!-- Breakdown footer totals (hidden by default) -->
-                                <td id="footStaffCount" class="col-breakdown p-1 text-center text-cyan-300 text-xs font-bold font-mono" style="display:none">0</td>
-                                <td id="footReception" class="col-breakdown p-1 text-center text-emerald-300 text-xs font-mono" style="display:none">0</td>
-                                <td id="footBooking" class="col-breakdown p-1 text-center text-orange-300 text-xs font-mono" style="display:none">0</td>
-                                <td id="footMorning" class="col-breakdown p-1 text-center text-amber-300 text-xs font-mono" style="display:none">0</td>
-                                <td id="footEvening" class="col-breakdown p-1 text-center text-indigo-300 text-xs font-mono" style="display:none">0</td>
-                                <td id="footNight" class="col-breakdown p-1 text-center text-gray-300 text-xs font-mono" style="display:none">0</td>
-                                <td id="footVipRooms" class="col-breakdown p-1 text-center text-amber-300 text-xs font-bold font-mono" style="display:none" colspan="1">0</td>
-                                <td id="footAlertCount" class="col-breakdown p-1 text-center text-red-400 text-xs font-mono" style="display:none">0</td>
-                                <td id="footAlertTotal" class="col-breakdown p-1 text-center text-red-400 text-xs font-mono" style="display:none">0</td>
+                                <td id="footStaffCount" class="col-breakdown p-1 text-center font-mono text-sm text-cyan-300 font-semibold" style="display:none">0</td>
+                                <td id="footReception" class="col-breakdown p-1 text-center font-mono text-sm text-emerald-300 font-medium" style="display:none">0</td>
+                                <td id="footBooking" class="col-breakdown p-1 text-center font-mono text-sm text-orange-300 font-medium" style="display:none">0</td>
+                                <td id="footMorning" class="col-breakdown p-1 text-center font-mono text-sm text-amber-300 font-medium" style="display:none">0</td>
+                                <td id="footEvening" class="col-breakdown p-1 text-center font-mono text-sm text-indigo-300 font-medium" style="display:none">0</td>
+                                <td id="footNight" class="col-breakdown p-1 text-center font-mono text-sm text-gray-300 font-medium" style="display:none">0</td>
+                                <td id="footVipRooms" class="col-breakdown p-1 text-center font-mono text-sm text-amber-300 font-semibold" style="display:none" colspan="1">0</td>
+                                <td id="footAlertCount" class="col-breakdown p-1 text-center font-mono text-sm text-red-300 font-medium" style="display:none">0</td>
+                                <td id="footAlertTotal" class="col-breakdown p-1 text-center font-mono text-sm text-red-300 font-medium" style="display:none">0</td>
                                 <td class="col-attendance p-2"></td>
                                 <td class="col-rate p-2"></td>
                                 <td id="footEvalCount" class="p-2 text-center text-yellow-400 text-base border-x border-white/10 number-display font-black">0</td>
@@ -502,7 +521,7 @@
                                 <li><strong>المكافأة الكبرى:</strong> عند وصول الموظف إلى 100,000 نقطة تراكمية، يستحق "باكيج" التميز:</li>
                                 <li><strong>قسيمة مشتريات أو تذاكر أو قسائم:</strong> بما يعادل 1,500 ريال.</li>
                                 <li><strong>إقامة فاخرة:</strong> ليلة مجانية (للموظف أو لأحد ضيوفه) صالحة لمدة سنة.</li>
-                                <li><strong>وجبة عشاء:</strong> عشاء فاخر متكامل.</li>
+                                <li><strong>وجبة عشاء:</strong> عشاء لفردين.</li>
                                 <li><strong>نظام النقاط:</strong> تُحتسب وتُضاف النقاط للموظفين دورياً مع كل إغلاق فترة.</li>
                             </ul>
                             <div class="flex flex-wrap items-center gap-3 mb-4">
@@ -537,16 +556,16 @@
                                 </button>
                             </h4>
                             <div class="overflow-x-auto">
-                                <table id="employeePerformanceTable" class="w-full text-sm">
+                                <table id="employeePerformanceTable" class="w-full text-sm" data-sort-key="points" data-sort-dir="desc">
                                     <thead>
                                         <tr class="bg-white/10 border-b border-white/20">
-                                            <th class="p-3 text-right font-bold text-turquoise">الترتيب</th>
-                                            <th class="p-3 text-right font-bold text-turquoise">اسم الموظف</th>
-                                            <th class="p-3 text-center font-bold text-turquoise">الفرع</th>
-                                            <th class="p-3 text-center font-bold text-turquoise">عدد الحجوزات</th>
-                                            <th class="p-3 text-center font-bold text-turquoise">التقييمات</th>
-                                            <th class="p-3 text-center font-bold text-turquoise">الصافي المستحق</th>
-                                            <th class="p-3 text-center font-bold text-turquoise" title="رصيد النقاط من الفترة (صافي + مساهمة 15%). للتفاصيل اضغط على الاسم.">النقاط</th>
+                                            <th class="p-3 text-right font-bold text-turquoise cursor-pointer select-none hover:bg-white/10 transition-colors rounded-tl" data-sort-key="points" title="الترتيب حسب النقاط" onclick="sortEmployeePerformanceTable(this.dataset.sortKey)"><span>الترتيب</span> <span class="sort-arrow text-xs opacity-70 mr-1">▼</span></th>
+                                            <th class="p-3 text-right font-bold text-turquoise cursor-pointer select-none hover:bg-white/10 transition-colors" data-sort-key="name" title="فرز حسب الاسم" onclick="sortEmployeePerformanceTable(this.dataset.sortKey)"><span>اسم الموظف</span> <span class="sort-arrow text-xs opacity-70 mr-1">↕</span></th>
+                                            <th class="p-3 text-center font-bold text-turquoise cursor-pointer select-none hover:bg-white/10 transition-colors" data-sort-key="branches" title="فرز حسب الفرع" onclick="sortEmployeePerformanceTable(this.dataset.sortKey)"><span>الفرع</span> <span class="sort-arrow text-xs opacity-70 mr-1">↕</span></th>
+                                            <th class="p-3 text-center font-bold text-turquoise cursor-pointer select-none hover:bg-white/10 transition-colors" data-sort-key="count" title="فرز حسب عدد الحجوزات" onclick="sortEmployeePerformanceTable(this.dataset.sortKey)"><span>عدد الحجوزات</span> <span class="sort-arrow text-xs opacity-70 mr-1">↕</span></th>
+                                            <th class="p-3 text-center font-bold text-turquoise cursor-pointer select-none hover:bg-white/10 transition-colors" data-sort-key="totalEval" title="فرز حسب التقييمات" onclick="sortEmployeePerformanceTable(this.dataset.sortKey)"><span>التقييمات</span> <span class="sort-arrow text-xs opacity-70 mr-1">↕</span></th>
+                                            <th class="p-3 text-center font-bold text-turquoise cursor-pointer select-none hover:bg-white/10 transition-colors" data-sort-key="net" title="فرز حسب الصافي" onclick="sortEmployeePerformanceTable(this.dataset.sortKey)"><span>الصافي المستحق</span> <span class="sort-arrow text-xs opacity-70 mr-1">↕</span></th>
+                                            <th class="p-3 text-center font-bold text-turquoise cursor-pointer select-none hover:bg-white/10 transition-colors rounded-tr" data-sort-key="points" title="رصيد النقاط من الفترة (صافي + مساهمة 15%). للتفاصيل اضغط على الاسم." onclick="sortEmployeePerformanceTable(this.dataset.sortKey)"><span>النقاط</span> <span class="sort-arrow text-xs opacity-70 mr-1">↕</span></th>
                                         </tr>
                                     </thead>
                                     <tbody id="employeePerformanceTableBody">
@@ -627,85 +646,30 @@
                 <button type="button" onclick="closeRatingExplanationModal()" class="text-gray-400 hover:text-white transition-colors text-2xl font-bold min-w-[44px] min-h-[44px] flex items-center justify-center rounded-lg hover:bg-white/10">&times;</button>
             </div>
             <div class="space-y-4 text-sm text-gray-300">
-                <p class="text-gray-200 font-medium leading-relaxed">
-                    عمود <strong class="text-turquoise">«النقاط»</strong> في الجدول = <strong class="text-white">رصيد النقاط من الفترة</strong> (صافي المستحق + مساهمة 15% معروض كنقاط) — نفس المفهوم في التقرير عند الضغط على الاسم. <strong class="text-white">مستوى الأداء</strong> (ممتاز/جيد/سيء) يُحسب من أدائك مقارنةً بباقي الموظفين ويُعرض تحت النقاط للتوضيح. فيما يلي شرح كيفية حساب مستوى الأداء:
+                <p class="text-gray-200 font-medium">
+                    <strong class="text-turquoise">النقاط</strong> = رصيدك من الفترة (صافي + 15%).<br>
+                    <strong class="text-turquoise">مستوى الأداء</strong> = نسبة من 0 إلى 100 ثم تحويلها لمستوى.
                 </p>
 
                 <div class="bg-turquoise/10 rounded-xl p-4 border border-turquoise/30">
-                    <h3 class="text-base font-bold text-turquoise mb-3 flex items-center gap-2">
-                        <span>1.</span>
-                        <span>ما الذي يُؤخذ في الاعتبار؟</span>
-                    </h3>
-                    <ul class="space-y-2 list-none">
-                        <li class="flex items-start gap-2">
-                            <span class="text-turquoise font-bold mt-0.5">•</span>
-                            <span><strong class="text-white">عدد الحجوزات:</strong> كلما كان عدد حجوزاتك أقرب إلى أعلى موظف في الفريق، زادت نقاطك في هذا الجزء.</span>
-                        </li>
-                        <li class="flex items-start gap-2">
-                            <span class="text-turquoise font-bold mt-0.5">•</span>
-                            <span><strong class="text-white">التقييمات (Booking و Google):</strong> كلما كان إجمالي تقييماتك أقرب إلى أعلى موظف، زادت نقاطك.</span>
-                        </li>
-                        <li class="flex items-start gap-2">
-                            <span class="text-turquoise font-bold mt-0.5">•</span>
-                            <span><strong class="text-white">الحضور 26 يوم وأكثر:</strong> إذا أتممت 26 يوماً وأكثر من العطاء (بطل تحدي الظروف)، يُضاف لك <strong class="text-green-400">+0.15</strong> على النتيجة النهائية كمكافأة التزام.</span>
-                        </li>
-                        <li class="flex items-start gap-2">
-                            <span class="text-red-400 font-bold mt-0.5">•</span>
-                            <span><strong class="text-white">الخصم الإداري:</strong> إذا كان عليك خصم إداري بأي قيمة، يتم <strong class="text-red-400">تخفيض التقييم بمقدار 0.25</strong> ليعكس تأثير التقصير على الأداء.</span>
-                        </li>
-                        <li class="flex items-start gap-2">
-                            <span class="text-red-400 font-bold mt-0.5">•</span>
-                            <span><strong class="text-white">خصم تقييم الفندق (تقييمات سلبية) وفقدان فرص حجز (مكالمات لم يُرد عليها):</strong> إذا سجّل الفرع تقييمات سلبية (أقل من تقييم الفندق) أو فقدان فرص حجز نتيجة المكالمات التي لم يتم الرد عليها، يُخصم <strong class="text-red-400">10 ريال × عدد التقييمات السلبية للفرع</strong> من صافي كل موظف في ذلك الفرع، ويُنقص نقاط التقييم (مثال: 5 تقييمات سلبية = 50 ريال من صافي كل موظف في الفرع).</span>
-                        </li>
+                    <h3 class="text-base font-bold text-turquoise mb-2">كيف يُحسب مستوى الأداء؟</h3>
+                    <ul class="space-y-1.5 list-none text-gray-200">
+                        <li><strong>70%</strong> من رصيد النقاط (مكانك بين الموظفين)</li>
+                        <li><strong>30%</strong> من عدد التقييمات (بوكينج + جوجل)</li>
+                        <li><span class="text-green-400">+15 نقطة</span> للحضور 26 يوم وأكثر</li>
+                        <li><span class="text-red-400">−10 نقاط</span> عند وجود خصم إداري</li>
                     </ul>
                 </div>
 
                 <div class="bg-white/5 rounded-xl p-4 border border-white/10">
-                    <h3 class="text-base font-bold text-turquoise mb-3 flex items-center gap-2">
-                        <span>2.</span>
-                        <span>كيف تُترجم النتيجة إلى نقاط ومستوى؟</span>
-                    </h3>
-                    <p class="text-gray-200 mb-3 leading-relaxed">
-                        <strong class="text-white">مستوى الأداء</strong> (ممتاز/جيد/سيء) يُحسب من نتيجة داخلية (بعد الحضور والخصم) تُحوَّل إلى <strong class="text-white">نقاط من 0 إلى 100</strong>، ثم يُحدَّد المستوى حسب الجدول التالي (ويُعرض تحت عمود «النقاط» في الجدول):
-                    </p>
-                    <ul class="space-y-2 list-none">
-                        <li class="flex items-start gap-2">
-                            <span class="text-green-400 font-bold">•</span>
-                            <span><strong class="text-green-400">ممتاز:</strong> من 90 إلى 100 نقطة.</span>
-                        </li>
-                        <li class="flex items-start gap-2">
-                            <span class="text-green-300 font-bold">•</span>
-                            <span><strong class="text-green-300">جيد:</strong> من 80 إلى أقل من 90 نقطة.</span>
-                        </li>
-                        <li class="flex items-start gap-2">
-                            <span class="text-yellow-400 font-bold">•</span>
-                            <span><strong class="text-yellow-400">متوسط:</strong> من 60 إلى أقل من 80 نقطة.</span>
-                        </li>
-                        <li class="flex items-start gap-2">
-                            <span class="text-orange-400 font-bold">•</span>
-                            <span><strong class="text-orange-400">ضعيف:</strong> من 40 إلى أقل من 60 نقطة.</span>
-                        </li>
-                        <li class="flex items-start gap-2">
-                            <span class="text-red-400 font-bold">•</span>
-                            <span><strong class="text-red-400">سيء:</strong> أقل من 40 نقطة.</span>
-                        </li>
+                    <h3 class="text-base font-bold text-turquoise mb-2">المستويات:</h3>
+                    <ul class="space-y-1 list-none">
+                        <li><strong class="text-green-400">ممتاز</strong> 90–100</li>
+                        <li><strong class="text-green-300">جيد جداً</strong> 80–89</li>
+                        <li><strong class="text-yellow-400">جيد</strong> 60–79</li>
+                        <li><strong class="text-orange-400">ضعيف</strong> 40–59</li>
+                        <li><strong class="text-red-400">سيء</strong> 0–39</li>
                     </ul>
-                </div>
-
-                <div class="bg-white/5 rounded-xl p-4 border border-white/10">
-                    <p class="text-gray-200 leading-relaxed">
-                        <strong class="text-turquoise">ملاحظة:</strong> <strong class="text-white">النقاط</strong> في الجدول = رصيد النقاط من الفترة (صافي + 15%). <strong class="text-white">مستوى الأداء</strong> (ممتاز → سيء) يعكس أداءك مقارنةً بباقي الموظفين. تُؤخذ هذه النتائج بعين الاعتبار عند نظر الإدارة في قرارات مثل زيادة الراتب والمميزات مستقبلاً. <span class="text-turquoise/90 font-medium">حافظ على أدائك لتعزّز فرصك في الزيادات والمكافآت.</span>
-                    </p>
-                </div>
-
-                <div class="bg-turquoise/5 rounded-xl p-4 border border-turquoise/20">
-                    <h3 class="text-base font-bold text-turquoise mb-2 flex items-center gap-2">
-                        <span>3.</span>
-                        <span>ملخص سريع</span>
-                    </h3>
-                    <p class="text-gray-200 leading-relaxed">
-                        <strong class="text-white">النقاط</strong> في الجدول = رصيد النقاط من الفترة (صافي + 15%). <strong class="text-white">مستوى الأداء</strong> (ممتاز → سيء) يُبنى على أداء الحجوزات والتقييمات بالنسبة لباقي الموظفين، مع <strong class="text-green-400">مكافأة للحضور 26 يوم وأكثر</strong>، و<strong class="text-red-400">تخفيض عند وجود خصم إداري أو خصم تقييم الفندق</strong>. كلما كنت أقرب للأعلى وملتزماً بالحضور (وبلا خصم)، ارتفع مستوى أدائك إلى «ممتاز».
-                    </p>
                 </div>
             </div>
             <div class="mt-4 sm:mt-6 flex justify-end">
@@ -879,7 +843,7 @@
 
     <!-- Discounts Modal -->
     <div id="discountsModal" class="fixed inset-0 z-[1003] hidden flex items-center justify-center bg-black/70 backdrop-blur-sm p-2 sm:p-4" onclick="closeDiscountsModal(event)" style="z-index: 1003 !important;">
-        <div class="glass rounded-xl sm:rounded-2xl p-4 sm:p-5 md:p-6 max-w-3xl w-full mx-2 sm:mx-4 max-h-[90vh] overflow-y-auto" onclick="event.stopPropagation()" style="background: linear-gradient(135deg, rgba(15, 23, 41, 0.98) 0%, rgba(26, 31, 53, 0.98) 100%); border: 2px solid rgba(239, 68, 68, 0.4); box-shadow: 0 20px 60px rgba(239, 68, 68, 0.2);">
+        <div class="glass rounded-xl sm:rounded-2xl p-4 sm:p-5 md:p-6 max-w-3xl w-full mx-2 sm:mx-4 max-h-[90vh] overflow-y-auto min-w-0 overflow-hidden" onclick="event.stopPropagation()" style="background: linear-gradient(135deg, rgba(15, 23, 41, 0.98) 0%, rgba(26, 31, 53, 0.98) 100%); border: 2px solid rgba(239, 68, 68, 0.4); box-shadow: 0 20px 60px rgba(239, 68, 68, 0.2);">
             <!-- Header -->
             <div class="flex items-center justify-between mb-5 pb-3 border-b border-white/10">
                 <h2 class="text-lg sm:text-xl font-black text-red-400 flex items-center gap-2">
@@ -970,12 +934,12 @@
             </div>
             
             <!-- Discounts List -->
-            <div class="mt-6 border-t border-white/10 pt-4">
+            <div class="mt-6 border-t border-white/10 pt-4 min-w-0">
                 <h3 class="text-sm sm:text-base font-bold text-white mb-3 flex items-center gap-2">
                     <span class="text-red-400">📋</span>
                     <span>الخصومات المطبقة:</span>
                 </h3>
-                <div id="discountsList" class="space-y-2 max-h-[280px] overflow-y-auto pr-2">
+                <div id="discountsList" class="space-y-2 max-h-[280px] overflow-y-auto pr-2 min-w-0 overflow-hidden">
                     <!-- Discounts will be populated here -->
                 </div>
             </div>
@@ -1059,13 +1023,13 @@
       })();
     </script>
     <!-- البنود الـ 55 للتعليمات/أنواع الخصم (قبل أي سكربت يحتاجها) -->
-    <script src="src/discount-clauses-55.js"></script>
+    <script defer src="src/discount-clauses-55.js"></script>
     <!-- وحدات المكافآت: firebase ثم rbac ثم table ثم app-extensions ثم نقطة الدخول app.js -->
-    <script src="src/rewards-firebase.js"></script>
-    <script src="src/rewards-rbac.js"></script>
-    <script src="src/rewards-table.js"></script>
-    <script src="src/app-extensions.js?v=reasons-row-small"></script>
-    <script src="src/app.js?v=bonus-dedup-5"></script>
+    <script defer src="src/rewards-firebase.js"></script>
+    <script defer src="src/rewards-rbac.js"></script>
+    <script defer src="src/rewards-table.js"></script>
+    <script defer src="src/app-extensions.js?v=reasons-row-small"></script>
+    <script defer src="src/app.js?v=bonus-dedup-5"></script>
 </body>
 
 </html>

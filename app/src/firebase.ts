@@ -42,11 +42,13 @@ export async function saveConfigToFirebase(config: AppConfig): Promise<void> {
 /**
  * Load AppConfig from Firebase Storage.
  * Returns null if not found or on error.
- * Skips the request (avoids 404) when no one has saved config to Firebase yet.
+ * @param options.forceFetch — when true, try Firebase even without adora_firebase_config_saved
+ *   (used on new device when localStorage is empty, to fetch config saved from another device).
  */
-export async function loadConfigFromFirebase(): Promise<AppConfig | null> {
+export async function loadConfigFromFirebase(options?: { forceFetch?: boolean }): Promise<AppConfig | null> {
   try {
-    if (typeof localStorage !== 'undefined' && !localStorage.getItem(FIREBASE_CONFIG_SAVED_KEY)) {
+    const skipGuard = options?.forceFetch === true;
+    if (!skipGuard && typeof localStorage !== 'undefined' && !localStorage.getItem(FIREBASE_CONFIG_SAVED_KEY)) {
       return null;
     }
     const st = getFirebaseStorage();

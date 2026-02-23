@@ -482,7 +482,7 @@ function doSyncLivePeriodNow() {
   });
 }
 
-var LIVE_POLL_INTERVAL_MS = 15000;
+var LIVE_POLL_INTERVAL_MS = 30000;
 var ADMIN_POLL_INTERVAL_MS = 12000;
 var livePollTimerId = null;
 
@@ -544,10 +544,12 @@ function startLivePeriodPolling() {
   var isAdmin = typeof isAdminMode === 'function' && isAdminMode();
   var firstDelay = isAdmin ? 0 : LIVE_POLL_INTERVAL_MS;
   livePollTimerId = setTimeout(poll, firstDelay);
-  if (isAdmin && typeof document !== 'undefined' && document.addEventListener) {
+  if (typeof document !== 'undefined' && document.addEventListener) {
     document.addEventListener('visibilitychange', function () {
-      if (document.visibilityState === 'visible' && typeof isAdminMode === 'function' && isAdminMode() && livePollTimerId != null) {
-        poll();
+      if (document.visibilityState === 'hidden') {
+        stopLivePeriodPolling();
+      } else {
+        startLivePeriodPolling();
       }
     });
   }

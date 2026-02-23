@@ -1,4 +1,12 @@
-import * as XLSX from 'xlsx';
+/** تحميل xlsx عند الطلب من App.tsx (ديناميكي) لتحسين وقت التحميل الأولي. */
+let _xlsxModule: typeof import('xlsx') | null = null;
+export function setXLSXModule(m: typeof import('xlsx')) {
+  _xlsxModule = m;
+}
+function getXLSX(): typeof import('xlsx') {
+  if (!_xlsxModule) throw new Error('XLSX not loaded; call setXLSXModule after dynamic import');
+  return _xlsxModule;
+}
 
 /** حد أقصى لحجم ملف Excel (10MB) — تخفيف من ReDoS/استهلاك الموارد. الحزمة: SheetJS من CDN الرسمي (xlsx-0.20.3). تقييد الحجم والنوع في App.tsx قبل القراءة. */
 export const MAX_FILE_SIZE_BYTES = 10 * 1024 * 1024;
@@ -260,13 +268,14 @@ export function getFileTypeIcon(baseType: string): { color: string; bg: string }
     log: { color: 'text-teal-400', bg: 'bg-teal-500/20' },
     report: { color: 'text-sky-400', bg: 'bg-sky-500/20' },
     units: { color: 'text-amber-400', bg: 'bg-amber-500/20' },
-    unknown: { color: 'text-red-400', bg: 'bg-red-500/20' },
+    unknown: { color: 'text-[var(--adora-error)]', bg: 'bg-adora-error-subtle' },
   };
   return icons[baseType] || icons.unknown;
 }
 
 export function detectFileType(buffer: ArrayBuffer): FileDetectionResult {
   assertFileSize(buffer);
+  const XLSX = getXLSX();
   const wb = XLSX.read(buffer, { type: 'array' });
   const sheetName = wb.SheetNames[0] || '';
   const rows = XLSX.utils.sheet_to_json<unknown[]>(wb.Sheets[sheetName], {
@@ -351,6 +360,7 @@ export function extractRoomNumber(roomUnit: string): string {
 
 function readSheet(buffer: ArrayBuffer) {
   assertFileSize(buffer);
+  const XLSX = getXLSX();
   const wb = XLSX.read(buffer, { type: 'array' });
   return XLSX.utils.sheet_to_json<unknown[]>(wb.Sheets[wb.SheetNames[0]], {
     header: 1, defval: '',

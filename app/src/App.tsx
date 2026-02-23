@@ -43,6 +43,7 @@ import {
   Link2,
   TrendingDown,
   Moon,
+  Sun,
   Printer,
   Info,
   FileText,
@@ -53,6 +54,7 @@ import {
   ChevronUp,
   ChevronDown,
 } from 'lucide-react';
+import { getTheme, toggleTheme } from '../shared/theme.js';
 import type { MatchedRow, StaffRecord, BookingSource, ShiftType, RoomCategory } from './types';
 import {
   ADMIN_SECRET_KEY,
@@ -118,6 +120,7 @@ import {
   getStaffBranches,
   extractRoomNumber,
   MAX_FILE_SIZE_BYTES,
+  setXLSXModule,
   type FileDetectionResult,
 } from './parser';
 import {
@@ -132,6 +135,27 @@ import {
   saveDefaultConfig,
   DEFAULT_CONFIG,
 } from './config';
+
+// ===== Theme toggle (small, distinct; used in header and entry pages) =====
+function ThemeToggle({ className = '' }: { className?: string }) {
+  const [theme, setTheme] = useState<'dark' | 'light'>(() => getTheme());
+  const handleClick = useCallback(() => {
+    toggleTheme();
+    setTheme(getTheme());
+  }, []);
+  const isDark = theme === 'dark';
+  return (
+    <button
+      type="button"
+      onClick={handleClick}
+      className={`p-2 rounded-xl border border-[var(--adora-border)] bg-[var(--adora-bg-card)] hover:bg-[var(--adora-hover-bg)] text-[var(--adora-text)] transition-[background-color,color,border-color] duration-300 ease-out ${className}`}
+      title={isDark ? 'تفعيل الوضع الفاتح' : 'تفعيل الوضع الداكن'}
+      aria-label={isDark ? 'تفعيل الوضع الفاتح' : 'تفعيل الوضع الداكن'}
+    >
+      {isDark ? <Sun className="w-5 h-5 text-[var(--adora-accent)]" /> : <Moon className="w-5 h-5 text-[var(--adora-accent)]" />}
+    </button>
+  );
+}
 
 // ===== Helpers =====
 
@@ -163,10 +187,10 @@ function FilterSelect({ label, value, options, onChange }: {
 }) {
   return (
     <div className="flex flex-col gap-1">
-      <label className="text-xs text-slate-400 font-medium">{label}</label>
+      <label className="text-sm text-slate-400 font-medium">{label}</label>
       <select value={value} onChange={(e) => onChange(e.target.value)}
         className="border border-white/10 text-sm rounded-xl px-3 py-2
-                   focus:ring-2 focus:ring-[#14b8a6]/40 focus:border-[#14b8a6]/50 outline-none transition-all"
+                   focus:ring-2 focus:ring-[var(--adora-focus-border)] focus:border-[var(--adora-focus-border)] outline-none transition-all"
         style={{ colorScheme: 'dark' }}>
         <option value="">الكل</option>
         {options.map((o) => <option key={o} value={o}>{o}</option>)}
@@ -202,31 +226,27 @@ const columns = [
   ch.accessor('employeeName', {
     header: 'الموظف',
     size: 90,
-    cell: (i) => <span className="font-medium text-slate-100 truncate block text-xs">{i.getValue()}</span>,
+    cell: (i) => <span className="font-medium text-[var(--adora-text)] truncate block text-sm">{i.getValue()}</span>,
   }),
   ch.accessor('branch', {
     header: 'الفرع',
     size: 60,
-    cell: (i) => {
-      const v = i.getValue();
-      const c = v === 'الكورنيش' ? 'bg-sky-500/15 text-sky-300' : 'bg-violet-500/15 text-violet-300';
-      return <span className={`px-1.5 py-0.5 rounded-full text-[10px] font-medium ${c}`}>{v}</span>;
-    },
+    cell: (i) => <span className="px-1.5 py-0.5 rounded-full text-[14px] font-medium badge-adora">{i.getValue()}</span>,
   }),
   ch.accessor('bookingNumber', {
     header: 'رقم الحجز',
     size: 65,
-    cell: (i) => <span className="text-slate-300 font-mono text-xs">{i.getValue()}</span>,
+    cell: (i) => <span className="text-[var(--adora-text-secondary)] font-mono text-sm">{i.getValue()}</span>,
   }),
   ch.accessor('guestName', {
     header: 'العميل',
     size: 100,
-    cell: (i) => <span className="text-slate-200 text-xs truncate block">{i.getValue() || '—'}</span>,
+    cell: (i) => <span className="text-[var(--adora-text)] text-sm truncate block">{i.getValue() || '—'}</span>,
   }),
   ch.accessor('roomUnit', {
     header: 'الوحدة',
     size: 90,
-    cell: (i) => <span className="text-slate-300 text-xs truncate block">{i.getValue() || '—'}</span>,
+    cell: (i) => <span className="text-[var(--adora-text-secondary)] text-sm truncate block">{i.getValue() || '—'}</span>,
   }),
   ch.accessor('roomCategory', {
     header: 'التصنيف',
@@ -234,11 +254,11 @@ const columns = [
     cell: (i) => {
       const v = i.getValue();
       return v === 'VIP' ? (
-        <span className="px-1.5 py-0.5 rounded-full text-[10px] font-bold bg-amber-500/15 text-amber-300 flex items-center gap-0.5 w-fit">
+        <span className="px-1.5 py-0.5 rounded-full text-[14px] font-bold badge-warning flex items-center gap-0.5 w-fit">
           <Crown className="w-2.5 h-2.5" />VIP
         </span>
       ) : (
-        <span className="px-1.5 py-0.5 rounded-full text-[10px] font-medium bg-slate-600/25 text-slate-500">عادي</span>
+        <span className="px-1.5 py-0.5 rounded-full text-[14px] font-medium badge-muted">عادي</span>
       );
     },
   }),
@@ -248,11 +268,11 @@ const columns = [
     cell: (i) => {
       const v = i.getValue();
       const c: Record<string, string> = {
-        استقبال: 'bg-emerald-500/15 text-emerald-300',
-        بوكينج: 'bg-orange-500/15 text-orange-300',
-        'غير محدد': 'bg-slate-600/25 text-slate-500',
+        استقبال: 'badge-success',
+        بوكينج: 'badge-warning',
+        'غير محدد': 'badge-muted',
       };
-      return <span className={`px-1.5 py-0.5 rounded-full text-[10px] font-medium ${c[v] || ''}`}>{v}</span>;
+      return <span className={`px-1.5 py-0.5 rounded-full text-[14px] font-medium ${c[v] || 'badge-muted'}`}>{v}</span>;
     },
   }),
   ch.accessor('shift', {
@@ -261,11 +281,11 @@ const columns = [
     cell: (i) => {
       const v = i.getValue();
       const c: Record<string, string> = {
-        صباح: 'bg-amber-500/15 text-amber-300',
-        مساء: 'bg-indigo-500/15 text-indigo-300',
-        ليل: 'bg-slate-600/30 text-slate-300',
+        صباح: 'badge-warning',
+        مساء: 'badge-adora',
+        ليل: 'badge-muted',
       };
-      return <span className={`px-1.5 py-0.5 rounded-full text-[10px] font-medium ${c[v] || ''}`}>{v}</span>;
+      return <span className={`px-1.5 py-0.5 rounded-full text-[14px] font-medium ${c[v] || 'badge-muted'}`}>{v}</span>;
     },
   }),
   ch.accessor('priceSAR', {
@@ -275,10 +295,9 @@ const columns = [
       const row = i.row.original;
       return (
         <div className="flex items-center gap-1">
-          <span className="text-emerald-400 font-mono text-xs font-semibold">{i.getValue().toLocaleString('en-SA')}</span>
+          <span className="text-[var(--adora-success)] font-mono text-sm font-semibold">{i.getValue().toLocaleString('en-SA')}</span>
           {row.isMerged && (
-            <span title={`دمج مع حجز ${row.mergedWithBooking}`}
-              className="flex items-center gap-0.5 px-1 py-0.5 rounded bg-purple-500/12 text-purple-400 text-[8px] font-bold">
+            <span title={`دمج مع حجز ${row.mergedWithBooking}`} className="flex items-center gap-0.5 px-1 py-0.5 rounded text-[8px] font-bold badge-adora">
               <Link2 className="w-2.5 h-2.5" />دمج
             </span>
           )}
@@ -293,13 +312,11 @@ const columns = [
       const row = i.row.original;
       return (
         <div className="flex flex-col items-end">
-          <span className="text-slate-300 font-mono text-xs flex items-center gap-0.5">
-            <Moon className="w-2.5 h-2.5 text-indigo-400/50" />{row.nights}
-            {row.isMonthly && (
-              <span className="px-1 py-0 rounded bg-cyan-500/12 text-cyan-400 text-[8px] font-bold mr-0.5">شهري</span>
-            )}
+          <span className="text-[var(--adora-text-secondary)] font-mono text-sm flex items-center gap-0.5">
+            <Moon className="w-2.5 h-2.5 opacity-60" />{row.nights}
+            {row.isMonthly && <span className="px-1 py-0 rounded text-[8px] font-bold badge-adora mr-0.5">شهري</span>}
           </span>
-          <span className="text-slate-600 font-mono text-[10px]">{row.nightlyRate.toLocaleString('en-SA')}/ل</span>
+          <span className="text-[var(--adora-text-secondary)] font-mono text-[14px]">{row.nightlyRate.toLocaleString('en-SA')}/ل</span>
         </div>
       );
     },
@@ -309,27 +326,17 @@ const columns = [
     size: 60,
     cell: (i) => {
       const row = i.row.original;
-      if (row.isExcess || !row.minPrice) return <span className="text-slate-800">—</span>;
+      if (row.isExcess || !row.minPrice) return <span className="text-[var(--adora-text-secondary)]">—</span>;
       if (row.isRoomTransfer) {
-        return (
-          <span className="px-1.5 py-0.5 rounded text-[10px] font-bold bg-blue-500/12 text-blue-400 border border-blue-500/15 whitespace-nowrap">
-            ↔ نقل
-          </span>
-        );
+        return <span className="px-1.5 py-0.5 rounded text-[14px] font-bold badge-adora whitespace-nowrap">↔ نقل</span>;
       }
       if (row.priceShortfall <= 0) {
-        return (
-          <span className="px-1.5 py-0.5 rounded text-[10px] font-bold bg-emerald-500/8 text-emerald-500/80 border border-emerald-500/15">
-            ✓ سليم
-          </span>
-        );
+        return <span className="px-1.5 py-0.5 rounded text-[14px] font-bold badge-success">✓ سليم</span>;
       }
       return (
         <div className="flex items-center gap-1">
-          <TrendingDown className="w-3 h-3 text-red-400 shrink-0" />
-          <span className="px-1.5 py-0.5 rounded text-[10px] font-bold bg-red-500/12 text-red-400 border border-red-500/15 whitespace-nowrap">
-            ▼ {row.priceShortfall.toLocaleString('en-SA')}
-          </span>
+          <TrendingDown className="w-3 h-3 text-[var(--adora-error)] shrink-0" />
+          <span className="px-1.5 py-0.5 rounded text-[14px] font-bold badge-error whitespace-nowrap">▼ {row.priceShortfall.toLocaleString('en-SA')}</span>
         </div>
       );
     },
@@ -339,39 +346,32 @@ const columns = [
     size: 65,
     cell: (i) => {
       const v = i.getValue();
-      if (!v || v === 'غير مصنف' || v === 'غير محدد') return <span className="text-slate-700 text-[10px]">—</span>;
-      const isMerged = v.includes('غرفتين');
-      return (
-        <span className={`px-1.5 py-0.5 rounded text-[10px] font-medium ${
-          isMerged ? 'bg-purple-500/12 text-purple-300' : 'bg-slate-600/15 text-slate-400'
-        }`}>
-          {v}
-        </span>
-      );
+      if (!v || v === 'غير مصنف' || v === 'غير محدد') return <span className="text-[var(--adora-text-secondary)] text-[14px]">—</span>;
+      return <span className="px-1.5 py-0.5 rounded text-[14px] font-medium badge-muted">{v}</span>;
     },
   }),
   ch.accessor('checkInTime', {
     header: 'الدخول',
     size: 68,
-    cell: (i) => <span className="text-slate-500 text-[11px] font-mono">{i.getValue()}</span>,
+    cell: (i) => <span className="text-[var(--adora-text-secondary)] text-[15px] font-mono">{i.getValue()}</span>,
   }),
   ch.accessor('isExcess', {
     header: 'الحالة',
     size: 50,
     cell: (i) => i.getValue()
-      ? <span className="px-1.5 py-0.5 rounded-full text-[10px] font-bold bg-amber-500/15 text-amber-400 border border-amber-500/20">زيادة</span>
-      : <span className="px-1.5 py-0.5 rounded-full text-[10px] font-bold bg-emerald-500/10 text-emerald-400 border border-emerald-500/20">محسوب</span>,
+      ? <span className="px-1.5 py-0.5 rounded-full text-[14px] font-bold badge-warning">زيادة</span>
+      : <span className="px-1.5 py-0.5 rounded-full text-[14px] font-bold badge-success">محسوب</span>,
   }),
   ch.accessor('excessReason', {
     header: 'السبب',
     size: 60,
     cell: (i) => {
       const reason = i.getValue();
-      if (!reason) return <span className="text-slate-700">—</span>;
-      const colors: Record<string, string> = {
-        'تجاوز العدد': 'text-amber-400 bg-amber-500/8',
-        'بدون صلاحية': 'text-orange-400 bg-orange-500/8',
-        'لم يخرج': 'text-sky-400 bg-sky-500/8',
+      if (!reason) return <span className="text-[var(--adora-text-secondary)]">—</span>;
+      const cls: Record<string, string> = {
+        'تجاوز العدد': 'badge-warning',
+        'بدون صلاحية': 'badge-warning',
+        'لم يخرج': 'badge-adora',
       };
       const icons: Record<string, string> = {
         'تجاوز العدد': '⚡',
@@ -379,7 +379,7 @@ const columns = [
         'لم يخرج': '🏨',
       };
       return (
-        <span className={`px-1.5 py-0.5 rounded text-[10px] font-medium ${colors[reason] || 'text-slate-500'}`}>
+        <span className={`px-1.5 py-0.5 rounded text-[14px] font-medium ${cls[reason] || 'badge-muted'}`}>
           {icons[reason] || ''} {reason}
         </span>
       );
@@ -614,7 +614,7 @@ export default function App() {
   useEffect(() => {
     if (hasLocalConfig()) return; // Already has local settings — skip
     import('./firebase').then(({ loadConfigFromFirebase }) => {
-      loadConfigFromFirebase().then((fbConfig) => {
+      loadConfigFromFirebase({ forceFetch: true }).then((fbConfig) => {
         if (fbConfig) {
           setConfig(fbConfig);
           saveConfig(fbConfig); // Cache locally so next load is instant
@@ -677,6 +677,9 @@ export default function App() {
     const newUnknown: string[] = [...unknownFiles];
     const rejectionMessages: string[] = [];
     let updatedConfig = config;
+
+    const xlsxMod = await import('xlsx');
+    setXLSXModule(xlsxMod);
 
     for (const file of Array.from(files)) {
       const validation = validateExcelFile(file);
@@ -888,6 +891,7 @@ export default function App() {
   const handleSaveConfig = useCallback((newConfig: AppConfig) => {
     setConfig(newConfig);
     saveConfig(newConfig);
+    import('./firebase').then(({ saveConfigToFirebase }) => saveConfigToFirebase(newConfig).catch(() => {}));
     setShowSettings(false);
     // If already analyzed, trigger automatic re-analysis with new config
     if (analyzed && canAnalyze) {
@@ -979,33 +983,41 @@ export default function App() {
 
   return (
     adminRoleRedirect ? (
-      <div dir="rtl" className="min-h-screen text-slate-100 relative flex items-center justify-center px-4">
+      <div dir="rtl" className="min-h-screen text-[var(--adora-text)] relative flex items-center justify-center px-4">
+        <ThemeToggle className="fixed top-4 left-4 z-[100]" />
         <div className="glass rounded-2xl border border-white/15 p-6 max-w-xl w-full text-center">
           <h2 className="text-xl font-black text-turquoise mb-2">جاري التحويل</h2>
-          <p className="text-sm text-slate-300 leading-7">تحويلك إلى شاشة المكافآت بحسب صلاحيات الرابط...</p>
+          <p className="text-sm text-[var(--adora-text-secondary)] leading-7">تحويلك إلى شاشة المكافآت بحسب صلاحيات الرابط...</p>
         </div>
       </div>
     ) : adminKeyFromUrl === '' ? (
-      <AdminGate gateKey={gateKey} setGateKey={setGateKey} onSubmit={handleGateSubmit} />
+      <>
+        <ThemeToggle className="fixed top-4 left-4 z-[100]" />
+        <AdminGate gateKey={gateKey} setGateKey={setGateKey} onSubmit={handleGateSubmit} />
+      </>
     ) : !isAdminLink ? (
-      <div dir="rtl" className="min-h-screen text-slate-100 relative flex items-center justify-center px-4">
+      <div dir="rtl" className="min-h-screen text-[var(--adora-text)] relative flex items-center justify-center px-4">
+        <ThemeToggle className="fixed top-4 left-4 z-[100]" />
         <div className="glass rounded-2xl border border-white/15 p-6 max-w-xl w-full text-center">
           <h2 className="text-xl font-black text-turquoise mb-2">غير مصرح بالدخول</h2>
-          <p className="text-sm text-slate-300 leading-7">
+          <p className="text-sm text-[var(--adora-text-secondary)] leading-7">
             مفتاح الدخول غير صحيح. تأكد من الرابط أو أدخل المفتاح من الصفحة الرئيسية.
           </p>
-          <a href={typeof window !== 'undefined' ? window.location.origin + '/' : '/'} className="mt-4 inline-block text-turquoise hover:text-cyan-300 text-sm font-semibold">← العودة لصفحة الدخول</a>
+          <a href={typeof window !== 'undefined' ? window.location.origin + '/' : '/'} className="mt-4 inline-block text-[var(--adora-accent)] hover:opacity-90 text-sm font-semibold">← العودة لصفحة الدخول</a>
         </div>
       </div>
     ) : authState === 'checking' ? (
-      <div dir="rtl" className="min-h-screen text-slate-100 relative flex items-center justify-center px-4">
+      <div dir="rtl" className="min-h-screen text-[var(--adora-text)] relative flex items-center justify-center px-4">
+        <ThemeToggle className="fixed top-4 left-4 z-[100]" />
         <div className="glass rounded-2xl border border-white/15 p-6 max-w-xl w-full text-center">
           <h2 className="text-xl font-black text-turquoise mb-2">جاري التحقق من الجلسة</h2>
-          <p className="text-sm text-slate-300 leading-7">لحظات من فضلك...</p>
+          <p className="text-sm text-[var(--adora-text-secondary)] leading-7">لحظات من فضلك...</p>
         </div>
       </div>
     ) : authState === 'signed_out' ? (
-      <AdminLoginForm
+      <>
+        <ThemeToggle className="fixed top-4 left-4 z-[100]" />
+        <AdminLoginForm
         loginEmail={loginEmail}
         onLoginEmailChange={enforceStrictEmailInput}
         loginPassword={loginPassword}
@@ -1028,20 +1040,22 @@ export default function App() {
         resetStatus={resetStatus}
         onResetPassword={handleResetPassword}
       />
+      </>
     ) : (adminEntryMode === 'checking' || adminEntryMode === 'redirecting') ? (
-      <div dir="rtl" className="min-h-screen text-slate-100 relative flex items-center justify-center px-4">
+      <div dir="rtl" className="min-h-screen text-[var(--adora-text)] relative flex items-center justify-center px-4">
+        <ThemeToggle className="fixed top-4 left-4 z-[100]" />
         <div className="glass rounded-2xl border border-white/15 p-6 max-w-xl w-full text-center">
           <h2 className="text-xl font-black text-turquoise mb-2">
             {adminEntryMode === 'redirecting' ? 'جاري فتح شاشة المكافآت' : 'جاري فحص حالة الفترة'}
           </h2>
-          <p className="text-sm text-slate-300 leading-7">
+          <p className="text-sm text-[var(--adora-text-secondary)] leading-7">
             إذا كانت الفترة مفتوحة سيتم تحويلك تلقائيا إلى شاشة المكافآت، وإذا كانت مغلقة ستظهر صفحة رفع الملفات.
           </p>
-          {authUserEmail && <p className="text-xs text-slate-400 mt-2">{authUserEmail}</p>}
+          {authUserEmail && <p className="text-sm text-[var(--adora-text-secondary)] mt-2">{authUserEmail}</p>}
         </div>
       </div>
     ) : (
-    <div dir="rtl" className="min-h-screen text-slate-100 relative">
+    <div dir="rtl" className="min-h-screen text-[var(--adora-text)] relative">
       {/* Ambient background particles */}
       <div className="particles-bg" />
       {/* Loading overlay */}
@@ -1052,7 +1066,7 @@ export default function App() {
             <div className="absolute -inset-20 bg-cyan-500/10 rounded-full blur-3xl animate-pulse pointer-events-none" />
             <div className="absolute -inset-14 bg-teal-500/5 rounded-full blur-2xl pointer-events-none" />
 
-            <div className="relative bg-slate-900/70 backdrop-blur-xl border border-white/10 rounded-3xl px-12 py-10 text-center shadow-2xl shadow-cyan-500/5 max-w-sm mx-auto">
+            <div className="relative bg-[var(--adora-modal-bg)] backdrop-blur-xl border border-[var(--adora-border)] rounded-3xl px-12 py-10 text-center modal-no-side-shadow max-w-sm mx-auto">
               {/* Animated icon */}
               <div className="relative w-20 h-20 mx-auto mb-6">
                 {/* Spinning ring */}
@@ -1060,14 +1074,14 @@ export default function App() {
                 <div className="absolute inset-1.5 rounded-full border-2 border-transparent border-b-teal-400/60 border-l-teal-400/20 animate-spin" style={{ animationDirection: 'reverse', animationDuration: '1.5s' }} />
                 {/* Center icon */}
                 <div className="absolute inset-0 flex items-center justify-center">
-                  <BarChart3 className="w-8 h-8 text-cyan-400 animate-pulse" />
+                  <BarChart3 className="w-8 h-8 text-[var(--adora-accent)] animate-pulse" />
                 </div>
               </div>
 
-              <h3 className="text-lg font-bold text-white/90 mb-2">جاري التحليل</h3>
-              <p className="text-[13px] text-slate-400 mb-6 leading-relaxed">
+              <h3 className="text-lg font-bold text-[var(--adora-text)] mb-2">جاري التحليل</h3>
+              <p className="text-[13px] text-[var(--adora-text-secondary)] mb-6 leading-relaxed">
                 المرجع: تقرير إحصائيات الموظفين<br />
-                <span className="text-slate-500">الفلتر: تاريخ الإنشاء + الدخول</span>
+                <span className="text-[var(--adora-text-secondary)]">الفلتر: تاريخ الإنشاء + الدخول</span>
               </p>
 
               {/* Progress bar */}
@@ -1082,8 +1096,9 @@ export default function App() {
 
       {/* Header — unified with Rewards design (non-sticky) */}
       <header className="px-3 sm:px-5 pt-3 sm:pt-4 animate-in">
-        <div className="max-w-[1440px] mx-auto glass rounded-2xl sm:rounded-[30px] md:rounded-[40px] border-r-4 sm:border-r-6 md:border-r-8 border-turquoise p-4 sm:p-6 md:p-8">
+        <div className="max-w-[1440px] mx-auto glass rounded-2xl sm:rounded-[30px] md:rounded-[40px] border-r-4 sm:border-r-6 md:border-r-8 border-[var(--adora-accent)] p-4 sm:p-6 md:p-8">
           <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 sm:gap-5">
+            <ThemeToggle className="flex-shrink-0 self-center order-first sm:order-first" />
             {/* Right side (RTL): Logo + Title */}
             <div className="flex items-center gap-3 sm:gap-4 md:gap-5 w-full sm:w-auto">
               <div className="flex-shrink-0">
@@ -1094,14 +1109,12 @@ export default function App() {
                 />
               </div>
               <div className="flex-1 min-w-0">
-                <h1 className="text-lg sm:text-xl md:text-2xl lg:text-3xl font-black text-white truncate"
-                    style={{ fontSize: 'clamp(1rem, 3vw, 1.875rem)' }}>
+                <h1 className="text-[var(--adora-text)] truncate typography-h1">
                   مكافآت فريق عمل فندق إليت
                 </h1>
-                <p className="text-sm sm:text-base md:text-lg text-gray-300 mt-1 sm:mt-2 font-semibold"
-                   style={{ fontSize: 'clamp(0.875rem, 2vw, 1.125rem)' }}>
+                <p className="header-sub text-[var(--adora-text-secondary)] mt-1 sm:mt-2 font-semibold">
                   {analyzed && dateRange
-                    ? <>الفترة: <span className="text-turquoise font-bold">{dateRange.from} → {dateRange.to}</span></>
+                    ? <>الفترة: <span className="text-[var(--adora-accent)] font-bold">{dateRange.from} → {dateRange.to}</span></>
                     : 'تحليل الحجوزات — المرجع: تقرير إحصائيات الموظفين'
                   }
                 </p>
@@ -1152,27 +1165,27 @@ export default function App() {
                   relative flex flex-col items-center justify-center gap-4 rounded-2xl sm:rounded-[28px] border-2 border-dashed
                   cursor-pointer transition-all duration-300 p-10 min-h-[220px] glass
                   ${filledCount > 0
-                    ? 'border-[#14b8a6]/40 hover:border-[#14b8a6]/60'
-                    : 'border-white/15 hover:border-[#14b8a6]/50'
+                    ? 'border-[var(--adora-focus-border)] hover:border-[var(--adora-accent)]'
+                    : 'border-white/15 hover:border-[var(--adora-focus-border)]'
                   }
                 `}
               >
                 {detecting ? (
                   <div className="flex flex-col items-center gap-3">
-                    <div className="w-12 h-12 border-4 border-[#14b8a6]/30 border-t-[#40E0D0] rounded-full animate-spin" />
+                    <div className="w-12 h-12 border-4 border-[var(--adora-focus-border)] border-t-[var(--adora-accent)] rounded-full animate-spin" />
                     <p className="text-turquoise font-semibold">جاري تحليل الملفات...</p>
                   </div>
                 ) : (
                   <>
-                    <div className="p-4 rounded-2xl bg-[#14b8a6]/10">
+                    <div className="p-4 rounded-2xl bg-[var(--adora-hover-bg)]">
                       <FolderUp className="w-10 h-10 text-turquoise" />
                     </div>
                     <div className="text-center space-y-1.5">
-                      <p className="text-lg font-bold text-white">ارفع كل الملفات دفعة واحدة</p>
-                      <p className="text-sm text-slate-400">اسحب الملفات هنا أو اضغط لاختيارها — التعرف تلقائي من المحتوى</p>
-                      <p className="text-xs text-slate-600">تقرير إحصائيات الموظفين + سجل حركات النظام + تقرير حجوزات العملاء + تقرير وحدات الحجوزات</p>
+                      <p className="text-lg font-bold text-[var(--adora-text)]">ارفع كل الملفات دفعة واحدة</p>
+                      <p className="text-sm text-[var(--adora-text-secondary)]">اسحب الملفات هنا أو اضغط لاختيارها — التعرف تلقائي من المحتوى</p>
+                      <p className="text-sm text-[var(--adora-text-secondary)]">تقرير إحصائيات الموظفين + سجل حركات النظام + تقرير حجوزات العملاء + تقرير وحدات الحجوزات</p>
                     </div>
-                    <div className="flex items-center gap-2 text-slate-500 text-xs mt-1">
+                    <div className="flex items-center gap-2 text-[var(--adora-text-secondary)] text-sm mt-1">
                       <Upload className="w-3.5 h-3.5" /> xlsx / xls
                     </div>
                   </>
@@ -1186,7 +1199,7 @@ export default function App() {
               {/* Detected Files Summary — collapsible */}
               {filledCount > 0 && (
                 <div className={`rounded-2xl overflow-hidden border transition-colors ${
-                  isAllFilesFilled ? 'bg-emerald-950/25 border-emerald-500/50' : 'bg-slate-800/40 border-slate-700/50'
+                  isAllFilesFilled ? 'bg-emerald-950/25 border-emerald-500/50' : 'bg-[var(--adora-input-bg)] border-[var(--adora-border)]'
                 }`}>
                   <button
                     type="button"
@@ -1201,11 +1214,11 @@ export default function App() {
                       ) : (
                         <FileSpreadsheet className="w-4 h-4 text-cyan-400 shrink-0" />
                       )}
-                      <span className={isAllFilesFilled ? 'text-emerald-300' : 'text-slate-300'}>
+                      <span className={isAllFilesFilled ? 'text-[var(--adora-success)]' : 'text-[var(--adora-text)]'}>
                         الملفات المكتشفة ({filledCount}/{displaySlots.length})
                       </span>
                       {isAllFilesFilled && (
-                        <span className="text-[10px] font-bold text-emerald-400 bg-emerald-500/20 border border-emerald-500/40 rounded-full px-2 py-0.5">
+                        <span className="text-[14px] font-bold text-[var(--adora-success)] bg-emerald-500/20 border border-emerald-500/40 rounded-full px-2 py-0.5">
                           تم بنجاح 100%
                         </span>
                       )}
@@ -1216,11 +1229,11 @@ export default function App() {
                         tabIndex={0}
                         onClick={(e) => { e.stopPropagation(); clearAll(); }}
                         onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); e.stopPropagation(); clearAll(); } }}
-                        className="flex items-center gap-1 text-xs text-red-400/70 hover:text-red-400 transition-colors cursor-pointer"
+                        className="flex items-center gap-1 text-sm text-[var(--adora-error)]/70 hover:text-[var(--adora-error)] transition-colors cursor-pointer"
                       >
                         <Trash2 className="w-3 h-3" /> مسح الكل
                       </span>
-                      {isAllFilesFilled && (filesSectionCollapsed ? <ChevronDown className="w-4 h-4 text-slate-500" /> : <ChevronUp className="w-4 h-4 text-slate-500" />)}
+                      {isAllFilesFilled && (filesSectionCollapsed ? <ChevronDown className="w-4 h-4 text-[var(--adora-text-secondary)]" /> : <ChevronUp className="w-4 h-4 text-[var(--adora-text-secondary)]" />)}
                     </span>
                   </button>
 
@@ -1238,28 +1251,28 @@ export default function App() {
                             ? 'bg-emerald-950/20 border-emerald-500/30'
                             : ds.required
                             ? 'bg-red-950/10 border-red-500/20'
-                            : 'bg-slate-800/30 border-slate-700/30'
+                            : 'bg-[var(--adora-input-bg)] border-[var(--adora-border)]'
                         }`}>
                           <div className={`p-1.5 rounded-lg ${slot ? 'bg-emerald-500/20' : bg}`}>
                             {slot
                               ? <CircleCheck className="w-4 h-4 text-emerald-400" />
-                              : <CircleDashed className={`w-4 h-4 ${ds.required ? 'text-red-400/70' : 'text-slate-500'}`} />
+                              : <CircleDashed className={`w-4 h-4 ${ds.required ? 'text-[var(--adora-error)]/70' : 'text-slate-500'}`} />
                             }
                           </div>
                           <div className="flex-1 min-w-0">
-                            <p className={`text-xs font-medium truncate ${slot ? 'text-emerald-300' : color}`}>
+                            <p className={`text-sm font-medium truncate ${slot ? 'text-[var(--adora-success)]' : color}`}>
                               {label}
                             </p>
                             {slot ? (
-                              <p className="text-[10px] text-emerald-400/80 truncate">{slot.file?.name} — {slot.stats}</p>
+                              <p className="text-[14px] text-emerald-400/80 truncate">{slot.file?.name} — {slot.stats}</p>
                             ) : (
-                              <p className="text-[10px] text-slate-600">
+                              <p className="text-[14px] text-[var(--adora-text-secondary)]">
                                 {ds.required ? 'مطلوب' : 'اختياري (إثراء)'}
                               </p>
                             )}
                           </div>
                           {slot && (
-                            <button onClick={() => removeSlot(ds.key)} className="p-1 text-slate-600 hover:text-red-400 transition-colors">
+                            <button onClick={() => removeSlot(ds.key)} className="p-1 text-[var(--adora-text-secondary)] hover:text-[var(--adora-error)] transition-colors">
                               <X className="w-3.5 h-3.5" />
                             </button>
                           )}
@@ -1269,7 +1282,7 @@ export default function App() {
                   </div>
 
                   {unknownFiles.length > 0 && (
-                    <div className="flex items-center gap-2 text-xs text-amber-400/80 bg-amber-500/5 px-3 py-2 rounded-lg">
+                    <div className="flex items-center gap-2 text-sm text-amber-400/80 bg-amber-500/5 px-3 py-2 rounded-lg">
                       <AlertTriangle className="w-3.5 h-3.5 shrink-0" />
                       <span>ملفات لم يتم التعرف عليها: {unknownFiles.join('، ')}</span>
                     </div>
@@ -1283,37 +1296,37 @@ export default function App() {
               <div className="flex flex-col items-center gap-3">
                 <div className="flex items-center gap-4">
                   <button onClick={startAnalysis} disabled={!canAnalyze}
-                    className="group flex items-center gap-3 px-12 py-4 bg-[#14b8a6]
-                               hover:bg-[#0d9488] disabled:bg-slate-700
-                               text-white rounded-2xl font-bold text-lg shadow-lg shadow-[#14b8a6]/30
-                               disabled:shadow-none disabled:text-slate-500 transition-all duration-300
+                    className="group flex items-center gap-3 px-12 py-4 bg-teal-500 hover:bg-teal-600
+                               disabled:bg-slate-700 disabled:text-[var(--adora-text-secondary)]
+                               text-white rounded-2xl font-bold text-lg shadow-lg shadow-teal-500/30
+                               disabled:shadow-none transition-all duration-300
                                disabled:cursor-not-allowed active:scale-95">
                     <Play className="w-6 h-6" /> بدء التحليل
                   </button>
                   {/* Show "view previous results" if data exists from localStorage */}
                   {data.length > 0 && !analyzed && (
                     <button onClick={() => setAnalyzed(true)}
-                      className="flex items-center gap-2 px-6 py-4 bg-white/[0.06] hover:bg-[#14b8a6]/15
-                                 text-slate-300 hover:text-white rounded-2xl font-semibold text-sm
-                                 border border-white/10 hover:border-[#14b8a6]/40
+                      className="flex items-center gap-2 px-6 py-4 bg-[var(--adora-input-bg)] hover:bg-[var(--adora-hover-bg)]
+                                 text-[var(--adora-text-secondary)] hover:text-[var(--adora-text)] rounded-2xl font-semibold text-sm
+                                 border border-[var(--adora-border)] hover:border-[var(--adora-focus-border)]
                                  transition-all duration-300 active:scale-95">
                       <BarChart3 className="w-5 h-5 text-turquoise" /> عرض النتائج السابقة
                     </button>
                   )}
                 </div>
                 {!canAnalyze && filledCount === 0 && data.length === 0 && (
-                  <p className="text-xs text-slate-600">ارفع الملفات للبدء</p>
+                  <p className="text-sm text-[var(--adora-text-secondary)]">ارفع الملفات للبدء</p>
                 )}
                 {!canAnalyze && filledCount > 0 && !hasStaff && (
-                  <p className="text-xs text-red-400/80">مطلوب: تقرير إحصائيات الموظفين</p>
+                  <p className="text-sm text-[var(--adora-error)]/80">مطلوب: تقرير إحصائيات الموظفين</p>
                 )}
                 {!canAnalyze && hasStaff && !hasAnyReport && (
-                  <p className="text-xs text-red-400/80">مطلوب: تقرير حجوزات العملاء لفرع واحد على الأقل</p>
+                  <p className="text-sm text-[var(--adora-error)]/80">مطلوب: تقرير حجوزات العملاء لفرع واحد على الأقل</p>
                 )}
               </div>
 
               {filledCount === 0 && (
-                <div className="text-center py-6 text-slate-700">
+                <div className="text-center py-6 text-[var(--adora-text-secondary)]">
                   <FileSpreadsheet className="w-14 h-14 mx-auto mb-3 opacity-15" />
                   <p className="text-sm">اسحب ملفات Excel هنا أو اضغط على المنطقة أعلاه</p>
                 </div>
@@ -1327,48 +1340,48 @@ export default function App() {
           <>
             {/* Stats Cards */}
             <section className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-3 animate-in">
-              <div className="glass rounded-2xl p-4 border-r-2 border-[#14b8a6]/60 hover:border-[#14b8a6] transition-all duration-200">
-                <p className="text-[11px] text-turquoise mb-1.5 font-semibold tracking-wide">مرجع الإحصائيات</p>
-                <p className="text-2xl font-bold text-turquoise tabular-nums">{staffTotal.toLocaleString()}</p>
-                <p className="text-[10px] text-slate-500 mt-1.5">{staffList.filter((s) => s.bookingCount > 0).length} موظف نشط</p>
+              <div className="glass rounded-2xl p-4 border-r-2 border-[var(--adora-focus-border)] hover:border-[var(--adora-accent)] transition-all duration-200">
+                <p className="text-[15px] text-turquoise mb-1.5 font-semibold tracking-wide">مرجع الإحصائيات</p>
+                <p className="text-2xl font-bold text-[var(--adora-accent)] tabular-nums">{staffTotal.toLocaleString()}</p>
+                <p className="text-[14px] text-[var(--adora-text-secondary)] mt-1.5">{staffList.filter((s) => s.bookingCount > 0).length} موظف نشط</p>
               </div>
               <div className="glass rounded-2xl p-4 border-r-2 border-emerald-500/50 hover:border-emerald-500/80 transition-all duration-200">
-                <p className="text-[11px] text-emerald-400/80 mb-1.5 font-semibold tracking-wide">محسوب (مع تفاصيل)</p>
-                <p className="text-2xl font-bold text-emerald-400 tabular-nums">{countedData.length.toLocaleString()}</p>
-                <p className="text-[10px] text-slate-500 mt-1.5">تغطية {coverage}%</p>
+                <p className="text-[15px] text-[var(--adora-success)] mb-1.5 font-semibold tracking-wide opacity-90">محسوب (مع تفاصيل)</p>
+                <p className="text-2xl font-bold text-[var(--adora-success)] tabular-nums">{countedData.length.toLocaleString()}</p>
+                <p className="text-[14px] text-[var(--adora-text-secondary)] mt-1.5">تغطية {coverage}%</p>
               </div>
               <div className="glass rounded-2xl p-4 border-r-2 border-amber-500/50 hover:border-amber-500/80 transition-all duration-200">
-                <p className="text-[11px] text-amber-400/80 mb-1.5 font-semibold tracking-wide">زيادة (مستبعد)</p>
-                <p className="text-2xl font-bold text-amber-400 tabular-nums">{excessData.length}</p>
+                <p className="text-[15px] text-[var(--adora-warning)] mb-1.5 font-semibold tracking-wide opacity-90">زيادة (مستبعد)</p>
+                <p className="text-2xl font-bold text-[var(--adora-warning)] tabular-nums">{excessData.length}</p>
                 <div className="flex flex-wrap gap-x-2 gap-y-0.5 mt-1.5">
                   {excessByReason['لم يخرج'] > 0 && (
-                    <span className="text-[10px] text-sky-400">🏨 {excessByReason['لم يخرج']} لم يخرج</span>
+                    <span className="text-[14px] text-[var(--adora-accent)]">🏨 {excessByReason['لم يخرج']} لم يخرج</span>
                   )}
                   {excessByReason['تجاوز العدد'] > 0 && (
-                    <span className="text-[10px] text-amber-400">⚡ {excessByReason['تجاوز العدد']} تجاوز</span>
+                    <span className="text-[14px] text-[var(--adora-warning)]">⚡ {excessByReason['تجاوز العدد']} تجاوز</span>
                   )}
                   {excessByReason['بدون صلاحية'] > 0 && (
-                    <span className="text-[10px] text-orange-400">🚫 {excessByReason['بدون صلاحية']} بدون صلاحية</span>
+                    <span className="text-[14px] text-[var(--adora-warning)]">🚫 {excessByReason['بدون صلاحية']} بدون صلاحية</span>
                   )}
-                  {excessData.length === 0 && <span className="text-[10px] text-emerald-400">✓ مطابق</span>}
+                  {excessData.length === 0 && <span className="text-[14px] text-[var(--adora-success)]">✓ مطابق</span>}
                 </div>
               </div>
               <div className="glass rounded-2xl p-4 border-r-2 border-red-500/40 hover:border-red-500/70 transition-all duration-200">
-                <p className="text-[11px] text-red-400/80 mb-1.5 font-semibold tracking-wide">ناقص (بدون تفاصيل)</p>
-                <p className="text-2xl font-bold text-red-400 tabular-nums">{Math.max(0, staffTotal - countedData.length)}</p>
-                <p className="text-[10px] text-slate-500 mt-1.5">الإحصائيات &gt; التقارير</p>
+                <p className="text-[15px] text-[var(--adora-error)] mb-1.5 font-semibold tracking-wide opacity-90">ناقص (بدون تفاصيل)</p>
+                <p className="text-2xl font-bold text-[var(--adora-error)] tabular-nums">{Math.max(0, staffTotal - countedData.length)}</p>
+                <p className="text-[14px] text-[var(--adora-text-secondary)] mt-1.5">الإحصائيات &gt; التقارير</p>
               </div>
 {/* Hidden: إجمالي الأسعار (محسوب) */}
               <div className={`glass rounded-2xl p-4 border-r-2 transition-all duration-200 ${
                 priceAlertData.length > 0 ? 'border-red-500/50 hover:border-red-500/80' : 'border-emerald-500/40 hover:border-emerald-500/70'
               }`}>
-                <p className="text-[11px] text-red-400/80 mb-1.5 font-semibold flex items-center gap-1 tracking-wide">
+                <p className="text-[15px] text-[var(--adora-error)] mb-1.5 font-semibold flex items-center gap-1 tracking-wide opacity-90">
                   <TrendingDown className="w-3 h-3" /> تنبيهات الأسعار
                 </p>
-                <p className={`text-2xl font-bold tabular-nums ${priceAlertData.length > 0 ? 'text-red-400' : 'text-emerald-400'}`}>
+                <p className={`text-2xl font-bold tabular-nums ${priceAlertData.length > 0 ? 'text-[var(--adora-error)]' : 'text-[var(--adora-success)]'}`}>
                   {priceAlertData.length > 0 ? priceAlertData.length : '✓'}
                 </p>
-                <p className="text-[10px] text-slate-500 mt-1.5">
+                <p className="text-[14px] text-[var(--adora-text-secondary)] mt-1.5">
                   {priceAlertData.length > 0
                     ? `نقص ${totalShortfall.toLocaleString('en-SA')} SAR`
                     : 'لا توجد مخالفات سعرية'}
@@ -1383,29 +1396,29 @@ export default function App() {
             {/* Filters */}
             <section className="glass rounded-2xl sm:rounded-[28px] p-5 space-y-4 neon-glow animate-in animate-delay-200">
               <div className="flex items-center justify-between">
-                <h2 className="text-sm font-semibold text-white/80 flex items-center gap-2">
+                <h2 className="text-sm font-semibold text-[var(--adora-text)] flex items-center gap-2">
                   <Search className="w-4 h-4 text-turquoise" /> الجدول التفصيلي
                 </h2>
                 <div className="flex items-center gap-3">
                   {hasFilters && (
-                    <button onClick={clearFilters} className="flex items-center gap-1 text-xs text-red-400 hover:text-red-300">
+                    <button onClick={clearFilters} className="flex items-center gap-1 text-sm text-[var(--adora-error)] hover:opacity-90">
                       <X className="w-3 h-3" /> مسح
                     </button>
                   )}
                   <button onClick={() => { setAnalyzed(false); }}
-                    className="text-xs text-slate-500 hover:text-slate-300 transition-colors">
+                    className="text-sm text-[var(--adora-text-secondary)] hover:text-[var(--adora-text)] transition-colors">
                     ← رجوع للملفات
                   </button>
                 </div>
               </div>
 
               <div className="relative">
-                <Search className="absolute right-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-500" />
+                <Search className="absolute right-3 top-1/2 -translate-y-1/2 w-4 h-4 text-[var(--adora-text-secondary)]" />
                 <input type="text" placeholder="بحث (موظف، عميل، وحدة، رقم حجز)..."
                   value={globalFilter} onChange={(e) => setGlobalFilter(e.target.value)}
-                  className="w-full bg-white/[0.04] border border-white/10 text-slate-200 text-sm rounded-xl
-                             pr-10 pl-4 py-2.5 focus:ring-2 focus:ring-[#14b8a6]/40 focus:border-[#14b8a6]/50
-                             outline-none transition-all placeholder:text-slate-600" />
+                  className="w-full bg-[var(--adora-input-bg)] border border-[var(--adora-border)] text-[var(--adora-text)] text-sm rounded-xl
+                             pr-10 pl-4 py-2.5 focus:ring-2 focus:ring-[var(--adora-focus-border)] focus:border-[var(--adora-focus-border)]
+                             outline-none transition-all placeholder:text-[var(--adora-text-secondary)]" />
               </div>
 
               <div className="grid grid-cols-2 md:grid-cols-6 gap-3">
@@ -1422,7 +1435,7 @@ export default function App() {
                   className={`flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium transition-all ${
                     fCountedOnly
                       ? 'bg-emerald-500/20 text-emerald-300 border border-emerald-500/40'
-                      : 'bg-slate-700/50 text-slate-400 border border-slate-600 hover:text-slate-300'
+                      : 'bg-[var(--adora-input-bg)] text-[var(--adora-text-secondary)] border border-[var(--adora-border)] hover:text-[var(--adora-text)]'
                   }`}>
                   <ShieldCheck className="w-4 h-4" /> المحسوب فقط
                 </button>
@@ -1430,7 +1443,7 @@ export default function App() {
                   className={`flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium transition-all ${
                     fExcessOnly
                       ? 'bg-amber-500/20 text-amber-300 border border-amber-500/40'
-                      : 'bg-slate-700/50 text-slate-400 border border-slate-600 hover:text-slate-300'
+                      : 'bg-[var(--adora-input-bg)] text-[var(--adora-text-secondary)] border border-[var(--adora-border)] hover:text-[var(--adora-text)]'
                   }`}>
                   <AlertTriangle className="w-4 h-4" /> الزيادة فقط
                 </button>
@@ -1438,7 +1451,7 @@ export default function App() {
                   className={`flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium transition-all ${
                     fPriceAlertOnly
                       ? 'bg-red-500/20 text-red-300 border border-red-500/40'
-                      : 'bg-slate-700/50 text-slate-400 border border-slate-600 hover:text-slate-300'
+                      : 'bg-[var(--adora-input-bg)] text-[var(--adora-text-secondary)] border border-[var(--adora-border)] hover:text-[var(--adora-text)]'
                   }`}>
                   <TrendingDown className="w-4 h-4" /> تنبيهات الأسعار
                 </button>
@@ -1446,22 +1459,22 @@ export default function App() {
             </section>
 
             {/* Detailed Table */}
-            <section className="glass rounded-2xl sm:rounded-[28px] overflow-hidden neon-glow animate-in animate-delay-300">
+            <section className="glass rounded-2xl sm:rounded-[28px] overflow-hidden neon-glow table-section-no-side-shadow animate-in animate-delay-300">
               <div className="overflow-x-auto">
                 <table className="text-sm w-full app-detail-table">
                   <thead>
                     {table.getHeaderGroups().map((hg) => (
-                      <tr key={hg.id} className="border-b border-white/[0.08]">
+                      <tr key={hg.id} className="border-b border-[var(--adora-border)]">
                         {hg.headers.map((h) => (
                           <th key={h.id}
                             style={{ minWidth: h.getSize() }}
-                            className="px-2 py-2.5 text-right text-[11px] font-semibold text-slate-400
-                                       bg-white/[0.02] cursor-pointer hover:text-turquoise hover:bg-white/[0.04] transition-colors
+                            className="px-2 py-2.5 text-right text-[15px] font-semibold text-[var(--adora-text-secondary)]
+                                       bg-[var(--adora-table-header-bg)] cursor-pointer hover:text-[var(--adora-accent)] hover:bg-[var(--adora-hover-bg)] transition-colors
                                        select-none whitespace-nowrap overflow-hidden tracking-wide"
                             onClick={h.column.getToggleSortingHandler()}>
                             <div className="flex items-center gap-1">
                               {flexRender(h.column.columnDef.header, h.getContext())}
-                              <ArrowUpDown className="w-3 h-3 text-slate-600 shrink-0" />
+                              <ArrowUpDown className="w-3 h-3 text-[var(--adora-text-secondary)] shrink-0" />
                             </div>
                           </th>
                         ))}
@@ -1479,7 +1492,7 @@ export default function App() {
                         {row.getVisibleCells().map((cell) => (
                           <td key={cell.id}
                             style={{ minWidth: cell.column.getSize() }}
-                            className="px-2 py-2 whitespace-nowrap overflow-hidden text-ellipsis text-xs">
+                            className="px-2 py-2 whitespace-nowrap overflow-hidden text-ellipsis text-sm">
                             {flexRender(cell.column.columnDef.cell, cell.getContext())}
                           </td>
                         ))}
@@ -1489,28 +1502,28 @@ export default function App() {
                 </table>
               </div>
 
-              <div className="flex items-center justify-between px-5 py-3 border-t border-white/[0.06] bg-white/[0.02]">
-                <div className="text-[11px] text-slate-500">
-                  عرض <span className="text-slate-400 font-medium">{table.getRowModel().rows.length}</span> من <span className="text-slate-400 font-medium">{filteredData.length}</span>
+              <div className="flex items-center justify-between px-5 py-3 border-t border-[var(--adora-border)] bg-[var(--adora-modal-header-bg)]">
+                <div className="text-[15px] text-[var(--adora-text-secondary)]">
+                  عرض <span className="text-[var(--adora-text)] font-medium">{table.getRowModel().rows.length}</span> من <span className="text-[var(--adora-text)] font-medium">{filteredData.length}</span>
                   {data.length !== filteredData.length && (
                     <span className="text-amber-500/70 mr-1.5">(مفلتر من {data.length})</span>
                   )}
                 </div>
                 <div className="flex items-center gap-1.5">
                   <button onClick={() => table.previousPage()} disabled={!table.getCanPreviousPage()}
-                    className="p-1.5 rounded-lg bg-white/[0.06] hover:bg-[#14b8a6]/15 disabled:opacity-25 disabled:cursor-not-allowed transition-colors border border-white/10">
+                    className="p-1.5 rounded-lg bg-[var(--adora-input-bg)] hover:bg-[var(--adora-hover-bg)] disabled:opacity-25 disabled:cursor-not-allowed transition-colors border border-[var(--adora-border)]">
                     <ChevronRight className="w-3.5 h-3.5" />
                   </button>
-                  <span className="text-[11px] text-slate-400 min-w-[70px] text-center tabular-nums">
+                  <span className="text-[15px] text-[var(--adora-text-secondary)] min-w-[70px] text-center tabular-nums">
                     {table.getState().pagination.pageIndex + 1} / {table.getPageCount()}
                   </span>
                   <button onClick={() => table.nextPage()} disabled={!table.getCanNextPage()}
-                    className="p-1.5 rounded-lg bg-white/[0.06] hover:bg-[#14b8a6]/15 disabled:opacity-25 disabled:cursor-not-allowed transition-colors border border-white/10">
+                    className="p-1.5 rounded-lg bg-[var(--adora-input-bg)] hover:bg-[var(--adora-hover-bg)] disabled:opacity-25 disabled:cursor-not-allowed transition-colors border border-[var(--adora-border)]">
                     <ChevronLeft className="w-3.5 h-3.5" />
                   </button>
                   <select value={table.getState().pagination.pageSize}
                     onChange={(e) => table.setPageSize(Number(e.target.value))}
-                    className="bg-white/[0.06] text-slate-300 text-[11px] rounded-lg px-2 py-1.5 border border-white/10 outline-none focus:ring-1 focus:ring-[#14b8a6]/30 cursor-pointer">
+                    className="bg-[var(--adora-input-bg)] text-[var(--adora-text)] text-[15px] rounded-lg px-2 py-1.5 border border-[var(--adora-border)] outline-none focus:ring-1 focus:ring-[var(--adora-focus-border)] cursor-pointer">
                     {[25, 50, 100, 200].map((s) => <option key={s} value={s}>{s} صف</option>)}
                     <option value={99999}>الكل</option>
                   </select>
@@ -1527,6 +1540,10 @@ export default function App() {
           config={config}
           discoveredBranches={discoveredBranches}
           onSave={handleSaveConfig}
+          onSaveAsDefault={async (c) => {
+            const { saveConfigToFirebase } = await import('./firebase');
+            await saveConfigToFirebase(c).catch(() => {});
+          }}
           onClose={() => setShowSettings(false)}
         />
       )}
@@ -1550,14 +1567,16 @@ export default function App() {
 // Settings Panel Component
 // ===================================================================
 
-function SettingsPanel({ config, discoveredBranches, onSave, onClose }: {
+function SettingsPanel({ config, discoveredBranches, onSave, onSaveAsDefault, onClose }: {
   config: AppConfig;
   discoveredBranches: string[];
   onSave: (c: AppConfig) => void;
+  onSaveAsDefault?: (c: AppConfig) => void | Promise<void>;
   onClose: () => void;
 }) {
   const [draft, setDraft] = useState<AppConfig>(() => structuredClone(config));
   const [saving, setSaving] = useState(false);
+  const [savedDefaultAt, setSavedDefaultAt] = useState<number | null>(null);
 
   const handleSave = useCallback(() => {
     setSaving(true);
@@ -1642,8 +1661,11 @@ function SettingsPanel({ config, discoveredBranches, onSave, onClose }: {
     setDraft(structuredClone(base));
   };
 
-  const saveAsDefault = () => {
+  const saveAsDefault = async () => {
     saveDefaultConfig(draft);
+    if (onSaveAsDefault) await onSaveAsDefault(draft);
+    setSavedDefaultAt(Date.now());
+    setTimeout(() => setSavedDefaultAt(null), 2500);
   };
 
   const allBranches = useMemo(() => {
@@ -1661,99 +1683,110 @@ function SettingsPanel({ config, discoveredBranches, onSave, onClose }: {
   return (
     <div className="fixed inset-0 z-200 flex items-center justify-center bg-black/70 backdrop-blur-sm"
       onClick={onClose}>
-      <div className="bg-slate-900/98 border border-slate-700/60 rounded-2xl shadow-2xl
+      <div className="bg-[var(--adora-modal-bg)] border border-[var(--adora-border)] rounded-2xl modal-no-side-shadow
                       max-w-3xl w-[95%] max-h-[90vh] flex flex-col overflow-hidden"
         onClick={(e) => e.stopPropagation()}>
         {/* Header */}
-        <div className="px-6 py-4 border-b border-slate-700/50 bg-slate-800/50 shrink-0 flex items-center justify-between">
+        <div className="px-6 py-4 border-b border-[var(--adora-border)] bg-[var(--adora-modal-header-bg)] shrink-0 flex items-center justify-between">
           <div className="flex items-center gap-3">
             <div className="p-2 bg-cyan-500/20 rounded-xl">
               <SettingsIcon className="w-5 h-5 text-cyan-400" />
             </div>
             <div>
-              <h3 className="text-base font-bold text-white">إعدادات التحليل</h3>
-              <p className="text-[11px] text-slate-500">الأسعار، الفروع، الحدود — محفوظة تلقائياً</p>
-              <p className="text-[10px] text-cyan-400/80 mt-0.5">هذه الإعدادات عامة للمشروع ولا تتغير بتغيير الفترة أو إغلاقها أو رفع ملفات جديدة. الإعدادات الحالية يمكن حفظها كافتراضي بزر «حفظ كافتراضي» لتُستعاد لاحقاً بـ «استعادة الافتراضي».</p>
+              <h3 className="text-base font-bold text-[var(--adora-text)]">إعدادات التحليل</h3>
+              <p className="text-[15px] text-[var(--adora-text-secondary)]">الأسعار، الفروع، الحدود — محفوظة تلقائياً</p>
+              <p className="text-[14px] text-[var(--adora-accent)] mt-0.5 opacity-90">هذه الإعدادات عامة للمشروع ولا تتغير بتغيير الفترة أو إغلاقها أو رفع ملفات جديدة. الإعدادات الحالية يمكن حفظها كافتراضي بزر «حفظ كافتراضي» لتُستعاد لاحقاً بـ «استعادة الافتراضي».</p>
             </div>
           </div>
-          <button onClick={onClose} className="text-slate-500 hover:text-slate-200 transition-colors">
+          <button onClick={onClose} className="text-[var(--adora-text-secondary)] hover:text-[var(--adora-text)] transition-colors">
             <X className="w-5 h-5" />
           </button>
         </div>
 
         {/* Body */}
-        <div className="overflow-y-auto flex-1 px-6 py-5 space-y-6 text-sm">
+        <div className="overflow-y-auto flex-1 px-6 py-5 space-y-6 text-base leading-relaxed max-w-3xl">
           {/* Thresholds */}
           <section>
-            <h4 className="text-cyan-400 font-bold text-sm mb-3">الحدود العامة</h4>
+            <h4 className="text-[var(--adora-accent)] font-bold text-base mb-3">الحدود العامة</h4>
             <div className="grid grid-cols-2 gap-4">
               <div>
-                <label className="text-xs text-slate-400 block mb-1">الحد الأدنى لحجوزات الموظف</label>
+                <label className="text-sm text-[var(--adora-text-secondary)] block mb-1">الحد الأدنى لحجوزات الموظف</label>
                 <input type="number" min={0} value={draft.minBookingThreshold}
                   onChange={(e) => updateThreshold('minBookingThreshold', parseInt(e.target.value) || 0)}
-                  className="w-full bg-slate-800 border border-slate-700 text-slate-200 text-sm rounded-lg px-3 py-2 outline-none focus:ring-2 focus:ring-cyan-500/50" />
-                <p className="text-[10px] text-slate-600 mt-1">موظفين بأقل من هذا العدد يُستبعدون</p>
+                  className="w-full bg-[var(--adora-input-bg)] border border-[var(--adora-border)] text-[var(--adora-text)] text-sm rounded-lg px-3 py-2 outline-none focus:ring-2 focus:ring-cyan-500/50" />
+                <p className="text-sm text-[var(--adora-text-secondary)] mt-1">موظفين بأقل من هذا العدد يُستبعدون</p>
               </div>
               <div>
-                <label className="text-xs text-slate-400 block mb-1">عتبة الحجز الشهري (ليالي)</label>
+                <label className="text-sm text-[var(--adora-text-secondary)] block mb-1">عتبة الحجز الشهري (ليالي)</label>
                 <input type="number" min={1} value={draft.monthlyNightsThreshold}
                   onChange={(e) => updateThreshold('monthlyNightsThreshold', parseInt(e.target.value) || 1)}
-                  className="w-full bg-slate-800 border border-slate-700 text-slate-200 text-sm rounded-lg px-3 py-2 outline-none focus:ring-2 focus:ring-cyan-500/50" />
-                <p className="text-[10px] text-slate-600 mt-1">≥ هذا العدد = حجز شهري (سعر أقل)</p>
+                  className="w-full bg-[var(--adora-input-bg)] border border-[var(--adora-border)] text-[var(--adora-text)] text-sm rounded-lg px-3 py-2 outline-none focus:ring-2 focus:ring-cyan-500/50" />
+                <p className="text-sm text-[var(--adora-text-secondary)] mt-1">≥ هذا العدد = حجز شهري (سعر أقل)</p>
               </div>
             </div>
           </section>
 
           {/* Reward Pricing — أسعار المكافآت */}
           <section className="border border-emerald-500/30 rounded-xl p-4 space-y-4 bg-emerald-900/10">
-            <h4 className="text-emerald-400 font-bold text-sm">أسعار المكافآت (تؤثر على صافي الموظف)</h4>
-            <p className="text-[10px] text-slate-500">كل وحدة × السعر المحدد = جزء من الإجمالي. الصافي = الإجمالي − صندوق الدعم (15%)</p>
-            <p className="text-[10px] text-slate-400">الحساب يُقسّم حسب المصدر: <strong className="text-emerald-400/90">استقبال</strong> (حسب الشفت صباح/مساء/ليل)، <strong className="text-orange-400/90">بوكينج عادي</strong> (سعر ثابت لكل حجز)، <strong className="text-violet-400/90">VIP</strong> (من الخانات أدناه لكل غرفة).</p>
+            <h4 className="text-emerald-400 font-bold text-base">أسعار المكافآت (تؤثر على صافي الموظف)</h4>
+            <p className="text-sm text-[var(--adora-text-secondary)]">كل وحدة × السعر المحدد = جزء من الإجمالي. الصافي = الإجمالي − صندوق الدعم (15%)</p>
+            <p className="text-sm text-[var(--adora-text-secondary)]">الحساب يُقسّم حسب المصدر: <strong className="text-emerald-400/90">استقبال</strong> (حسب الشفت صباح/مساء/ليل)، <strong className="text-orange-400/90">بوكينج عادي</strong> (سعر ثابت لكل حجز)، <strong className="text-violet-400/90">VIP</strong> (من الخانات أدناه لكل غرفة).</p>
 
             {/* استقبال — حسب الشفت */}
             <div className="space-y-1.5">
-              <p className="text-[10px] font-medium text-emerald-400/90">استقبال (حسب الشفت) — ريال لكل حجز عادي</p>
+              <p className="text-sm font-medium text-emerald-400/90">استقبال (حسب الشفت) — ريال لكل حجز عادي</p>
               <div className="grid grid-cols-3 gap-3">
                 <div>
-                  <label className="text-xs text-slate-400 block mb-1">صباح</label>
+                  <label className="text-sm text-[var(--adora-text-secondary)] block mb-1">صباح</label>
                   <input type="number" min={0} step={0.5} value={draft.rewardPricing.rateMorning}
                     onChange={(e) => setDraft(prev => ({ ...prev, rewardPricing: { ...prev.rewardPricing, rateMorning: parseFloat(e.target.value) || 0 } }))}
-                    className="w-full bg-slate-800 border border-slate-700 text-slate-200 text-sm rounded-lg px-3 py-2 outline-none focus:ring-2 focus:ring-emerald-500/50 font-mono" />
+                    className="w-full bg-[var(--adora-input-bg)] border border-[var(--adora-border)] text-[var(--adora-text)] text-sm rounded-lg px-3 py-2 outline-none focus:ring-2 focus:ring-emerald-500/50 font-mono" />
                 </div>
                 <div>
-                  <label className="text-xs text-slate-400 block mb-1">مساء</label>
+                  <label className="text-sm text-[var(--adora-text-secondary)] block mb-1">مساء</label>
                   <input type="number" min={0} step={0.5} value={draft.rewardPricing.rateEvening}
                     onChange={(e) => setDraft(prev => ({ ...prev, rewardPricing: { ...prev.rewardPricing, rateEvening: parseFloat(e.target.value) || 0 } }))}
-                    className="w-full bg-slate-800 border border-slate-700 text-slate-200 text-sm rounded-lg px-3 py-2 outline-none focus:ring-2 focus:ring-emerald-500/50 font-mono" />
+                    className="w-full bg-[var(--adora-input-bg)] border border-[var(--adora-border)] text-[var(--adora-text)] text-sm rounded-lg px-3 py-2 outline-none focus:ring-2 focus:ring-emerald-500/50 font-mono" />
                 </div>
                 <div>
-                  <label className="text-xs text-slate-400 block mb-1">ليل</label>
+                  <label className="text-sm text-[var(--adora-text-secondary)] block mb-1">ليل</label>
                   <input type="number" min={0} step={0.5} value={draft.rewardPricing.rateNight}
                     onChange={(e) => setDraft(prev => ({ ...prev, rewardPricing: { ...prev.rewardPricing, rateNight: parseFloat(e.target.value) || 0 } }))}
-                    className="w-full bg-slate-800 border border-slate-700 text-slate-200 text-sm rounded-lg px-3 py-2 outline-none focus:ring-2 focus:ring-emerald-500/50 font-mono" />
+                    className="w-full bg-[var(--adora-input-bg)] border border-[var(--adora-border)] text-[var(--adora-text)] text-sm rounded-lg px-3 py-2 outline-none focus:ring-2 focus:ring-emerald-500/50 font-mono" />
                 </div>
               </div>
             </div>
 
             {/* بوكينج عادي — سعر ثابت */}
             <div className="space-y-1.5">
-              <p className="text-[10px] font-medium text-orange-400/90">بوكينج عادي (غير VIP) — ريال واحد لكل حجز بغض النظر عن الشفت</p>
+              <p className="text-sm font-medium text-orange-400/90">بوكينج عادي (غير VIP) — ريال واحد لكل حجز بغض النظر عن الشفت</p>
               <div className="grid grid-cols-1 gap-3">
                 <div className="max-w-[140px]">
-                  <label className="text-xs text-slate-400 block mb-1">مكافأة بوكينج (ريال)</label>
+                  <label className="text-sm text-[var(--adora-text-secondary)] block mb-1">مكافأة بوكينج (ريال)</label>
                   <input type="number" min={0} step={0.5} value={draft.rewardPricing.rateBooking}
                     onChange={(e) => setDraft(prev => ({ ...prev, rewardPricing: { ...prev.rewardPricing, rateBooking: parseFloat(e.target.value) || 0 } }))}
-                    className="w-full bg-slate-800 border border-slate-700 text-slate-200 text-sm rounded-lg px-3 py-2 outline-none focus:ring-2 focus:ring-emerald-500/50 font-mono" />
+                    className="w-full bg-[var(--adora-input-bg)] border border-[var(--adora-border)] text-[var(--adora-text)] text-sm rounded-lg px-3 py-2 outline-none focus:ring-2 focus:ring-emerald-500/50 font-mono" />
                 </div>
+              </div>
+            </div>
+
+            {/* عقد شهري */}
+            <div className="space-y-1.5">
+              <p className="text-sm font-medium text-cyan-400/90">عقد شهري (قائمة الأسعار)</p>
+              <div className="max-w-[140px]">
+                <label className="text-sm text-[var(--adora-text-secondary)] block mb-1">ريال لكل عقد</label>
+                <input type="number" min={0} step={1} value={draft.rewardPricing.rateContract ?? 200}
+                  onChange={(e) => setDraft(prev => ({ ...prev, rewardPricing: { ...prev.rewardPricing, rateContract: parseFloat(e.target.value) || 0 } }))}
+                  className="w-full bg-[var(--adora-input-bg)] border border-[var(--adora-border)] text-[var(--adora-text)] text-sm rounded-lg px-3 py-2 outline-none focus:ring-2 focus:ring-emerald-500/50 font-mono" />
               </div>
             </div>
 
             {/* VIP — افتراضي ثم لكل غرفة */}
             <div className="space-y-1.5">
-              <p className="text-[10px] font-medium text-violet-400/90">VIP — لكل غرفة سعر استقبال وسعر بوكينج (أو الافتراضي أدناه)</p>
+              <p className="text-sm font-medium text-violet-400/90">VIP — لكل غرفة سعر استقبال وسعر بوكينج (أو الافتراضي أدناه)</p>
               <div className="grid grid-cols-2 gap-3">
                 <div>
-                  <label className="text-xs text-slate-400 block mb-1">VIP افتراضي — استقبال (ريال)</label>
+                  <label className="text-sm text-[var(--adora-text-secondary)] block mb-1">VIP افتراضي — استقبال (ريال)</label>
                   <input type="number" min={0} step={0.5} value={draft.rewardPricing.rateVipDefault.reception}
                     onChange={(e) => {
                       const newVal = parseFloat(e.target.value) || 0;
@@ -1766,10 +1799,10 @@ function SettingsPanel({ config, discoveredBranches, onSave, onClose }: {
                         }
                       }));
                     }}
-                    className="w-full bg-slate-800 border border-slate-700 text-slate-200 text-sm rounded-lg px-3 py-2 outline-none focus:ring-2 focus:ring-emerald-500/50 font-mono" />
+                    className="w-full bg-[var(--adora-input-bg)] border border-[var(--adora-border)] text-[var(--adora-text)] text-sm rounded-lg px-3 py-2 outline-none focus:ring-2 focus:ring-emerald-500/50 font-mono" />
                 </div>
                 <div>
-                  <label className="text-xs text-slate-400 block mb-1">VIP افتراضي — بوكينج (ريال)</label>
+                  <label className="text-sm text-[var(--adora-text-secondary)] block mb-1">VIP افتراضي — بوكينج (ريال)</label>
                   <input type="number" min={0} step={0.5} value={draft.rewardPricing.rateVipDefault.booking}
                     onChange={(e) => {
                       const newVal = parseFloat(e.target.value) || 0;
@@ -1782,7 +1815,7 @@ function SettingsPanel({ config, discoveredBranches, onSave, onClose }: {
                         }
                       }));
                     }}
-                    className="w-full bg-slate-800 border border-slate-700 text-slate-200 text-sm rounded-lg px-3 py-2 outline-none focus:ring-2 focus:ring-emerald-500/50 font-mono" />
+                    className="w-full bg-[var(--adora-input-bg)] border border-[var(--adora-border)] text-[var(--adora-text)] text-sm rounded-lg px-3 py-2 outline-none focus:ring-2 focus:ring-emerald-500/50 font-mono" />
                 </div>
               </div>
             </div>
@@ -1830,34 +1863,34 @@ function SettingsPanel({ config, discoveredBranches, onSave, onClose }: {
 
               return (
                 <div className="space-y-3">
-                  <label className="text-xs text-slate-400 block">سعر VIP لكل غرفة حسب الفرع (ريال) — اترك فارغاً ليأخذ الافتراضي</label>
-                  <p className="text-[10px] text-violet-400/70">لكل غرفة VIP: سعر استقبال (حجز مباشر) وسعر بوكينج (حجز أونلاين) — الحقل الفارغ يرث القيمة الافتراضية أعلاه. حجز VIP يأخذ هذا السعر فقط بدون سعر الشفت</p>
+                  <label className="text-sm text-[var(--adora-text-secondary)] block">سعر VIP لكل غرفة حسب الفرع (ريال) — اترك فارغاً ليأخذ الافتراضي</label>
+                  <p className="text-[14px] text-violet-400/70">لكل غرفة VIP: سعر استقبال (حجز مباشر) وسعر بوكينج (حجز أونلاين) — الحقل الفارغ يرث القيمة الافتراضية أعلاه. حجز VIP يأخذ هذا السعر فقط بدون سعر الشفت</p>
                   {branchVips.map(bv => (
                     <div key={bv.name} className="border border-violet-500/20 rounded-lg p-3 bg-violet-900/10">
-                      <p className="text-xs text-violet-300 font-bold mb-2">{bv.name}</p>
+                      <p className="text-sm text-violet-300 font-bold mb-2">{bv.name}</p>
                       <div className="space-y-2">
                         {bv.rooms.map(room => {
                           const rates = draft.rewardPricing.rateVipByBranch?.[bv.name]?.[room];
                           return (
-                            <div key={room} className="flex items-center gap-2 bg-slate-800/60 rounded-lg px-2.5 py-2 border border-slate-700/50 flex-wrap sm:flex-nowrap">
-                              <span className="text-xs text-violet-300 font-bold font-mono bg-violet-500/15 px-2 py-1 rounded border border-violet-500/25 shrink-0">{room}</span>
+                            <div key={room} className="flex items-center gap-2 bg-[var(--adora-input-bg)] rounded-lg px-2.5 py-2 border border-[var(--adora-border)] flex-wrap sm:flex-nowrap">
+                              <span className="text-sm text-violet-300 font-bold font-mono bg-violet-500/15 px-2 py-1 rounded border border-violet-500/25 shrink-0">{room}</span>
                               <div className="flex items-center gap-1.5 flex-1 min-w-0">
-                                <span className="text-[10px] text-emerald-400 shrink-0">استقبال</span>
+                                <span className="text-[14px] text-emerald-400 shrink-0">استقبال</span>
                                 <input type="number" min={0} step={0.5}
                                   value={rates?.reception ?? ''}
                                   placeholder={String(draft.rewardPricing.rateVipDefault.reception)}
                                   onChange={(e) => updateVipRate(bv.name, room, 'reception', e.target.value)}
-                                  className="flex-1 bg-slate-900 border border-slate-600 text-slate-200 text-xs rounded-lg px-2 py-1.5 outline-none focus:ring-2 focus:ring-emerald-500/50 font-mono min-w-[50px]" />
+                                  className="flex-1 bg-[var(--adora-input-bg)] border border-[var(--adora-border)] text-[var(--adora-text)] text-sm rounded-lg px-2 py-1.5 outline-none focus:ring-2 focus:ring-emerald-500/50 font-mono min-w-[50px]" />
                               </div>
                               <div className="flex items-center gap-1.5 flex-1 min-w-0">
-                                <span className="text-[10px] text-orange-400 shrink-0">بوكينج</span>
+                                <span className="text-[14px] text-orange-400 shrink-0">بوكينج</span>
                                 <input type="number" min={0} step={0.5}
                                   value={rates?.booking ?? ''}
                                   placeholder={String(draft.rewardPricing.rateVipDefault.booking)}
                                   onChange={(e) => updateVipRate(bv.name, room, 'booking', e.target.value)}
-                                  className="flex-1 bg-slate-900 border border-slate-600 text-slate-200 text-xs rounded-lg px-2 py-1.5 outline-none focus:ring-2 focus:ring-orange-500/50 font-mono min-w-[50px]" />
+                                  className="flex-1 bg-[var(--adora-input-bg)] border border-[var(--adora-border)] text-[var(--adora-text)] text-sm rounded-lg px-2 py-1.5 outline-none focus:ring-2 focus:ring-orange-500/50 font-mono min-w-[50px]" />
                               </div>
-                              <span className="text-[10px] text-slate-500 shrink-0">ر.س</span>
+                              <span className="text-[14px] text-slate-500 shrink-0">ر.س</span>
                             </div>
                           );
                         })}
@@ -1868,19 +1901,46 @@ function SettingsPanel({ config, discoveredBranches, onSave, onClose }: {
               );
             })()}
             {/* Evaluation rates */}
-            <div className="grid grid-cols-2 gap-3 pt-2 border-t border-slate-700/30">
+            <div className="grid grid-cols-2 gap-3 pt-2 border-t border-[var(--adora-border)]">
               <div>
-                <label className="text-xs text-slate-400 block mb-1">تقييم Booking (ريال/تقييم)</label>
+                <label className="text-sm text-[var(--adora-text-secondary)] block mb-1">تقييم Booking (ريال/تقييم)</label>
                 <input type="number" min={0} step={1} value={draft.rewardPricing.rateEvalBooking}
                   onChange={(e) => setDraft(prev => ({ ...prev, rewardPricing: { ...prev.rewardPricing, rateEvalBooking: parseFloat(e.target.value) || 0 } }))}
-                  className="w-full bg-slate-800 border border-slate-700 text-slate-200 text-sm rounded-lg px-3 py-2 outline-none focus:ring-2 focus:ring-emerald-500/50 font-mono" />
+                  className="w-full bg-[var(--adora-input-bg)] border border-[var(--adora-border)] text-[var(--adora-text)] text-sm rounded-lg px-3 py-2 outline-none focus:ring-2 focus:ring-emerald-500/50 font-mono" />
               </div>
               <div>
-                <label className="text-xs text-slate-400 block mb-1">تقييم Google Maps (ريال/تقييم)</label>
+                <label className="text-sm text-[var(--adora-text-secondary)] block mb-1">تقييم Google Maps (ريال/تقييم)</label>
                 <input type="number" min={0} step={1} value={draft.rewardPricing.rateEvalGoogle}
                   onChange={(e) => setDraft(prev => ({ ...prev, rewardPricing: { ...prev.rewardPricing, rateEvalGoogle: parseFloat(e.target.value) || 0 } }))}
-                  className="w-full bg-slate-800 border border-slate-700 text-slate-200 text-sm rounded-lg px-3 py-2 outline-none focus:ring-2 focus:ring-emerald-500/50 font-mono" />
+                  className="w-full bg-[var(--adora-input-bg)] border border-[var(--adora-border)] text-[var(--adora-text)] text-sm rounded-lg px-3 py-2 outline-none focus:ring-2 focus:ring-emerald-500/50 font-mono" />
               </div>
+            </div>
+            <p className="text-[14px] text-[var(--adora-text-secondary)]">حد التقييم الأدنى للفندق (يظهر في شروط المكافآت)</p>
+            <div className="grid grid-cols-3 gap-3">
+              <div>
+                <label className="text-sm text-[var(--adora-text-secondary)] block mb-1">الكورنيش</label>
+                <input type="number" min={0} max={10} step={0.1} value={draft.rewardPricing.minEvalCorniche ?? 8.7}
+                  onChange={(e) => setDraft(prev => ({ ...prev, rewardPricing: { ...prev.rewardPricing, minEvalCorniche: parseFloat(e.target.value) || 0 } }))}
+                  className="w-full bg-[var(--adora-input-bg)] border border-[var(--adora-border)] text-[var(--adora-text)] text-sm rounded-lg px-3 py-2 outline-none focus:ring-2 focus:ring-emerald-500/50 font-mono" />
+              </div>
+              <div>
+                <label className="text-sm text-[var(--adora-text-secondary)] block mb-1">الأندلس</label>
+                <input type="number" min={0} max={10} step={0.1} value={draft.rewardPricing.minEvalAndalus ?? 8.2}
+                  onChange={(e) => setDraft(prev => ({ ...prev, rewardPricing: { ...prev.rewardPricing, minEvalAndalus: parseFloat(e.target.value) || 0 } }))}
+                  className="w-full bg-[var(--adora-input-bg)] border border-[var(--adora-border)] text-[var(--adora-text)] text-sm rounded-lg px-3 py-2 outline-none focus:ring-2 focus:ring-emerald-500/50 font-mono" />
+              </div>
+              <div>
+                <label className="text-sm text-[var(--adora-text-secondary)] block mb-1">خرائط جوجل</label>
+                <input type="number" min={0} max={5} step={0.1} value={draft.rewardPricing.minEvalGoogle ?? 4.3}
+                  onChange={(e) => setDraft(prev => ({ ...prev, rewardPricing: { ...prev.rewardPricing, minEvalGoogle: parseFloat(e.target.value) || 0 } }))}
+                  className="w-full bg-[var(--adora-input-bg)] border border-[var(--adora-border)] text-[var(--adora-text)] text-sm rounded-lg px-3 py-2 outline-none focus:ring-2 focus:ring-emerald-500/50 font-mono" />
+              </div>
+            </div>
+            <div>
+              <label className="text-sm text-[var(--adora-text-secondary)] block mb-1">نص حجوزات VIP (يظهر في شروط المكافآت)</label>
+              <input type="text" value={draft.rewardPricing.vipDescription ?? 'حجوزات VIP — تُسعّر من خانات VIP (استقبال/بوكينج لكل غرفة)'}
+                onChange={(e) => setDraft(prev => ({ ...prev, rewardPricing: { ...prev.rewardPricing, vipDescription: e.target.value } }))}
+                className="w-full bg-[var(--adora-input-bg)] border border-[var(--adora-border)] text-[var(--adora-text)] text-sm rounded-lg px-3 py-2 outline-none focus:ring-2 focus:ring-emerald-500/50" />
             </div>
           </section>
 
@@ -1894,12 +1954,12 @@ function SettingsPanel({ config, discoveredBranches, onSave, onClose }: {
                 bc.excluded ? 'border-slate-700/30 bg-slate-800/20 opacity-60' : 'border-slate-700/50 bg-slate-800/30'
               }`}>
                 <div className="flex items-center justify-between">
-                  <h4 className="text-sky-400 font-bold text-sm">{branchName}</h4>
+                  <h4 className="text-sky-400 font-bold text-base">{branchName}</h4>
                   <label className="flex items-center gap-2 cursor-pointer">
                     <input type="checkbox" checked={bc.excluded}
                       onChange={() => toggleBranchExcluded(branchName)}
-                      className="rounded border-slate-600 bg-slate-800 text-red-500 focus:ring-red-500/50" />
-                    <span className="text-xs text-slate-400">مستبعد</span>
+                      className="rounded border-[var(--adora-border)] bg-[var(--adora-input-bg)] text-[var(--adora-error)] focus:ring-red-500/50" />
+                    <span className="text-sm text-[var(--adora-text-secondary)]">مستبعد</span>
                   </label>
                 </div>
 
@@ -1907,43 +1967,43 @@ function SettingsPanel({ config, discoveredBranches, onSave, onClose }: {
                   <>
                     {/* VIP Rooms */}
                     <div>
-                      <label className="text-xs text-slate-400 block mb-1">غرف VIP (مفصولة بفاصلة)</label>
+                      <label className="text-sm text-[var(--adora-text-secondary)] block mb-1">غرف VIP (مفصولة بفاصلة)</label>
                       <input type="text" value={bc.vipRooms.join(', ')}
                         onChange={(e) => updateVipRooms(branchName, e.target.value)}
                         placeholder="601, 602, 603, 604"
-                        className="w-full bg-slate-800 border border-slate-700 text-slate-200 text-sm rounded-lg px-3 py-2 outline-none focus:ring-2 focus:ring-cyan-500/50" />
+                        className="w-full bg-[var(--adora-input-bg)] border border-[var(--adora-border)] text-[var(--adora-text)] text-sm rounded-lg px-3 py-2 outline-none focus:ring-2 focus:ring-cyan-500/50" />
                     </div>
 
                     {/* Price Rules */}
                     <div>
                       <div className="flex items-center justify-between mb-2">
-                        <label className="text-xs text-slate-400 font-medium">جدول الأسعار الدنيا</label>
+                        <label className="text-sm text-[var(--adora-text-secondary)] font-medium">جدول الأسعار الدنيا</label>
                         <button onClick={() => addPriceRule(branchName)}
-                          className="flex items-center gap-1 text-xs text-cyan-400 hover:text-cyan-300">
+                          className="flex items-center gap-1 text-sm text-cyan-400 hover:text-cyan-300">
                           <Plus className="w-3 h-3" /> إضافة نوع
                         </button>
                       </div>
                       <div className="space-y-1.5">
-                        <div className="grid grid-cols-[1fr_80px_80px_1fr_32px] gap-2 text-[10px] text-slate-500 font-medium px-1">
+                        <div className="grid grid-cols-[1fr_80px_80px_1fr_32px] gap-2 text-[14px] text-slate-500 font-medium px-1">
                           <span>نوع الغرفة</span><span>يومي</span><span>شهري</span><span>كلمات مفتاحية</span><span></span>
                         </div>
                         {(bc.priceRules || []).map((rule, idx) => (
                           <div key={idx} className="grid grid-cols-[1fr_80px_80px_1fr_32px] gap-2 items-center">
                             <input type="text" value={rule.roomType}
                               onChange={(e) => updatePriceRule(branchName, idx, 'roomType', e.target.value)}
-                              className="bg-slate-800 border border-slate-700 text-slate-200 text-xs rounded px-2 py-1.5 outline-none" />
+                              className="bg-[var(--adora-input-bg)] border border-[var(--adora-border)] text-[var(--adora-text)] text-sm rounded px-2 py-1.5 outline-none" />
                             <input type="number" value={rule.dailyMin}
                               onChange={(e) => updatePriceRule(branchName, idx, 'dailyMin', parseInt(e.target.value) || 0)}
-                              className="bg-slate-800 border border-slate-700 text-slate-200 text-xs rounded px-2 py-1.5 outline-none font-mono" />
+                              className="bg-[var(--adora-input-bg)] border border-[var(--adora-border)] text-[var(--adora-text)] text-sm rounded px-2 py-1.5 outline-none font-mono" />
                             <input type="number" value={rule.monthlyMin}
                               onChange={(e) => updatePriceRule(branchName, idx, 'monthlyMin', parseInt(e.target.value) || 0)}
-                              className="bg-slate-800 border border-slate-700 text-slate-200 text-xs rounded px-2 py-1.5 outline-none font-mono" />
+                              className="bg-[var(--adora-input-bg)] border border-[var(--adora-border)] text-[var(--adora-text)] text-sm rounded px-2 py-1.5 outline-none font-mono" />
                             <input type="text" value={rule.keywords.join(', ')}
                               onChange={(e) => updatePriceRule(branchName, idx, 'keywords', e.target.value.split(',').map((s) => s.trim()).filter(Boolean))}
                               placeholder="كلمات للمطابقة"
-                              className="bg-slate-800 border border-slate-700 text-slate-200 text-xs rounded px-2 py-1.5 outline-none" />
+                              className="bg-[var(--adora-input-bg)] border border-[var(--adora-border)] text-[var(--adora-text)] text-sm rounded px-2 py-1.5 outline-none" />
                             <button onClick={() => removePriceRule(branchName, idx)}
-                              className="p-1 text-slate-600 hover:text-red-400 transition-colors">
+                              className="p-1 text-slate-600 hover:text-[var(--adora-error)] transition-colors">
                               <Trash2 className="w-3.5 h-3.5" />
                             </button>
                           </div>
@@ -1954,36 +2014,36 @@ function SettingsPanel({ config, discoveredBranches, onSave, onClose }: {
                     {/* Merged Rules */}
                     <div>
                       <div className="flex items-center justify-between mb-2">
-                        <label className="text-xs text-slate-400 font-medium">غرف مدمجة (أزواج)</label>
+                        <label className="text-sm text-[var(--adora-text-secondary)] font-medium">غرف مدمجة (أزواج)</label>
                         <button onClick={() => addMergedRule(branchName)}
-                          className="flex items-center gap-1 text-xs text-purple-400 hover:text-purple-300">
+                          className="flex items-center gap-1 text-sm text-purple-400 hover:text-purple-300">
                           <Plus className="w-3 h-3" /> إضافة زوج
                         </button>
                       </div>
                       {(bc.mergedRules || []).length > 0 && (
                         <div className="space-y-1.5">
-                          <div className="grid grid-cols-[1fr_60px_60px_50px_50px_32px] gap-2 text-[10px] text-slate-500 font-medium px-1">
+                          <div className="grid grid-cols-[1fr_60px_60px_50px_50px_32px] gap-2 text-[14px] text-slate-500 font-medium px-1">
                             <span>التسمية</span><span>يومي</span><span>شهري</span><span>رقم1</span><span>رقم2</span><span></span>
                           </div>
                           {bc.mergedRules.map((rule, idx) => (
                             <div key={idx} className="grid grid-cols-[1fr_60px_60px_50px_50px_32px] gap-2 items-center">
                               <input type="text" value={rule.label}
                                 onChange={(e) => updateMergedRule(branchName, idx, 'label', e.target.value)}
-                                className="bg-slate-800 border border-slate-700 text-slate-200 text-xs rounded px-2 py-1.5 outline-none" />
+                                className="bg-[var(--adora-input-bg)] border border-[var(--adora-border)] text-[var(--adora-text)] text-sm rounded px-2 py-1.5 outline-none" />
                               <input type="number" value={rule.dailyMin}
                                 onChange={(e) => updateMergedRule(branchName, idx, 'dailyMin', parseInt(e.target.value) || 0)}
-                                className="bg-slate-800 border border-slate-700 text-slate-200 text-xs rounded px-2 py-1.5 outline-none font-mono" />
+                                className="bg-[var(--adora-input-bg)] border border-[var(--adora-border)] text-[var(--adora-text)] text-sm rounded px-2 py-1.5 outline-none font-mono" />
                               <input type="number" value={rule.monthlyMin}
                                 onChange={(e) => updateMergedRule(branchName, idx, 'monthlyMin', parseInt(e.target.value) || 0)}
-                                className="bg-slate-800 border border-slate-700 text-slate-200 text-xs rounded px-2 py-1.5 outline-none font-mono" />
+                                className="bg-[var(--adora-input-bg)] border border-[var(--adora-border)] text-[var(--adora-text)] text-sm rounded px-2 py-1.5 outline-none font-mono" />
                               <input type="number" value={rule.digitPairs[0]}
                                 onChange={(e) => updateMergedRule(branchName, idx, 'digitPairs', [parseInt(e.target.value) || 0, rule.digitPairs[1]])}
-                                className="bg-slate-800 border border-slate-700 text-slate-200 text-xs rounded px-2 py-1.5 outline-none font-mono" />
+                                className="bg-[var(--adora-input-bg)] border border-[var(--adora-border)] text-[var(--adora-text)] text-sm rounded px-2 py-1.5 outline-none font-mono" />
                               <input type="number" value={rule.digitPairs[1]}
                                 onChange={(e) => updateMergedRule(branchName, idx, 'digitPairs', [rule.digitPairs[0], parseInt(e.target.value) || 0])}
-                                className="bg-slate-800 border border-slate-700 text-slate-200 text-xs rounded px-2 py-1.5 outline-none font-mono" />
+                                className="bg-[var(--adora-input-bg)] border border-[var(--adora-border)] text-[var(--adora-text)] text-sm rounded px-2 py-1.5 outline-none font-mono" />
                               <button onClick={() => removeMergedRule(branchName, idx)}
-                                className="p-1 text-slate-600 hover:text-red-400 transition-colors">
+                                className="p-1 text-slate-600 hover:text-[var(--adora-error)] transition-colors">
                                 <Trash2 className="w-3.5 h-3.5" />
                               </button>
                             </div>
@@ -1999,25 +2059,25 @@ function SettingsPanel({ config, discoveredBranches, onSave, onClose }: {
         </div>
 
         {/* Footer */}
-        <div className="px-6 py-3 border-t border-slate-700/50 bg-slate-800/40 shrink-0 flex items-center justify-between">
+        <div className="px-6 py-3 border-t border-[var(--adora-border)] bg-[var(--adora-modal-header-bg)] shrink-0 flex items-center justify-between">
           <div className="flex items-center gap-2">
             <button onClick={resetDefaults}
-              className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs text-slate-500 hover:text-slate-300 transition-colors">
+              className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-sm text-[var(--adora-text-secondary)] hover:text-[var(--adora-text)] transition-colors">
               <RotateCcw className="w-3.5 h-3.5" /> استعادة الافتراضي
             </button>
             <button onClick={saveAsDefault}
-              className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs text-slate-500 hover:text-slate-300 transition-colors"
-              title="حفظ الإعدادات الحالية كافتراضي يُستعاد بزر «استعادة الافتراضي»">
-              حفظ كافتراضي
+              className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-sm text-[var(--adora-text-secondary)] hover:text-[var(--adora-text)] transition-colors"
+              title="حفظ الإعدادات الحالية كافتراضي يُستعاد بزر «استعادة الافتراضي» — يُرفع أيضاً لـ Firebase ليتوفر على أجهزة أخرى">
+              {savedDefaultAt ? '✓ تم حفظ الافتراضي' : 'حفظ كافتراضي'}
             </button>
           </div>
           <div className="flex items-center gap-2">
             <button onClick={onClose}
-              className="px-4 py-1.5 rounded-lg text-xs font-medium text-slate-400 hover:text-slate-200 transition-colors">
+              className="px-4 py-1.5 rounded-lg text-sm font-medium text-[var(--adora-text-secondary)] hover:text-[var(--adora-text)] transition-colors">
               إلغاء
             </button>
             <button onClick={handleSave} disabled={saving}
-              className={`px-6 py-1.5 rounded-lg text-xs font-medium border transition-all duration-300 flex items-center gap-1.5 ${
+              className={`px-6 py-1.5 rounded-lg text-sm font-medium border transition-all duration-300 flex items-center gap-1.5 ${
                 saving
                   ? 'bg-emerald-500/20 text-emerald-300 border-emerald-500/30 shadow-lg shadow-emerald-500/10 scale-105'
                   : 'bg-cyan-600/20 text-cyan-300 hover:bg-cyan-600/30 border-cyan-500/20 hover:scale-[1.02] active:scale-[0.98]'
@@ -2050,50 +2110,50 @@ function MethodologyPopup({ config, onClose }: { config: AppConfig; onClose: () 
   return (
     <div className="fixed inset-0 z-200 flex items-center justify-center bg-black/70 backdrop-blur-sm"
       onClick={onClose}>
-      <div className="bg-slate-900/98 border border-slate-700/60 rounded-2xl shadow-2xl
+      <div className="bg-[var(--adora-modal-bg)] border border-[var(--adora-border)] rounded-2xl modal-no-side-shadow
                       max-w-2xl w-[95%] max-h-[90vh] flex flex-col overflow-hidden"
         onClick={(e) => e.stopPropagation()}>
         {/* Header */}
-        <div className="px-6 py-4 border-b border-slate-700/50 bg-slate-800/50 shrink-0 flex items-center justify-between">
+        <div className="px-6 py-4 border-b border-[var(--adora-border)] bg-[var(--adora-modal-header-bg)] shrink-0 flex items-center justify-between">
           <div className="flex items-center gap-3">
             <div className="p-2 bg-cyan-500/20 rounded-xl">
-              <Info className="w-5 h-5 text-cyan-400" />
+              <Info className="w-5 h-5 text-[var(--adora-accent)]" />
             </div>
             <div>
-              <h3 className="text-base font-bold text-white">منهجية التحليل والشروط</h3>
-              <p className="text-[11px] text-slate-500">كل قواعد احتساب الحجوزات والتنبيهات السعرية</p>
+              <h3 className="text-base font-bold text-[var(--adora-text)]">منهجية التحليل والشروط</h3>
+              <p className="text-[15px] text-[var(--adora-text-secondary)]">كل قواعد احتساب الحجوزات والتنبيهات السعرية</p>
             </div>
           </div>
-          <button onClick={onClose} className="text-slate-500 hover:text-slate-200 transition-colors">
+          <button onClick={onClose} className="text-[var(--adora-text-secondary)] hover:text-[var(--adora-text)] transition-colors">
             <X className="w-5 h-5" />
           </button>
         </div>
 
         {/* Body */}
-        <div className="overflow-y-auto flex-1 px-6 py-5 space-y-6 text-sm leading-relaxed">
+        <div className="overflow-y-auto flex-1 px-6 py-5 space-y-6 text-base leading-relaxed max-w-3xl">
 
           {/* 1. Data Sources */}
           <section>
-            <h4 className="text-cyan-400 font-bold text-sm mb-2 flex items-center gap-2">
-              <span className="w-6 h-6 rounded-lg bg-cyan-500/20 flex items-center justify-center text-xs font-bold">1</span>
+            <h4 className="text-cyan-400 font-bold text-base mb-2 flex items-center gap-2">
+              <span className="w-6 h-6 rounded-lg bg-cyan-500/20 flex items-center justify-center text-sm font-bold">1</span>
               مصادر البيانات
             </h4>
-            <div className="space-y-1.5 text-slate-300 text-xs mr-8">
+            <div className="space-y-1.5 text-slate-300 text-sm mr-8">
               <p><span className="text-cyan-300 font-bold">تقرير إحصائيات الموظفين</span> — المرجع النهائي لعدد الحجوزات لكل موظف (الحَكَم). يُستخرج منه عدد الحجوزات + فترة التقرير.</p>
               <p><span className="text-sky-300 font-bold">تقرير حجوزات العملاء</span> — المصدر الأساسي للتفاصيل: اسم العميل، الوحدة، السعر، تاريخ الدخول/الخروج، مصدر الحجز.</p>
               <p><span className="text-teal-300 font-bold">سجل حركات النظام</span> — مصدر ثانوي لكشف نقل الغرف فقط (Room Transfer).</p>
               <p><span className="text-amber-300 font-bold">تقرير وحدات الحجوزات</span> — مصدر تكميلي لأسعار الغرف المدمجة بدقة (per-unit pricing).</p>
-              <p className="text-slate-500 text-[11px] mt-1.5">الأعمدة تُكتشف تلقائياً من هيدرات الملف — لا تعتمد على ترتيب ثابت.</p>
+              <p className="text-slate-500 text-sm mt-1.5">الأعمدة تُكتشف تلقائياً من هيدرات الملف — لا تعتمد على ترتيب ثابت.</p>
             </div>
           </section>
 
           {/* 2. Filtering Logic */}
           <section>
-            <h4 className="text-emerald-400 font-bold text-sm mb-2 flex items-center gap-2">
-              <span className="w-6 h-6 rounded-lg bg-emerald-500/20 flex items-center justify-center text-xs font-bold">2</span>
+            <h4 className="text-emerald-400 font-bold text-base mb-2 flex items-center gap-2">
+              <span className="w-6 h-6 rounded-lg bg-emerald-500/20 flex items-center justify-center text-sm font-bold">2</span>
               شروط احتساب الحجز (الفلتر المزدوج)
             </h4>
-            <div className="space-y-2 text-slate-300 text-xs mr-8">
+            <div className="space-y-2 text-slate-300 text-sm mr-8">
               <p className="font-medium text-slate-200">الحجز يُحسب للموظف فقط إذا تحقق الشرطان معاً:</p>
               <div className="bg-slate-800/60 rounded-xl p-3 border border-slate-700/30 space-y-1.5">
                 <p className="flex items-start gap-2">
@@ -2105,24 +2165,24 @@ function MethodologyPopup({ config, onClose }: { config: AppConfig; onClose: () 
                   <span><span className="text-emerald-300 font-bold">تاريخ الدخول</span> داخل فترة التقرير (العميل فعلاً دخل خلال الفترة)</span>
                 </p>
               </div>
-              <p className="text-slate-500 text-[11px]">حجز أُنشئ في يناير لعميل يدخل فبراير → لا يُحسب. حجز أُنشئ في ديسمبر لعميل دخل يناير → لا يُحسب.</p>
+              <p className="text-slate-500 text-sm">حجز أُنشئ في يناير لعميل يدخل فبراير → لا يُحسب. حجز أُنشئ في ديسمبر لعميل دخل يناير → لا يُحسب.</p>
             </div>
           </section>
 
           {/* 3. Counting Logic */}
           <section>
-            <h4 className="text-violet-400 font-bold text-sm mb-2 flex items-center gap-2">
-              <span className="w-6 h-6 rounded-lg bg-violet-500/20 flex items-center justify-center text-xs font-bold">3</span>
+            <h4 className="text-violet-400 font-bold text-base mb-2 flex items-center gap-2">
+              <span className="w-6 h-6 rounded-lg bg-violet-500/20 flex items-center justify-center text-sm font-bold">3</span>
               آلية العد والحالة
             </h4>
-            <div className="space-y-1.5 text-slate-300 text-xs mr-8">
+            <div className="space-y-1.5 text-slate-300 text-sm mr-8">
               <p>لكل موظف-فرع: عدد تقرير الإحصائيات = السقف الأعلى (Cap).</p>
-              <p><span className="px-1.5 py-0.5 rounded text-[10px] font-bold bg-emerald-500/15 text-emerald-400 border border-emerald-500/20">محسوب</span> — الحجوزات ضمن السقف (أول N حجز).</p>
-              <p><span className="px-1.5 py-0.5 rounded text-[10px] font-bold bg-amber-500/15 text-amber-400 border border-amber-500/20">زيادة</span> — حجوزات تتجاوز السقف.</p>
+              <p><span className="px-1.5 py-0.5 rounded text-[14px] font-bold bg-emerald-500/15 text-emerald-400 border border-emerald-500/20">محسوب</span> — الحجوزات ضمن السقف (أول N حجز).</p>
+              <p><span className="px-1.5 py-0.5 rounded text-[14px] font-bold bg-amber-500/15 text-amber-400 border border-amber-500/20">زيادة</span> — حجوزات تتجاوز السقف.</p>
               <p className="mt-1"><span className="text-amber-400 font-bold">⚡ تجاوز العدد:</span> الموظف له حجوزات أكثر من تقرير الإحصائيات.</p>
               <p><span className="text-orange-400 font-bold">🚫 بدون صلاحية:</span> الموظف غير موجود في تقرير الإحصائيات أصلاً.</p>
               <p><span className="text-sky-400 font-bold">🏨 لم يخرج:</span> النزيل لم يسجل خروج ضمن فترة التقرير — لذلك الإحصائيات لا تحسبه.</p>
-              <p className="text-slate-500 text-[11px] mt-1">
+              <p className="text-slate-500 text-sm mt-1">
                 موظفين بأقل من <span className="text-cyan-400 font-bold">{config.minBookingThreshold}</span> حجوزات مجمعة يُستبعدون.
                 {Object.entries(config.branches).filter(([, bc]) => bc.excluded).map(([n]) => n).length > 0 && (
                   <> فروع مستبعدة: {Object.entries(config.branches).filter(([, bc]) => bc.excluded).map(([n]) => n).join('، ')}.</>
@@ -2133,11 +2193,11 @@ function MethodologyPopup({ config, onClose }: { config: AppConfig; onClose: () 
 
           {/* 4. Price Alerts — Dynamic from config */}
           <section>
-            <h4 className="text-red-400 font-bold text-sm mb-2 flex items-center gap-2">
-              <span className="w-6 h-6 rounded-lg bg-red-500/20 flex items-center justify-center text-xs font-bold">4</span>
+            <h4 className="text-[var(--adora-error)] font-bold text-base mb-2 flex items-center gap-2">
+              <span className="w-6 h-6 rounded-lg bg-red-500/20 flex items-center justify-center text-sm font-bold">4</span>
               التنبيهات السعرية (الحد الأدنى لليلة)
             </h4>
-            <div className="space-y-3 text-xs mr-8">
+            <div className="space-y-3 text-sm mr-8">
               <p className="text-slate-300">لكل نوع غرفة حد أدنى لسعر الليلة. لو <span className="text-red-300 font-mono">(الإيجار ÷ الليالي) &lt; الحد الأدنى</span> → تنبيه.</p>
 
               {activeBranches.map(([branchName, bc]) => (
@@ -2165,7 +2225,7 @@ function MethodologyPopup({ config, onClose }: { config: AppConfig; onClose: () 
                 </div>
               ))}
 
-              <p className="text-slate-500 text-[11px]">
+              <p className="text-slate-500 text-sm">
                 شهري = {config.monthlyNightsThreshold} ليلة فأكثر. حجوزات بوكينج (أونلاين) مستبعدة من فحص الحد الأدنى. نقل الغرف (Room Transfer) مستبعد أيضاً.
               </p>
             </div>
@@ -2173,11 +2233,11 @@ function MethodologyPopup({ config, onClose }: { config: AppConfig; onClose: () 
 
           {/* 5. Exemptions */}
           <section>
-            <h4 className="text-blue-400 font-bold text-sm mb-2 flex items-center gap-2">
-              <span className="w-6 h-6 rounded-lg bg-blue-500/20 flex items-center justify-center text-xs font-bold">5</span>
+            <h4 className="text-blue-400 font-bold text-base mb-2 flex items-center gap-2">
+              <span className="w-6 h-6 rounded-lg bg-blue-500/20 flex items-center justify-center text-sm font-bold">5</span>
               الاستثناءات من فحص السعر
             </h4>
-            <div className="space-y-1.5 text-slate-300 text-xs mr-8">
+            <div className="space-y-1.5 text-slate-300 text-sm mr-8">
               <p className="flex items-start gap-2">
                 <span className="text-orange-400 font-bold shrink-0">بوكينج:</span>
                 <span>حجوزات المواقع الخارجية (Booking.com وغيرها) لا تخضع لفحص الحد الأدنى — السعر محدد مسبقاً من المنصة.</span>
@@ -2199,43 +2259,43 @@ function MethodologyPopup({ config, onClose }: { config: AppConfig; onClose: () 
 
           {/* 6. Formula */}
           <section>
-            <h4 className="text-amber-400 font-bold text-sm mb-2 flex items-center gap-2">
-              <span className="w-6 h-6 rounded-lg bg-amber-500/20 flex items-center justify-center text-xs font-bold">6</span>
+            <h4 className="text-amber-400 font-bold text-base mb-2 flex items-center gap-2">
+              <span className="w-6 h-6 rounded-lg bg-amber-500/20 flex items-center justify-center text-sm font-bold">6</span>
               معادلة حساب النقص السعري
             </h4>
-            <div className="text-xs mr-8 space-y-2">
+            <div className="text-sm mr-8 space-y-2">
               <div className="bg-slate-800/60 rounded-xl p-3 border border-slate-700/30 font-mono text-slate-300">
                 <p>المتوقع = <span className="text-cyan-300">الحد الأدنى لليلة</span> × <span className="text-cyan-300">عدد الليالي</span></p>
                 <p className="mt-1">النقص = <span className="text-red-300">المتوقع</span> − <span className="text-emerald-300">الإيجار الفعلي</span></p>
                 <p className="mt-1 text-slate-500">لو النقص ≤ 0 → <span className="text-emerald-400">✓ سليم</span></p>
-                <p className="text-slate-500">لو النقص &gt; 0 → <span className="text-red-400">▼ تنبيه</span></p>
+                <p className="text-slate-500">لو النقص &gt; 0 → <span className="text-[var(--adora-error)]">▼ تنبيه</span></p>
               </div>
             </div>
           </section>
 
           {/* 7. Breakdown Table */}
           <section>
-            <h4 className="text-teal-400 font-bold text-sm mb-2 flex items-center gap-2">
-              <span className="w-6 h-6 rounded-lg bg-teal-500/20 flex items-center justify-center text-xs font-bold">7</span>
+            <h4 className="text-teal-400 font-bold text-base mb-2 flex items-center gap-2">
+              <span className="w-6 h-6 rounded-lg bg-teal-500/20 flex items-center justify-center text-sm font-bold">7</span>
               جدول ملخص المكافآت
             </h4>
-            <div className="space-y-1.5 text-slate-300 text-xs mr-8">
+            <div className="space-y-1.5 text-slate-300 text-sm mr-8">
               <p><span className="text-cyan-300 font-bold">مرجع الإحصائيات:</span> العدد من تقرير إحصائيات الموظفين (الحَكَم النهائي).</p>
               <p><span className="text-emerald-300 font-bold">محسوب:</span> عدد الحجوزات بالتفاصيل (≤ مرجع الإحصائيات).</p>
               <p><span className="text-amber-300 font-bold">زيادة:</span> حجوزات تتجاوز سقف تقرير الإحصائيات (⚡تجاوز / 🏨لم يخرج / 🚫بدون صلاحية).</p>
               <p><span className="text-emerald-300 font-bold">استقبال / بوكينج:</span> توزيع مصدر الحجز (المحسوب فقط).</p>
               <p><span className="text-amber-300 font-bold">صباح / مساء / ليل:</span> توزيع الورديات (6ص-4م = صباح، 4م-12ل = مساء، 12ل-6ص = ليل).</p>
-              <p className="text-slate-500 text-[11px] mt-1">اضغط على أي رقم في الجدول لعرض تفاصيل الحجوزات المكونة له.</p>
+              <p className="text-slate-500 text-sm mt-1">اضغط على أي رقم في الجدول لعرض تفاصيل الحجوزات المكونة له.</p>
             </div>
           </section>
 
         </div>
 
         {/* Footer */}
-        <div className="px-6 py-3 border-t border-slate-700/50 bg-slate-800/40 shrink-0 flex items-center justify-between">
-          <p className="text-[10px] text-slate-600">نظام Adora لتحليل الحجوزات — التوثيق التلقائي</p>
+        <div className="px-6 py-3 border-t border-[var(--adora-border)] bg-[var(--adora-modal-header-bg)] shrink-0 flex items-center justify-between">
+          <p className="text-[14px] text-[var(--adora-text-secondary)]">نظام Adora لتحليل الحجوزات — التوثيق التلقائي</p>
           <button onClick={onClose}
-            className="px-4 py-1.5 rounded-lg text-xs font-medium bg-cyan-600/20 text-cyan-300 hover:bg-cyan-600/30 border border-cyan-500/20 transition-colors">
+            className="px-4 py-1.5 rounded-lg text-sm font-medium bg-cyan-600/20 text-[var(--adora-accent)] hover:bg-cyan-600/30 border border-cyan-500/20 transition-colors">
             فهمت
           </button>
         </div>
@@ -2252,51 +2312,51 @@ function RatingExplanationPopup({ onClose }: { onClose: () => void }) {
   return (
     <div className="fixed inset-0 z-200 flex items-center justify-center bg-black/70 backdrop-blur-sm p-2 sm:p-4"
       onClick={onClose}>
-      <div className="bg-slate-900/98 border border-[#14b8a6]/30 rounded-2xl shadow-2xl max-w-2xl w-full max-h-[90vh] overflow-y-auto flex flex-col"
+      <div className="bg-[var(--adora-modal-bg)] border border-[var(--adora-focus-border)] rounded-2xl modal-no-side-shadow max-w-2xl w-full max-h-[90vh] overflow-y-auto flex flex-col"
         onClick={(e) => e.stopPropagation()}>
-        <div className="px-6 py-4 border-b border-white/10 shrink-0 flex items-center justify-between">
-          <h3 className="text-lg font-black text-[#14b8a6] flex items-center gap-2">
+        <div className="px-6 py-4 border-b border-[var(--adora-border)] shrink-0 flex items-center justify-between">
+          <h3 className="text-lg font-black text-[var(--adora-accent)] flex items-center gap-2">
             <span>📊</span>
             <span>كيفية حساب التقييم</span>
           </h3>
-          <button onClick={onClose} className="text-gray-400 hover:text-white transition-colors text-2xl font-bold w-11 h-11 flex items-center justify-center rounded-lg hover:bg-white/10">
+          <button onClick={onClose} className="text-[var(--adora-text-secondary)] hover:text-[var(--adora-text)] transition-colors text-2xl font-bold w-11 h-11 flex items-center justify-center rounded-lg hover:bg-[var(--adora-hover-bg)]">
             ×
           </button>
         </div>
-        <div className="px-6 py-5 space-y-4 text-sm text-gray-300 leading-relaxed">
-          <p className="text-gray-200 font-medium">
-            عمود <strong className="text-[#14b8a6]">«النقاط»</strong> في الجدول = <strong className="text-white">رصيد النقاط من الفترة</strong> (صافي المستحق + مساهمة 15% معروض كنقاط) — نفس المفهوم في التقرير عند الضغط على الاسم. <strong className="text-white">مستوى الأداء</strong> (ممتاز/جيد/سيء) يُحسب من أدائك مقارنةً بباقي الموظفين ويُعرض تحت النقاط للتوضيح. فيما يلي شرح كيفية حساب مستوى الأداء:
+        <div className="px-6 py-5 space-y-4 text-sm text-[var(--adora-text)] leading-relaxed">
+          <p className="text-[var(--adora-text)] font-medium">
+            عمود <strong className="text-[var(--adora-accent)]">«النقاط»</strong> في الجدول = <strong className="text-[var(--adora-text)]">رصيد النقاط من الفترة</strong> (صافي المستحق + مساهمة 15% معروض كنقاط) — نفس المفهوم في التقرير عند الضغط على الاسم. <strong className="text-[var(--adora-text)]">مستوى الأداء</strong> (ممتاز/جيد/سيء) يُحسب من أدائك مقارنةً بباقي الموظفين ويُعرض تحت النقاط للتوضيح. فيما يلي شرح كيفية حساب مستوى الأداء:
           </p>
-          <div className="bg-[#14b8a6]/10 rounded-xl p-4 border border-[#14b8a6]/30">
-            <h4 className="text-base font-bold text-[#14b8a6] mb-3">1. ما الذي يُؤخذ في الاعتبار؟</h4>
+          <div className="bg-[var(--adora-hover-bg)] rounded-xl p-4 border border-[var(--adora-focus-border)]">
+            <h4 className="text-base font-bold text-[var(--adora-accent)] mb-3">1. ما الذي يُؤخذ في الاعتبار؟</h4>
             <ul className="space-y-2 list-none">
-              <li className="flex items-start gap-2"><span className="text-[#14b8a6] font-bold">•</span><span><strong className="text-white">عدد الحجوزات:</strong> كلما كان عدد حجوزاتك أقرب إلى أعلى موظف في الفريق، زادت نقاطك في هذا الجزء.</span></li>
-              <li className="flex items-start gap-2"><span className="text-[#14b8a6] font-bold">•</span><span><strong className="text-white">التقييمات (Booking و Google):</strong> كلما كان إجمالي تقييماتك أقرب إلى أعلى موظف، زادت نقاطك.</span></li>
-              <li className="flex items-start gap-2"><span className="text-[#14b8a6] font-bold">•</span><span><strong className="text-white">الحضور 26 يوم وأكثر:</strong> إذا أتممت 26 يوماً وأكثر من العطاء (بطل تحدي الظروف)، يُضاف لك <strong className="text-green-400">+0.15</strong> على النتيجة النهائية كمكافأة التزام.</span></li>
-              <li className="flex items-start gap-2"><span className="text-red-400 font-bold">•</span><span><strong className="text-white">الخصم الإداري:</strong> إذا كان عليك خصم إداري بأي قيمة، يتم <strong className="text-red-400">تخفيض التقييم بمقدار 0.25</strong> ليعكس تأثير التقصير على الأداء.</span></li>
-              <li className="flex items-start gap-2"><span className="text-red-400 font-bold">•</span><span><strong className="text-white">خصم تقييم الفندق (تقييمات سلبية) وفقدان فرص حجز (مكالمات لم يُرد عليها):</strong> إذا سجّل الفرع تقييمات سلبية (أقل من تقييم الفندق) أو فقدان فرص حجز نتيجة المكالمات التي لم يتم الرد عليها، يُخصم <strong className="text-red-400">10 ريال × عدد التقييمات السلبية للفرع</strong> من صافي كل موظف في ذلك الفرع، ويُنقص نقاط التقييم.</span></li>
+              <li className="flex items-start gap-2"><span className="text-[var(--adora-accent)] font-bold">•</span><span><strong className="text-[var(--adora-text)]">عدد الحجوزات:</strong> كلما كان عدد حجوزاتك أقرب إلى أعلى موظف في الفريق، زادت نقاطك في هذا الجزء.</span></li>
+              <li className="flex items-start gap-2"><span className="text-[var(--adora-accent)] font-bold">•</span><span><strong className="text-[var(--adora-text)]">التقييمات (Booking و Google):</strong> كلما كان إجمالي تقييماتك أقرب إلى أعلى موظف، زادت نقاطك.</span></li>
+              <li className="flex items-start gap-2"><span className="text-[var(--adora-accent)] font-bold">•</span><span><strong className="text-[var(--adora-text)]">الحضور 26 يوم وأكثر:</strong> إذا أتممت 26 يوماً وأكثر من العطاء (بطل تحدي الظروف)، يُضاف لك <strong className="text-[var(--adora-success)]">+0.15</strong> على النتيجة النهائية كمكافأة التزام.</span></li>
+              <li className="flex items-start gap-2"><span className="text-[var(--adora-error)] font-bold">•</span><span><strong className="text-[var(--adora-text)]">الخصم الإداري:</strong> إذا كان عليك خصم إداري بأي قيمة، يتم <strong className="text-[var(--adora-error)]">تخفيض التقييم بمقدار 0.25</strong> ليعكس تأثير التقصير على الأداء.</span></li>
+              <li className="flex items-start gap-2"><span className="text-[var(--adora-error)] font-bold">•</span><span><strong className="text-[var(--adora-text)]">خصم تقييم الفندق (تقييمات سلبية) وفقدان فرص حجز (مكالمات لم يُرد عليها):</strong> إذا سجّل الفرع تقييمات سلبية (أقل من تقييم الفندق) أو فقدان فرص حجز نتيجة المكالمات التي لم يتم الرد عليها، يُخصم <strong className="text-[var(--adora-error)]">10 ريال × عدد التقييمات السلبية للفرع</strong> من صافي كل موظف في ذلك الفرع، ويُنقص نقاط التقييم.</span></li>
             </ul>
           </div>
-          <div className="bg-white/5 rounded-xl p-4 border border-white/10">
-            <h4 className="text-base font-bold text-[#14b8a6] mb-3">2. كيف تُترجم النتيجة إلى نقاط ومستوى؟</h4>
-            <p className="text-gray-200 mb-3"><strong className="text-white">مستوى الأداء</strong> (ممتاز/جيد/سيء) يُحسب من نتيجة داخلية تُحوَّل إلى <strong className="text-white">نقاط من 0 إلى 100</strong>، ثم يُحدَّد المستوى حسب الجدول التالي:</p>
+          <div className="bg-[var(--adora-hover-bg)] rounded-xl p-4 border border-[var(--adora-border)]">
+            <h4 className="text-base font-bold text-[var(--adora-accent)] mb-3">2. كيف تُترجم النتيجة إلى نقاط ومستوى؟</h4>
+            <p className="text-[var(--adora-text)] mb-3"><strong className="text-[var(--adora-text)]">مستوى الأداء</strong> (ممتاز/جيد/سيء) يُحسب من نتيجة داخلية تُحوَّل إلى <strong className="text-[var(--adora-text)]">نقاط من 0 إلى 100</strong>، ثم يُحدَّد المستوى حسب الجدول التالي:</p>
             <ul className="space-y-2 list-none">
-              <li className="flex items-start gap-2"><span className="text-green-400 font-bold">•</span><span><strong className="text-green-400">ممتاز:</strong> من 90 إلى 100 نقطة.</span></li>
-              <li className="flex items-start gap-2"><span className="text-green-300 font-bold">•</span><span><strong className="text-green-300">جيد:</strong> من 80 إلى أقل من 90 نقطة.</span></li>
-              <li className="flex items-start gap-2"><span className="text-yellow-400 font-bold">•</span><span><strong className="text-yellow-400">متوسط:</strong> من 60 إلى أقل من 80 نقطة.</span></li>
-              <li className="flex items-start gap-2"><span className="text-orange-400 font-bold">•</span><span><strong className="text-orange-400">ضعيف:</strong> من 40 إلى أقل من 60 نقطة.</span></li>
-              <li className="flex items-start gap-2"><span className="text-red-400 font-bold">•</span><span><strong className="text-red-400">سيء:</strong> أقل من 40 نقطة.</span></li>
+              <li className="flex items-start gap-2"><span className="text-[var(--adora-success)] font-bold">•</span><span><strong className="text-[var(--adora-success)]">ممتاز:</strong> من 90 إلى 100 نقطة.</span></li>
+              <li className="flex items-start gap-2"><span className="text-[var(--adora-success)] font-bold">•</span><span><strong className="text-[var(--adora-success)]">جيد:</strong> من 80 إلى أقل من 90 نقطة.</span></li>
+              <li className="flex items-start gap-2"><span className="text-[var(--adora-warning)] font-bold">•</span><span><strong className="text-[var(--adora-warning)]">متوسط:</strong> من 60 إلى أقل من 80 نقطة.</span></li>
+              <li className="flex items-start gap-2"><span className="text-[var(--adora-warning)] font-bold">•</span><span><strong className="text-[var(--adora-warning)]">ضعيف:</strong> من 40 إلى أقل من 60 نقطة.</span></li>
+              <li className="flex items-start gap-2"><span className="text-[var(--adora-error)] font-bold">•</span><span><strong className="text-[var(--adora-error)]">سيء:</strong> أقل من 40 نقطة.</span></li>
             </ul>
           </div>
-          <div className="bg-[#14b8a6]/5 rounded-xl p-4 border border-[#14b8a6]/20">
-            <h4 className="text-base font-bold text-[#14b8a6] mb-2">3. ملخص سريع</h4>
-            <p className="text-gray-200">
-              <strong className="text-white">النقاط</strong> في الجدول = رصيد النقاط من الفترة (صافي + 15%). <strong className="text-white">مستوى الأداء</strong> (ممتاز → سيء) يُبنى على أداء الحجوزات والتقييمات بالنسبة لباقي الموظفين، مع <strong className="text-green-400">مكافأة للحضور 26 يوم وأكثر</strong>، و<strong className="text-red-400">تخفيض عند وجود خصم إداري أو خصم تقييم الفندق</strong>. كلما كنت أقرب للأعلى وملتزماً بالحضور (وبلا خصم)، ارتفع مستوى أدائك إلى «ممتاز».
+          <div className="bg-[var(--adora-accent)]/5 rounded-xl p-4 border border-[var(--adora-border)]">
+            <h4 className="text-base font-bold text-[var(--adora-accent)] mb-2">3. ملخص سريع</h4>
+            <p className="text-[var(--adora-text)]">
+              <strong className="text-[var(--adora-text)]">النقاط</strong> في الجدول = رصيد النقاط من الفترة (صافي + 15%). <strong className="text-[var(--adora-text)]">مستوى الأداء</strong> (ممتاز → سيء) يُبنى على أداء الحجوزات والتقييمات بالنسبة لباقي الموظفين، مع <strong className="text-[var(--adora-success)]">مكافأة للحضور 26 يوم وأكثر</strong>، و<strong className="text-[var(--adora-error)]">تخفيض عند وجود خصم إداري أو خصم تقييم الفندق</strong>. كلما كنت أقرب للأعلى وملتزماً بالحضور (وبلا خصم)، ارتفع مستوى أدائك إلى «ممتاز».
             </p>
           </div>
         </div>
-        <div className="px-6 py-3 border-t border-white/10 shrink-0 flex justify-end">
-          <button onClick={onClose} className="px-4 py-2.5 rounded-lg text-sm font-bold text-gray-300 hover:bg-white/10 transition-colors">
+        <div className="px-6 py-3 border-t border-[var(--adora-border)] shrink-0 flex justify-end">
+          <button onClick={onClose} className="px-4 py-2.5 rounded-lg text-sm font-bold text-[var(--adora-text)] hover:bg-[var(--adora-hover-bg)] transition-colors">
             إغلاق
           </button>
         </div>
@@ -2332,12 +2392,12 @@ interface ConditionsSchema {
 const CONDITIONS_SCHEMA = conditionsContentSchema as ConditionsSchema;
 
 const THEME_CLASSES: Record<string, { wrap: string; title: string; bullet: string }> = {
-  turquoise: { wrap: 'bg-[#14b8a6]/10 rounded-xl p-4 border border-[#14b8a6]/30', title: 'text-[#14b8a6]', bullet: 'text-[#14b8a6]' },
-  amber: { wrap: 'bg-amber-500/10 rounded-xl p-4 border border-amber-500/30', title: 'text-amber-400', bullet: 'text-amber-400' },
-  yellow: { wrap: 'bg-yellow-500/10 rounded-xl p-4 border border-yellow-500/30', title: 'text-yellow-400', bullet: 'text-yellow-400' },
-  green: { wrap: 'bg-green-500/10 rounded-xl p-4 border border-green-500/30', title: 'text-green-400', bullet: 'text-green-400' },
-  orange: { wrap: 'bg-orange-500/10 rounded-xl p-4 border border-orange-500/30', title: 'text-orange-400', bullet: 'text-orange-400' },
-  red: { wrap: 'bg-red-500/10 rounded-xl p-4 border border-red-500/30', title: 'text-red-400', bullet: 'text-red-400' },
+  turquoise: { wrap: 'bg-[var(--adora-hover-bg)] rounded-xl p-4 border border-[var(--adora-focus-border)]', title: 'text-[var(--adora-accent)]', bullet: 'text-[var(--adora-accent)]' },
+  amber: { wrap: 'bg-[var(--adora-hover-bg)] rounded-xl p-4 border border-[var(--adora-focus-border)]', title: 'text-[var(--adora-warning)]', bullet: 'text-[var(--adora-warning)]' },
+  yellow: { wrap: 'bg-[var(--adora-hover-bg)] rounded-xl p-4 border border-[var(--adora-focus-border)]', title: 'text-[var(--adora-warning)]', bullet: 'text-[var(--adora-warning)]' },
+  green: { wrap: 'bg-[var(--adora-hover-bg)] rounded-xl p-4 border border-[var(--adora-focus-border)]', title: 'text-[var(--adora-success)]', bullet: 'text-[var(--adora-success)]' },
+  orange: { wrap: 'bg-[var(--adora-hover-bg)] rounded-xl p-4 border border-[var(--adora-focus-border)]', title: 'text-[var(--adora-warning)]', bullet: 'text-[var(--adora-warning)]' },
+  red: { wrap: 'rounded-xl p-4 border border-[var(--adora-border)] bg-[var(--adora-input-bg)]', title: 'text-[var(--adora-error)]', bullet: 'text-[var(--adora-error)]' },
 };
 
 function conditionsReplaceTemplate(tpl: string, rp: AppConfig['rewardPricing']): string {
@@ -2346,8 +2406,13 @@ function conditionsReplaceTemplate(tpl: string, rp: AppConfig['rewardPricing']):
     .replace(/\{\{rateEvening\}\}/g, String(rp.rateEvening))
     .replace(/\{\{rateNight\}\}/g, String(rp.rateNight))
     .replace(/\{\{rateBooking\}\}/g, String(rp.rateBooking))
+    .replace(/\{\{rateContract\}\}/g, String(rp.rateContract ?? 200))
+    .replace(/\{\{vipDescription\}\}/g, rp.vipDescription ?? 'حجوزات VIP — تُسعّر من خانات VIP (استقبال/بوكينج لكل غرفة)')
     .replace(/\{\{rateEvalBooking\}\}/g, String(rp.rateEvalBooking))
-    .replace(/\{\{rateEvalGoogle\}\}/g, String(rp.rateEvalGoogle));
+    .replace(/\{\{rateEvalGoogle\}\}/g, String(rp.rateEvalGoogle))
+    .replace(/\{\{minEvalCorniche\}\}/g, String(rp.minEvalCorniche ?? 8.7))
+    .replace(/\{\{minEvalAndalus\}\}/g, String(rp.minEvalAndalus ?? 8.2))
+    .replace(/\{\{minEvalGoogle\}\}/g, String(rp.minEvalGoogle ?? 4.3));
 }
 
 function buildConditionsPrintHtml(config: AppConfig): string {
@@ -2395,7 +2460,7 @@ function buildConditionsPrintHtml(config: AppConfig): string {
 
   return '<!DOCTYPE html><html dir="rtl" lang="ar"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0">' +
     '<title>' + esc(title) + '</title>' +
-    '<style>@page { size: A4 portrait; margin: 6mm; } * { margin: 0; padding: 0; box-sizing: border-box; } body { font-family: Arial, Segoe UI, Tahoma, sans-serif; padding: 4px 8px; background: #fff; color: #000; line-height: 1.25; direction: rtl; font-size: 9px; } h1 { font-size: 14px; font-weight: 900; margin-bottom: 4px; text-align: center; border-bottom: 1.5px solid #14b8a6; padding-bottom: 3px; } .section { margin-bottom: 3px; padding: 3px 6px; border-radius: 3px; border: 0.5px solid #ddd; page-break-inside: avoid; } .section.contracts { background-color: rgba(59, 130, 246, 0.06); border-color: rgba(59, 130, 246, 0.3); border-right: 3px solid rgba(59, 130, 246, 0.5); } .section.evaluations { background-color: rgba(234, 179, 8, 0.06); border-color: rgba(234, 179, 8, 0.3); border-right: 3px solid rgba(234, 179, 8, 0.5); } .section.attendance { background-color: rgba(16, 185, 129, 0.06); border-color: rgba(16, 185, 129, 0.3); border-right: 3px solid rgba(16, 185, 129, 0.5); } .section.discounts { background-color: rgba(239, 68, 68, 0.06); border-color: rgba(239, 68, 68, 0.3); border-right: 3px solid rgba(239, 68, 68, 0.5); } h2 { font-size: 10px; font-weight: 800; margin: 0 0 2px 0; } ul { list-style: none; padding: 0; margin: 0; } li { font-size: 8.5px; font-weight: 600; margin: 1.5px 0; padding-right: 12px; position: relative; line-height: 1.3; text-align: right; } li::before { content: "•"; position: absolute; right: 0; top: 0; font-weight: 900; } @media print { body { padding: 2px 6px; } .conditions-one-page { page-break-after: avoid; page-break-inside: avoid; } }</style></head><body><div class="conditions-one-page">' +
+    '<style>@page { size: A4 portrait; margin: 10mm; } * { margin: 0; padding: 0; box-sizing: border-box; } body { font-family: "IBM Plex Sans Arabic", Arial, sans-serif; padding: 8px 12px; background: #fff; color: #111; line-height: 1.4; direction: rtl; font-size: 10px; } h1 { font-size: 16px; font-weight: 900; margin-bottom: 8px; text-align: center; border-bottom: 2px solid #0d9488; padding-bottom: 6px; } .section { margin-bottom: 8px; padding: 8px 12px; border-radius: 6px; border: 1px solid #e2e8f0; page-break-inside: avoid; } .section.contracts { background-color: rgba(59, 130, 246, 0.08); border-color: rgba(59, 130, 246, 0.35); border-right: 4px solid rgba(59, 130, 246, 0.6); } .section.evaluations { background-color: rgba(234, 179, 8, 0.08); border-color: rgba(234, 179, 8, 0.35); border-right: 4px solid rgba(234, 179, 8, 0.6); } .section.attendance { background-color: rgba(16, 185, 129, 0.08); border-color: rgba(16, 185, 129, 0.35); border-right: 4px solid rgba(16, 185, 129, 0.6); } .section.discounts { background-color: rgba(239, 68, 68, 0.08); border-color: rgba(239, 68, 68, 0.35); border-right: 4px solid rgba(239, 68, 68, 0.6); } h2 { font-size: 11px; font-weight: 800; margin: 0 0 6px 0; } ul { list-style: none; padding: 0; margin: 0; } li { font-size: 9.5px; font-weight: 600; margin: 4px 0; padding-right: 14px; position: relative; line-height: 1.4; text-align: right; } li::before { content: "•"; position: absolute; right: 0; top: 0; font-weight: 900; color: #0d9488; } @media print { body { padding: 4mm 6mm; } .conditions-one-page { page-break-after: avoid; page-break-inside: avoid; } }</style></head><body><div class="conditions-one-page">' +
     body + '</div></body></html>';
 }
 
@@ -2419,15 +2484,15 @@ function ConditionsPopup({ config, onClose }: { config: AppConfig; onClose: () =
   return (
     <>
     <div className="fixed inset-0 z-[200] flex items-center justify-center bg-black/70 backdrop-blur-sm p-2 sm:p-4" onClick={onClose}>
-      <div className="bg-slate-900/98 border border-[#14b8a6]/30 rounded-2xl shadow-2xl max-w-2xl w-full max-h-[90vh] overflow-y-auto flex flex-col" onClick={(e) => e.stopPropagation()}>
-        <div className="px-6 py-4 border-b border-white/10 shrink-0 flex items-center justify-between">
-          <h3 className="text-lg font-black text-[#14b8a6] flex items-center gap-2">
+      <div className="bg-[var(--adora-modal-bg)] border border-[var(--adora-focus-border)] rounded-2xl modal-no-side-shadow max-w-2xl w-full max-h-[90vh] overflow-y-auto flex flex-col" onClick={(e) => e.stopPropagation()}>
+        <div className="px-6 py-4 border-b border-[var(--adora-border)] shrink-0 flex items-center justify-between">
+          <h3 className="text-lg font-black text-[var(--adora-accent)] flex items-center gap-2">
             <span>📋</span>
             <span>{CONDITIONS_SCHEMA.modalTitle}</span>
           </h3>
-          <button onClick={onClose} className="text-gray-400 hover:text-white transition-colors text-2xl font-bold w-11 h-11 flex items-center justify-center rounded-lg hover:bg-white/10">×</button>
+          <button onClick={onClose} className="text-[var(--adora-text-secondary)] hover:text-[var(--adora-text)] transition-colors text-2xl font-bold w-11 h-11 flex items-center justify-center rounded-lg hover:bg-[var(--adora-hover-bg)]">×</button>
         </div>
-        <div className="px-6 py-5 space-y-4 text-sm text-gray-300">
+        <div className="px-6 py-5 space-y-4 text-sm text-[var(--adora-text-secondary)]">
           {CONDITIONS_SCHEMA.sections.map((sec) => {
             if (sec.id === 'vip') {
               if (branchNames.length === 0 && !(vipDefault.reception > 0 || vipDefault.booking > 0)) return null;
@@ -2443,7 +2508,7 @@ function ConditionsPopup({ config, onClose }: { config: AppConfig; onClose: () =
                       return (
                         <li key={branch} className="flex items-start gap-2">
                           <span className={theme.bullet + ' font-bold'}>•</span>
-                          <span><strong className="text-amber-300">{branch}:</strong>{' '}
+                          <span><strong className="text-[var(--adora-warning)]">{branch}:</strong>{' '}
                             {roomNums.map((room) => {
                               const r = rooms[room];
                               return `غرفة ${room} (استقبال: ${r?.reception ?? 0} ريال، بوكينج: ${r?.booking ?? 0} ريال)`;
@@ -2453,7 +2518,7 @@ function ConditionsPopup({ config, onClose }: { config: AppConfig; onClose: () =
                       );
                     })}
                     {(vipDefault.reception > 0 || vipDefault.booking > 0) && (
-                      <li className="flex items-start gap-2"><span className={theme.bullet + ' font-bold'}>•</span><span><strong className="text-amber-300">VIP افتراضي:</strong> استقبال: {vipDefault.reception} ريال، بوكينج: {vipDefault.booking} ريال لكل حجز</span></li>
+                      <li className="flex items-start gap-2"><span className={theme.bullet + ' font-bold'}>•</span><span><strong className="text-[var(--adora-warning)]">VIP افتراضي:</strong> استقبال: {vipDefault.reception} ريال، بوكينج: {vipDefault.booking} ريال لكل حجز</span></li>
                     )}
                   </ul>
                 </div>
@@ -2471,8 +2536,8 @@ function ConditionsPopup({ config, onClose }: { config: AppConfig; onClose: () =
                       return (
                         <li key={idx} className="flex items-start gap-2 flex-wrap items-center">
                           <span className={theme.bullet + ' font-bold'}>•</span>
-                          <span className="text-gray-400">{item.staticBefore}</span>
-                          <button type="button" onClick={(e) => { e.stopPropagation(); setShowInstructions(true); }} className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg text-xs font-bold text-[#14b8a6] bg-[#14b8a6]/20 border border-[#14b8a6]/40 hover:bg-[#14b8a6]/30 transition-colors mt-1 sm:mt-0">او اضغط هنا</button>
+                          <span className="text-[var(--adora-text-secondary)]">{item.staticBefore}</span>
+                          <button type="button" onClick={(e) => { e.stopPropagation(); setShowInstructions(true); }} className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg text-sm font-bold text-[var(--adora-accent)] bg-[var(--adora-hover-bg)] border border-[var(--adora-focus-border)] hover:bg-[var(--adora-active-bg)] transition-colors mt-1 sm:mt-0">او اضغط هنا</button>
                         </li>
                       );
                     }
@@ -2481,7 +2546,7 @@ function ConditionsPopup({ config, onClose }: { config: AppConfig; onClose: () =
                     return (
                       <li key={idx} className="flex items-start gap-2">
                         <span className={theme.bullet + ' font-bold'}>•</span>
-                        <span>{hasRate ? <strong className="text-white">{text}</strong> : text}</span>
+                        <span>{hasRate ? <strong className="text-[var(--adora-text)]">{text}</strong> : text}</span>
                       </li>
                     );
                   })}
@@ -2490,12 +2555,12 @@ function ConditionsPopup({ config, onClose }: { config: AppConfig; onClose: () =
             );
           })}
         </div>
-        <div className="px-6 py-3 border-t border-white/10 shrink-0 flex justify-end gap-2">
-          <button type="button" onClick={handlePrint} className="px-4 py-2.5 rounded-lg text-sm font-bold text-gray-300 hover:bg-white/10 transition-colors inline-flex items-center gap-2">
+        <div className="px-6 py-3 border-t border-[var(--adora-border)] shrink-0 flex justify-end gap-2">
+          <button type="button" onClick={handlePrint} className="px-4 py-2.5 rounded-lg text-sm font-bold text-[var(--adora-text-secondary)] hover:bg-[var(--adora-hover-bg)] transition-colors inline-flex items-center gap-2">
             <Printer className="w-4 h-4" />
             طباعة الشروط
           </button>
-          <button onClick={onClose} className="px-4 py-2.5 rounded-lg text-sm font-bold text-gray-300 hover:bg-white/10 transition-colors">إغلاق</button>
+          <button onClick={onClose} className="px-4 py-2.5 rounded-lg text-sm font-bold text-[var(--adora-text-secondary)] hover:bg-[var(--adora-hover-bg)] transition-colors">إغلاق</button>
         </div>
       </div>
     </div>
@@ -2530,18 +2595,18 @@ function getCustomDiscountSectionHtml(types: string[]): string {
       return '<li class="flex gap-2"><span class="text-purple-400">•</span><span>' + s + '</span></li>';
     })
     .join('');
-  return '<div class="bg-purple-500/10 rounded-xl p-4 border border-purple-500/30"><h4 class="text-purple-400 font-bold mb-2 text-base">أنواع خصم إضافية (أضافها المدير)</h4><p class="text-slate-400 text-xs mb-2">تظهر تلقائياً هنا عند إضافة المدير نوع خصم جديد من نافذة الخصومات.</p><ul class="space-y-2 text-slate-300 list-none">' + lis + '</ul></div>';
+  return '<div class="bg-purple-500/10 rounded-xl p-4 border border-purple-500/30"><h4 class="text-purple-400 font-bold mb-2 text-base">أنواع خصم إضافية (أضافها المدير)</h4><p class="text-slate-400 text-sm mb-2">تظهر تلقائياً هنا عند إضافة المدير نوع خصم جديد من نافذة الخصومات.</p><ul class="space-y-2 text-slate-300 list-none">' + lis + '</ul></div>';
 }
 
 function printInstructionsModal(instructionsHtml: string, discountSectionHtml: string) {
   const content = '<div class="space-y-5">' + instructionsHtml + (discountSectionHtml ? discountSectionHtml : '') + '</div>';
   const printWin = window.open('', '_blank');
   if (!printWin) return;
-  const printStyles = '@page{size:A4 portrait;margin:6mm}body{background:#fff!important;color:#000!important;padding:4mm;font-family:"IBM Plex Sans Arabic",Arial,sans-serif;font-size:9px;line-height:1.25}@media print{body{background:#fff!important;color:#000!important} .no-print{display:none} *{color:#000!important;background:transparent!important}}';
+  const printStyles = '@page{size:A4 portrait;margin:10mm}body{background:#fff!important;color:#111!important;padding:6mm 8mm;font-family:"IBM Plex Sans Arabic",Arial,sans-serif;font-size:10px;line-height:1.4}@media print{body{background:#fff!important;color:#111!important}.no-print{display:none!important}}';
   printWin.document.write(
     '<!DOCTYPE html><html dir="rtl" lang="ar"><head><meta charset="UTF-8"><title>لائحة تعليمات وسياسات عمل موظفي الاستقبال</title><style>' +
       printStyles +
-      '</style></head><body><h1 style="font-size:14px;font-weight:900;color:#000;margin-bottom:6px;text-align:center;border-bottom:1.5px solid #14b8a6;padding-bottom:3px;">لائحة تعليمات وسياسات عمل موظفي الاستقبال</h1><div style="max-width:100%;margin:0 auto;font-size:9px;line-height:1.25;">' +
+      '</style></head><body><h1 style="font-size:16px;font-weight:900;color:#111;margin-bottom:10px;text-align:center;border-bottom:2px solid #0d9488;padding-bottom:8px;">لائحة تعليمات وسياسات عمل موظفي الاستقبال</h1><div style="max-width:100%;margin:0 auto;font-size:10px;line-height:1.4;">' +
       content +
       '</div></body></html>'
   );
@@ -2562,31 +2627,31 @@ function InstructionsPopup({ onClose }: { onClose: () => void }) {
 
   return (
     <div className="fixed inset-0 z-[300] flex items-center justify-center bg-black/70 backdrop-blur-sm" onClick={onClose}>
-      <div className="bg-slate-900/98 border border-slate-700/60 rounded-2xl shadow-2xl max-w-2xl w-[95%] max-h-[90vh] flex flex-col overflow-hidden" onClick={(e) => e.stopPropagation()}>
-        <div className="px-6 py-4 border-b border-slate-700/50 bg-slate-800/50 shrink-0 flex items-center justify-between">
+<div className="bg-[var(--adora-modal-bg)] border border-[var(--adora-border)] rounded-2xl modal-no-side-shadow max-w-2xl w-[95%] max-h-[90vh] flex flex-col overflow-hidden" onClick={(e) => e.stopPropagation()}>
+      <div className="px-6 py-4 border-b border-[var(--adora-border)] bg-[var(--adora-modal-header-bg)] shrink-0 flex items-center justify-between">
           <div className="flex items-center gap-3">
             <div className="p-2 bg-cyan-500/20 rounded-xl">
               <FileText className="w-5 h-5 text-cyan-400" />
             </div>
             <div>
-              <h3 className="text-base font-bold text-white">لائحة تعليمات وسياسات عمل موظفي الاستقبال</h3>
-              <p className="text-[11px] text-slate-500">لائحة موحدة — قائمة أنواع الخصم وطباعة اللائحة هنا</p>
+              <h3 className="text-base font-bold text-[var(--adora-text)]">لائحة تعليمات وسياسات عمل موظفي الاستقبال</h3>
+              <p className="text-[15px] text-[var(--adora-text-secondary)]">لائحة موحدة — قائمة أنواع الخصم وطباعة اللائحة هنا</p>
             </div>
           </div>
-          <button onClick={onClose} className="text-slate-500 hover:text-slate-200 transition-colors">
+          <button onClick={onClose} className="text-[var(--adora-text-secondary)] hover:text-[var(--adora-text)] transition-colors">
             <X className="w-5 h-5" />
           </button>
         </div>
-        <div className="overflow-y-auto flex-1 px-6 py-5 space-y-6 text-sm leading-relaxed">
+        <div className="overflow-y-auto flex-1 px-6 py-5 space-y-6 text-base leading-relaxed max-w-3xl">
           <div className="space-y-5" dangerouslySetInnerHTML={{ __html: instructionsBodyHtml }} />
           {customSectionHtml ? <div className="space-y-5" dangerouslySetInnerHTML={{ __html: customSectionHtml }} /> : null}
         </div>
-        <div className="px-6 py-3 border-t border-slate-700/50 bg-slate-800/40 shrink-0 flex flex-wrap items-center justify-between gap-2">
+        <div className="px-6 py-3 border-t border-[var(--adora-border)] bg-[var(--adora-modal-header-bg)] shrink-0 flex flex-wrap items-center justify-between gap-2">
           <button onClick={handlePrint} className="inline-flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-bold text-cyan-400 bg-cyan-600/20 border border-cyan-500/30 hover:bg-cyan-600/30 transition-colors">
             <Printer className="w-4 h-4" />
             طباعة اللائحة
           </button>
-          <button onClick={onClose} className="px-4 py-1.5 rounded-lg text-xs font-medium bg-cyan-600/20 text-cyan-300 hover:bg-cyan-600/30 border border-cyan-500/20 transition-colors">
+          <button onClick={onClose} className="px-4 py-1.5 rounded-lg text-sm font-medium bg-cyan-600/20 text-cyan-300 hover:bg-cyan-600/30 border border-cyan-500/20 transition-colors">
             فهمت
           </button>
         </div>
@@ -2853,12 +2918,54 @@ function EmployeeBreakdown({ staffList, data, config, dateRange }: {
       if (d.isMerged) a.mergedCount++;
     }
 
-    const result = Object.values(agg);
-    result.forEach((r) => {
-      const sum = r['استقبال'] + r['بوكينج'];
-      if (r.staffCount > sum) r['استقبال'] += r.staffCount - sum;
-    });
-    return result;
+    // المرجع هو الأساس ويُوزَّع — عند نقص التقرير (counted < staffCount) نوزّع الفرق تناسبياً
+    for (const k of Object.keys(agg)) {
+      const a = agg[k];
+      const ref = a.staffCount;
+      const counted = a.counted;
+      if (ref <= 0 || counted <= 0) continue;
+      if (counted === ref) continue;
+
+      const oldRec = a['استقبال'];
+      const oldM = a['صباح'];
+      const oldE = a['مساء'];
+
+      a['استقبال'] = Math.round(ref * (oldRec / counted));
+      a['بوكينج'] = ref - a['استقبال'];
+      a['صباح'] = Math.round(ref * (oldM / counted));
+      a['مساء'] = Math.round(ref * (oldE / counted));
+      a['ليل'] = ref - a['صباح'] - a['مساء'];
+
+      // توزيع تناسبي لـ receptionMorning/Evening/Night و bookingRegular
+      const oldRm = a.receptionMorning;
+      const oldRe = a.receptionEvening;
+      const oldRn = a.receptionNight;
+      const oldBr = a.bookingRegular;
+      const oldNonVipRec = oldRm + oldRe + oldRn;
+      const oldNonVipBook = oldBr;
+      const totalNonVip = oldNonVipRec + oldNonVipBook;
+      if (totalNonVip > 0) {
+        const vipTotal = a.vipTotal;
+        const toDist = ref - vipTotal;
+        if (toDist > 0) {
+          const recShare = oldNonVipRec / totalNonVip;
+          const newNonVipRec = Math.round(toDist * recShare);
+          const newNonVipBook = toDist - newNonVipRec;
+          if (oldNonVipRec > 0) {
+            a.receptionMorning = Math.round(newNonVipRec * (oldRm / oldNonVipRec));
+            a.receptionEvening = Math.round(newNonVipRec * (oldRe / oldNonVipRec));
+            a.receptionNight = newNonVipRec - a.receptionMorning - a.receptionEvening;
+          } else {
+            a.receptionMorning = 0;
+            a.receptionEvening = 0;
+            a.receptionNight = newNonVipRec;
+          }
+          a.bookingRegular = newNonVipBook;
+        }
+      }
+    }
+
+    return Object.values(agg);
   }, [staffList, data, countedData, ALL_VIP_NUMS, VIP_ROOMS]);
 
   // Sort handler
@@ -3029,19 +3136,19 @@ function EmployeeBreakdown({ staffList, data, config, dateRange }: {
   );
 
   return (
-    <section className="relative rounded-2xl overflow-hidden bg-gradient-to-br from-slate-900/80 via-slate-800/60 to-slate-900/80 backdrop-blur-xl neon-glow shadow-2xl shadow-black/20">
+    <section className="summary-section relative rounded-2xl overflow-hidden backdrop-blur-xl neon-glow table-section-no-side-shadow">
       {/* Glow effect */}
       <div className="absolute inset-0 bg-gradient-to-br from-cyan-500/[0.03] via-transparent to-violet-500/[0.03] pointer-events-none" />
 
       <div className="relative px-5 py-4 flex items-center justify-between">
         <div>
-          <h2 className="text-sm font-bold text-white/90 flex items-center gap-2.5">
+          <h2 className="text-sm font-bold text-[var(--adora-text)] flex items-center gap-2.5">
             <div className="p-1.5 rounded-lg bg-gradient-to-br from-cyan-500/20 to-teal-500/20">
-              <Users className="w-4 h-4 text-cyan-400" />
+              <Users className="w-4 h-4 text-[var(--adora-accent)]" />
             </div>
             ملخص المكافآت لكل موظف
           </h2>
-          <p className="text-[11px] text-slate-500 mt-1 mr-9">
+          <p className="text-[15px] text-[var(--adora-text-secondary)] mt-1 mr-9">
             فلتر مزدوج: تاريخ الإنشاء + تاريخ الدخول كلاهما داخل النطاق
           </p>
         </div>
@@ -3052,8 +3159,8 @@ function EmployeeBreakdown({ staffList, data, config, dateRange }: {
             transferDone
               ? 'bg-emerald-500/20 text-emerald-400 border border-emerald-500/30 shadow-lg shadow-emerald-500/10'
               : transferring
-              ? 'bg-cyan-500/10 text-cyan-300 border border-cyan-500/20 animate-pulse cursor-wait'
-              : 'bg-gradient-to-r from-cyan-500/20 to-teal-500/20 text-cyan-300 border border-cyan-500/20 hover:from-cyan-500/30 hover:to-teal-500/30 hover:text-white hover:shadow-lg hover:shadow-cyan-500/10 hover:scale-[1.02] active:scale-[0.98] cursor-pointer'
+              ? 'bg-[var(--adora-active-bg)] text-[var(--adora-accent)] border border-[var(--adora-focus-border)] animate-pulse cursor-wait'
+              : 'bg-[var(--adora-hover-bg)] text-[var(--adora-accent)] border border-[var(--adora-focus-border)] hover:bg-[var(--adora-active-bg)] hover:shadow-lg hover:scale-[1.02] active:scale-[0.98] cursor-pointer'
           }`}
         >
           {transferDone ? (
@@ -3071,45 +3178,45 @@ function EmployeeBreakdown({ staffList, data, config, dateRange }: {
           <thead>
             {/* Group labels with turquoise dividers */}
             <tr>
-              <th colSpan={2} className="py-2.5 bg-slate-900/60"></th>
-              <th colSpan={3} className="py-2.5 text-center bg-slate-900/60 group-divider">
-                <span className="inline-flex items-center gap-1.5 px-4 py-1 rounded-full text-[10px] font-bold tracking-wide bg-cyan-500/10 text-cyan-400 border border-[#40E0D0]/30 shadow-sm shadow-[#40E0D0]/10">
+              <th colSpan={2} className="py-2.5 bg-[var(--adora-table-header-bg)]"></th>
+              <th colSpan={3} className="py-2.5 text-center bg-[var(--adora-table-header-bg)] group-divider">
+                <span className="inline-flex items-center gap-1.5 px-4 py-1 rounded-full text-[14px] font-bold tracking-wide badge-adora">
                   الحجوزات
                 </span>
               </th>
-              <th colSpan={3} className="py-2.5 text-center bg-slate-900/60 group-divider">
-                <span className="inline-flex items-center gap-1.5 px-4 py-1 rounded-full text-[10px] font-bold tracking-wide bg-amber-500/10 text-amber-400 border border-[#40E0D0]/30 shadow-sm shadow-[#40E0D0]/10">
+              <th colSpan={3} className="py-2.5 text-center bg-[var(--adora-table-header-bg)] group-divider">
+                <span className="inline-flex items-center gap-1.5 px-4 py-1 rounded-full text-[14px] font-bold tracking-wide badge-warning">
                   الشفتات
                 </span>
               </th>
               {activeVipRooms.length > 0 && (
-                <th colSpan={activeVipRooms.length} className="py-2.5 text-center bg-slate-900/60 group-divider">
-                  <span className="inline-flex items-center gap-1 px-4 py-1 rounded-full text-[10px] font-bold tracking-wide bg-violet-500/10 text-violet-400 border border-[#40E0D0]/30 shadow-sm shadow-[#40E0D0]/10">
+                <th colSpan={activeVipRooms.length} className="py-2.5 text-center bg-[var(--adora-table-header-bg)] group-divider">
+                  <span className="inline-flex items-center gap-1 px-4 py-1 rounded-full text-[14px] font-bold tracking-wide badge-warning">
                     <Crown className="w-3 h-3" />VIP
                   </span>
                 </th>
               )}
-              <th colSpan={2} className="py-2.5 text-center bg-slate-900/60 group-divider">
-                <span className="inline-flex items-center gap-1 px-4 py-1 rounded-full text-[10px] font-bold tracking-wide bg-red-500/10 text-red-400 border border-[#40E0D0]/30 shadow-sm shadow-[#40E0D0]/10">
+              <th colSpan={2} className="py-2.5 text-center bg-[var(--adora-table-header-bg)] group-divider">
+                <span className="inline-flex items-center gap-1 px-4 py-1 rounded-full text-[14px] font-bold tracking-wide badge-error">
                   تنبيهات
                 </span>
               </th>
             </tr>
             {/* Column names — sortable */}
-            <tr className="border-b border-white/[0.06]">
+            <tr className="border-b border-[var(--adora-border)]">
               {[
-                { key: 'name', label: 'الموظف', cls: 'px-3 py-2.5 text-right text-[11px] text-slate-400 font-bold' },
-                { key: 'branch', label: 'الفرع', cls: 'px-3 py-2.5 text-right text-[11px] text-slate-400 font-bold' },
-                { key: 'staffCount', label: 'المرجع', cls: 'px-3 py-2.5 text-center text-[11px] text-cyan-400 font-bold bg-cyan-500/[0.04] group-divider-subtle' },
-                { key: 'استقبال', label: 'استقبال', cls: 'px-3 py-2.5 text-center text-[11px] text-emerald-400/80 font-medium bg-cyan-500/[0.04]' },
-                { key: 'بوكينج', label: 'بوكينج', cls: 'px-3 py-2.5 text-center text-[11px] text-orange-400/80 font-medium bg-cyan-500/[0.04]' },
-                { key: 'صباح', label: 'صباح', cls: 'px-3 py-2.5 text-center text-[11px] text-amber-400/80 font-medium bg-amber-500/[0.04] group-divider-subtle' },
-                { key: 'مساء', label: 'مساء', cls: 'px-3 py-2.5 text-center text-[11px] text-indigo-400/80 font-medium bg-amber-500/[0.04]' },
-                { key: 'ليل', label: 'ليل', cls: 'px-3 py-2.5 text-center text-[11px] text-slate-400 font-medium bg-amber-500/[0.04]' },
+                { key: 'name', label: 'الموظف', cls: 'px-3 py-2.5 text-right text-[15px] text-[var(--adora-text-secondary)] font-bold' },
+                { key: 'branch', label: 'الفرع', cls: 'px-3 py-2.5 text-right text-[15px] text-[var(--adora-text-secondary)] font-bold' },
+                { key: 'staffCount', label: 'المرجع', cls: 'px-3 py-2.5 text-center text-[15px] text-[var(--adora-accent)] font-bold bg-cyan-500/[0.04] group-divider-subtle' },
+                { key: 'استقبال', label: 'استقبال', cls: 'px-3 py-2.5 text-center text-[15px] text-[var(--adora-success)] font-medium bg-cyan-500/[0.04]' },
+                { key: 'بوكينج', label: 'بوكينج', cls: 'px-3 py-2.5 text-center text-[15px] text-[var(--adora-warning)] font-medium bg-cyan-500/[0.04]' },
+                { key: 'صباح', label: 'صباح', cls: 'px-3 py-2.5 text-center text-[15px] text-[var(--adora-warning)] font-medium bg-amber-500/[0.04] group-divider-subtle' },
+                { key: 'مساء', label: 'مساء', cls: 'px-3 py-2.5 text-center text-[15px] text-[var(--adora-text-secondary)] font-medium bg-amber-500/[0.04]' },
+                { key: 'ليل', label: 'ليل', cls: 'px-3 py-2.5 text-center text-[15px] text-[var(--adora-text-secondary)] font-medium bg-amber-500/[0.04]' },
               ].map((col) => (
                 <th key={col.key}
                   onClick={() => handleSort(col.key)}
-                  className={`${col.cls} cursor-pointer select-none hover:bg-white/[0.04] transition-colors group/th`}>
+                  className={`${col.cls} cursor-pointer select-none hover:bg-[var(--adora-hover-bg)] transition-colors group/th`}>
                   <span className="inline-flex items-center gap-1">
                     {col.label}
                     {sortKey === col.key
@@ -3124,7 +3231,7 @@ function EmployeeBreakdown({ staffList, data, config, dateRange }: {
               {activeVipRooms.map((num, idx) => (
                 <th key={num}
                   onClick={() => handleSort(`vip_${num}`)}
-                  className={`px-2 py-2.5 text-center text-[11px] text-amber-400/80 font-bold bg-violet-500/[0.04] cursor-pointer select-none hover:bg-white/[0.04] transition-colors group/th${idx === 0 ? ' group-divider-subtle' : ''}`}>
+                  className={`px-2 py-2.5 text-center text-[15px] text-[var(--adora-warning)] font-bold bg-violet-500/[0.04] cursor-pointer select-none hover:bg-[var(--adora-hover-bg)] transition-colors group/th${idx === 0 ? ' group-divider-subtle' : ''}`}>
                   <span className="inline-flex items-center gap-0.5">
                     {num}
                     {sortKey === `vip_${num}`
@@ -3142,7 +3249,7 @@ function EmployeeBreakdown({ staffList, data, config, dateRange }: {
               ].map((col, idx) => (
                 <th key={col.key}
                   onClick={() => handleSort(col.key)}
-                  className={`px-2 py-2.5 text-center text-[11px] text-red-400/80 font-medium bg-red-500/[0.04] whitespace-nowrap cursor-pointer select-none hover:bg-white/[0.04] transition-colors group/th${idx === 0 ? ' group-divider-subtle' : ''}`}>
+                  className={`px-2 py-2.5 text-center text-[15px] text-[var(--adora-error)] font-medium bg-red-500/[0.04] whitespace-nowrap cursor-pointer select-none hover:bg-[var(--adora-hover-bg)] transition-colors group/th${idx === 0 ? ' group-divider-subtle' : ''}`}>
                   <span className="inline-flex items-center gap-0.5">
                     {col.label}
                     {sortKey === col.key
@@ -3162,47 +3269,43 @@ function EmployeeBreakdown({ staffList, data, config, dateRange }: {
                 className={`group border-b border-white/[0.03] transition-all duration-200 hover:bg-white/[0.03] ${
                   rowIdx % 2 === 0 ? '' : 'bg-white/[0.01]'
                 }`}>
-                <td className="px-2 py-2 font-medium text-white/90 truncate text-xs">{r.name}</td>
+                <td className="px-2 py-2 font-medium text-[var(--adora-text)] truncate text-sm">{r.name}</td>
                 <td className="px-2 py-2">
-                  <span className={`inline-block px-2.5 py-0.5 rounded-full text-[10px] font-semibold ${
-                    r.branch === 'الكورنيش'
-                      ? 'bg-sky-500/15 text-sky-300 ring-1 ring-sky-500/20'
-                      : 'bg-violet-500/15 text-violet-300 ring-1 ring-violet-500/20'
-                  }`}>{r.branch}</span>
+                  <span className="inline-block px-2.5 py-0.5 rounded-full text-[14px] font-semibold badge-adora">{r.branch}</span>
                 </td>
                 {/* الحجوزات */}
                 <td className="px-1.5 py-2 text-center bg-cyan-500/[0.03] group-divider-subtle">
-                  <span className="text-cyan-300 font-mono font-bold text-xs">{r.staffCount}</span>
+                  <span className="text-[var(--adora-accent)] font-mono font-bold text-sm">{r.staffCount}</span>
                 </td>
                 <td className="px-1.5 py-2 text-center bg-cyan-500/[0.03]">
                   {r['استقبال'] > 0
-                    ? <button onClick={() => openDrilldown(r.name, r.branch, 'استقبال')} className="font-mono text-emerald-400 hover:text-emerald-300 hover:bg-emerald-500/10 px-1.5 py-0.5 rounded-md transition-all cursor-pointer text-xs">{r['استقبال']}</button>
-                    : <span className="text-slate-700/50 font-mono text-xs">0</span>
+                    ? <button onClick={() => openDrilldown(r.name, r.branch, 'استقبال')} className="font-mono text-[var(--adora-success)] hover:bg-[var(--adora-hover-bg)] px-1.5 py-0.5 rounded-md transition-all cursor-pointer text-sm">{r['استقبال']}</button>
+                    : <span className="text-[var(--adora-text-secondary)] font-mono text-sm">0</span>
                   }
                 </td>
                 <td className="px-1.5 py-2 text-center bg-cyan-500/[0.03]">
                   {r['بوكينج'] > 0
-                    ? <button onClick={() => openDrilldown(r.name, r.branch, 'بوكينج')} className="font-mono text-orange-400 hover:text-orange-300 hover:bg-orange-500/10 px-1.5 py-0.5 rounded-md transition-all cursor-pointer text-xs">{r['بوكينج']}</button>
-                    : <span className="text-slate-700/50 font-mono text-xs">0</span>
+                    ? <button onClick={() => openDrilldown(r.name, r.branch, 'بوكينج')} className="font-mono text-[var(--adora-warning)] hover:bg-[var(--adora-hover-bg)] px-1.5 py-0.5 rounded-md transition-all cursor-pointer text-sm">{r['بوكينج']}</button>
+                    : <span className="text-[var(--adora-text-secondary)] font-mono text-sm">0</span>
                   }
                 </td>
                 {/* الشفتات */}
                 <td className="px-1.5 py-2 text-center bg-amber-500/[0.03] group-divider-subtle">
                   {r['صباح'] > 0
-                    ? <button onClick={() => openDrilldown(r.name, r.branch, 'صباح')} className="font-mono text-amber-400 hover:text-amber-300 hover:bg-amber-500/10 px-1.5 py-0.5 rounded-md transition-all cursor-pointer text-xs">{r['صباح']}</button>
-                    : <span className="text-slate-700/50 font-mono text-xs">0</span>
+                    ? <button onClick={() => openDrilldown(r.name, r.branch, 'صباح')} className="font-mono text-[var(--adora-warning)] hover:bg-[var(--adora-hover-bg)] px-1.5 py-0.5 rounded-md transition-all cursor-pointer text-sm">{r['صباح']}</button>
+                    : <span className="text-[var(--adora-text-secondary)] font-mono text-sm">0</span>
                   }
                 </td>
                 <td className="px-1.5 py-2 text-center bg-amber-500/[0.03]">
                   {r['مساء'] > 0
-                    ? <button onClick={() => openDrilldown(r.name, r.branch, 'مساء')} className="font-mono text-indigo-400 hover:text-indigo-300 hover:bg-indigo-500/10 px-1.5 py-0.5 rounded-md transition-all cursor-pointer text-xs">{r['مساء']}</button>
-                    : <span className="text-slate-700/50 font-mono text-xs">0</span>
+                    ? <button onClick={() => openDrilldown(r.name, r.branch, 'مساء')} className="font-mono text-[var(--adora-accent)] hover:bg-[var(--adora-hover-bg)] px-1.5 py-0.5 rounded-md transition-all cursor-pointer text-sm">{r['مساء']}</button>
+                    : <span className="text-[var(--adora-text-secondary)] font-mono text-sm">0</span>
                   }
                 </td>
                 <td className="px-1.5 py-2 text-center bg-amber-500/[0.03]">
                   {r['ليل'] > 0
-                    ? <button onClick={() => openDrilldown(r.name, r.branch, 'ليل')} className="font-mono text-slate-300 hover:text-white hover:bg-slate-500/10 px-1.5 py-0.5 rounded-md transition-all cursor-pointer text-xs">{r['ليل']}</button>
-                    : <span className="text-slate-700/50 font-mono text-xs">0</span>
+                    ? <button onClick={() => openDrilldown(r.name, r.branch, 'ليل')} className="font-mono text-[var(--adora-text)] hover:bg-[var(--adora-hover-bg)] px-1.5 py-0.5 rounded-md transition-all cursor-pointer text-sm">{r['ليل']}</button>
+                    : <span className="text-[var(--adora-text-secondary)] font-mono text-sm">0</span>
                   }
                 </td>
                 {/* VIP */}
@@ -3213,10 +3316,10 @@ function EmployeeBreakdown({ staffList, data, config, dateRange }: {
                   return (
                     <td key={num} className={`px-1.5 py-2 text-center bg-violet-500/[0.03]${vipIdx === 0 ? ' group-divider-subtle' : ''}`}>
                       {!applicable
-                        ? <span className="text-slate-800/40">—</span>
+                        ? <span className="text-[var(--adora-text-secondary)] text-sm">—</span>
                         : count > 0
-                        ? <button onClick={() => openDrilldown(r.name, r.branch, 'vip', num)} className="font-mono font-bold text-amber-400 hover:text-amber-300 hover:bg-amber-500/10 px-2 py-0.5 rounded-md transition-all cursor-pointer">{count}</button>
-                        : <span className="text-slate-700/50 font-mono">0</span>
+                        ? <button onClick={() => openDrilldown(r.name, r.branch, 'vip', num)} className="font-mono font-bold text-sm text-[var(--adora-warning)] hover:bg-[var(--adora-hover-bg)] px-2 py-0.5 rounded-md transition-all cursor-pointer">{count}</button>
+                        : <span className="text-[var(--adora-text-secondary)] font-mono text-sm">0</span>
                       }
                     </td>
                   );
@@ -3224,48 +3327,48 @@ function EmployeeBreakdown({ staffList, data, config, dateRange }: {
                 {/* تنبيهات */}
                 <td className="px-1.5 py-2 text-center bg-red-500/[0.02] group-divider-subtle">
                   {r.alertCount > 0
-                    ? <button onClick={() => openDrilldown(r.name, r.branch, 'alert')} className="font-mono font-bold text-red-400 hover:text-red-300 hover:bg-red-500/10 px-1.5 py-0.5 rounded-md transition-all cursor-pointer text-xs">{r.alertCount}</button>
-                    : <span className="text-emerald-500/40 text-xs">✓</span>
+                    ? <button onClick={() => openDrilldown(r.name, r.branch, 'alert')} className="font-mono font-bold text-sm text-[var(--adora-error)] hover:bg-[var(--adora-hover-bg)] px-1.5 py-0.5 rounded-md transition-all cursor-pointer">{r.alertCount}</button>
+                    : <span className="text-[var(--adora-success)] text-sm">✓</span>
                   }
                 </td>
                 <td className="px-1.5 py-2 text-center bg-red-500/[0.02]">
                   {r.alertTotal > 0
-                    ? <button onClick={() => openDrilldown(r.name, r.branch, 'alertTotal')} className="font-mono text-[11px] text-red-400 hover:text-red-300 hover:bg-red-500/10 px-1.5 py-0.5 rounded-md transition-all cursor-pointer">{Math.round(r.alertTotal).toLocaleString('en-SA')}</button>
-                    : <span className="text-slate-800/40">—</span>
+                    ? <button onClick={() => openDrilldown(r.name, r.branch, 'alertTotal')} className="font-mono font-bold text-sm text-[var(--adora-error)] hover:bg-[var(--adora-hover-bg)] px-1.5 py-0.5 rounded-md transition-all cursor-pointer">{Math.round(r.alertTotal).toLocaleString('en-SA')}</button>
+                    : <span className="text-[var(--adora-text-secondary)] text-sm">—</span>
                   }
                 </td>
               </tr>
             ))}
           </tbody>
           <tfoot>
-            <tr className="bg-gradient-to-r from-slate-800/80 to-slate-800/60 backdrop-blur-sm">
-              <td className="px-2 py-2.5 text-white/80 text-xs font-bold" colSpan={2}>
+            <tr className="bg-[var(--adora-table-header-bg)] backdrop-blur-sm">
+              <td className="px-2 py-2.5 text-[var(--adora-text)] text-sm font-bold" colSpan={2}>
                 <span className="flex items-center gap-2">
-                  <div className="w-1.5 h-1.5 rounded-full bg-cyan-400 animate-pulse" />
+                  <div className="w-1.5 h-1.5 rounded-full bg-[var(--adora-accent)] animate-pulse" />
                   الإجمالي
                 </span>
               </td>
-              <td className="px-1.5 py-2.5 text-center bg-cyan-500/[0.06] group-divider-subtle"><span className="text-cyan-300 font-mono font-bold text-xs">{totals.staff}</span></td>
-              <td className="px-1.5 py-2.5 text-center bg-cyan-500/[0.06]"><span className="text-emerald-400 font-mono font-semibold text-xs">{totals['استقبال']}</span></td>
-              <td className="px-1.5 py-2.5 text-center bg-cyan-500/[0.06]"><span className="text-orange-400 font-mono font-semibold text-xs">{totals['بوكينج']}</span></td>
-              <td className="px-1.5 py-2.5 text-center bg-amber-500/[0.06] group-divider-subtle"><span className="text-amber-400 font-mono font-semibold text-xs">{totals['صباح']}</span></td>
-              <td className="px-1.5 py-2.5 text-center bg-amber-500/[0.06]"><span className="text-indigo-400 font-mono font-semibold text-xs">{totals['مساء']}</span></td>
-              <td className="px-1.5 py-2.5 text-center bg-amber-500/[0.06]"><span className="text-slate-300 font-mono font-semibold text-xs">{totals['ليل']}</span></td>
+              <td className="px-1.5 py-2.5 text-center bg-cyan-500/[0.06] group-divider-subtle"><span className="text-[var(--adora-accent)] font-mono font-bold text-sm">{totals.staff}</span></td>
+              <td className="px-1.5 py-2.5 text-center bg-cyan-500/[0.06]"><span className="text-[var(--adora-success)] font-mono font-semibold text-sm">{totals['استقبال']}</span></td>
+              <td className="px-1.5 py-2.5 text-center bg-cyan-500/[0.06]"><span className="text-[var(--adora-warning)] font-mono font-semibold text-sm">{totals['بوكينج']}</span></td>
+              <td className="px-1.5 py-2.5 text-center bg-amber-500/[0.06] group-divider-subtle"><span className="text-[var(--adora-warning)] font-mono font-semibold text-sm">{totals['صباح']}</span></td>
+              <td className="px-1.5 py-2.5 text-center bg-amber-500/[0.06]"><span className="text-[var(--adora-accent)] font-mono font-semibold text-sm">{totals['مساء']}</span></td>
+              <td className="px-1.5 py-2.5 text-center bg-amber-500/[0.06]"><span className="text-[var(--adora-text)] font-mono font-semibold text-sm">{totals['ليل']}</span></td>
               {activeVipRooms.map((num, idx) => (
                 <td key={num} className={`px-1.5 py-2.5 text-center bg-violet-500/[0.06]${idx === 0 ? ' group-divider-subtle' : ''}`}>
-                  <span className="text-amber-400 font-mono font-bold text-xs">{totals.vipRooms[num] || 0}</span>
+                  <span className="text-[var(--adora-warning)] font-mono font-bold text-sm">{totals.vipRooms[num] || 0}</span>
                 </td>
               ))}
               <td className="px-1.5 py-2.5 text-center bg-red-500/[0.04] group-divider-subtle">
                 {totals.alertCount > 0
-                  ? <span className="inline-flex items-center justify-center min-w-[24px] px-1.5 py-0.5 rounded-full text-xs font-bold bg-red-500/20 text-red-400">{totals.alertCount}</span>
-                  : <span className="text-emerald-500/50">✓</span>
+                  ? <span className="inline-flex items-center justify-center min-w-[24px] px-1.5 py-0.5 rounded-full text-sm font-bold badge-error">{totals.alertCount}</span>
+                  : <span className="text-[var(--adora-success)] text-sm">✓</span>
                 }
               </td>
               <td className="px-2 py-3.5 text-center bg-red-500/[0.04]">
                 {totals.alertTotal > 0
-                  ? <span className="text-red-400 font-mono font-semibold text-[11px]">{Math.round(totals.alertTotal).toLocaleString('en-SA')}</span>
-                  : <span className="text-slate-800/40">—</span>
+                  ? <span className="text-[var(--adora-error)] font-mono font-semibold text-sm">{Math.round(totals.alertTotal).toLocaleString('en-SA')}</span>
+                  : <span className="text-[var(--adora-text-secondary)] text-sm">—</span>
                 }
               </td>
             </tr>
@@ -3285,12 +3388,12 @@ function EmployeeBreakdown({ staffList, data, config, dateRange }: {
           <div className="fixed inset-0 z-[9999] flex items-center justify-center bg-black/60 backdrop-blur-sm"
             onClick={() => setDrilldown(null)}>
             <div
-              className="bg-slate-900/95 border border-slate-700/60 rounded-2xl shadow-2xl
+              className="bg-[var(--adora-modal-bg)] border border-[var(--adora-border)] rounded-2xl modal-no-side-shadow
                          max-w-3xl w-[95%] max-h-[80vh] flex flex-col overflow-hidden"
               onClick={(e) => e.stopPropagation()}>
               {/* Header */}
-              <div className="px-5 py-3 border-b border-slate-700/50 flex items-center justify-between shrink-0 bg-slate-800/50">
-                <h3 className="text-sm font-semibold text-slate-200">{drilldown.title}</h3>
+              <div className="px-5 py-3 border-b border-[var(--adora-border)] flex items-center justify-between shrink-0 bg-[var(--adora-modal-header-bg)]">
+                <h3 className="text-sm font-semibold text-[var(--adora-text)]">{drilldown.title}</h3>
                 <div className="flex items-center gap-2">
                   <button onClick={() => {
                     const w = window.open('', '_blank');
@@ -3304,15 +3407,15 @@ function EmployeeBreakdown({ staffList, data, config, dateRange }: {
                       <title>تقرير فروقات الأسعار — ${drilldown.title}</title>
                       <style>
                         *{margin:0;padding:0;box-sizing:border-box}
-                        body{font-family:'Segoe UI',Tahoma,sans-serif;font-size:11px;color:#1e293b;padding:20px 30px;background:#fff}
-                        h1{font-size:16px;text-align:center;margin-bottom:4px;color:#0f172a}
+                        body{font-family:'IBM Plex Sans Arabic','Segoe UI',Tahoma,sans-serif;font-size:11px;color:#111;padding:20px 30px;background:#fff;direction:rtl;line-height:1.35}
+                        h1{font-size:16px;text-align:center;margin-bottom:8px;color:#0f172a;padding-bottom:6px;border-bottom:2px solid #0d9488}
                         .sub{text-align:center;color:#64748b;font-size:10px;margin-bottom:12px}
                         .summary{display:flex;gap:20px;justify-content:center;margin-bottom:14px;font-size:11px;flex-wrap:wrap}
                         .summary span{background:#f1f5f9;padding:3px 10px;border-radius:4px}
                         .summary .alert{background:#fef2f2;color:#dc2626}
                         .summary .transfer{background:#eff6ff;color:#2563eb}
                         table{width:100%;border-collapse:collapse;margin-bottom:14px}
-                        th{background:#f8fafc;border:1px solid #e2e8f0;padding:4px 6px;text-align:right;font-size:10px;color:#475569;white-space:nowrap}
+                        th{background:#ccfbf1;border:1px solid #99f6e4;padding:4px 6px;text-align:right;font-size:10px;color:#0f766e;white-space:nowrap}
                         td{border:1px solid #e2e8f0;padding:3px 6px;font-size:10px;white-space:nowrap}
                         .mono{font-family:Consolas,'Courier New',monospace}
                         .num{text-align:left;direction:ltr}
@@ -3325,7 +3428,7 @@ function EmployeeBreakdown({ staffList, data, config, dateRange }: {
                         .b-monthly{background:#fae8ff;color:#a21caf}.b-transfer{background:#dbeafe;color:#1d4ed8}
                         .row-alert{background:#fef2f2}.row-transfer{background:#eff6ff}
                         .footer{text-align:center;color:#94a3b8;font-size:9px;margin-top:20px;border-top:1px solid #e2e8f0;padding-top:8px}
-                        @media print{body{padding:10px 15px}@page{size:A4 landscape;margin:10mm}}
+                        @media print{body{padding:10px 15px}@page{size:A4 landscape;margin:10mm}thead{display:table-header-group}}
                       </style></head><body>
                       <h1>تقرير فروقات الأسعار</h1>
                       <div class="sub">${drilldown.title} | ${new Date().toLocaleDateString('ar-SA')}</div>
@@ -3395,7 +3498,7 @@ function EmployeeBreakdown({ staffList, data, config, dateRange }: {
                     w.document.close();
                     setTimeout(() => w.print(), 300);
                   }}
-                    className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs
+                    className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-sm
                                bg-slate-700/50 text-slate-300 hover:bg-slate-600/50 hover:text-slate-100
                                border border-slate-600/30 transition-colors">
                     <Printer className="w-3.5 h-3.5" />
@@ -3408,7 +3511,7 @@ function EmployeeBreakdown({ staffList, data, config, dateRange }: {
                 </div>
               </div>
               {/* Summary bar */}
-              <div className="px-5 py-2.5 border-b border-slate-800/50 shrink-0 flex flex-wrap gap-4 text-xs">
+              <div className="px-5 py-2.5 border-b border-slate-800/50 shrink-0 flex flex-wrap gap-4 text-sm">
                 <span className="text-slate-400">
                   <span className="text-slate-200 font-bold">{drilldown.bookings.length}</span> حجز
                 </span>
@@ -3419,7 +3522,7 @@ function EmployeeBreakdown({ staffList, data, config, dateRange }: {
                   إجمالي الإيجار: <span className="text-emerald-400 font-bold font-mono">{Math.round(totalRent).toLocaleString('en-SA')}</span> ريال
                 </span>
                 {hasAlerts && (
-                  <span className="text-red-400">
+                  <span className="text-[var(--adora-error)]">
                     نقص: <span className="font-bold font-mono">{Math.round(totalShortfall).toLocaleString('en-SA')}</span> ريال
                   </span>
                 )}
@@ -3440,37 +3543,37 @@ function EmployeeBreakdown({ staffList, data, config, dateRange }: {
                     }`}>
                     {/* Top row */}
                     <div className="flex items-center gap-2 mb-2">
-                      <span className="text-slate-600 text-xs w-5 shrink-0">{i + 1}</span>
+                      <span className="text-slate-600 text-sm w-5 shrink-0">{i + 1}</span>
                       <span className="text-slate-100 font-mono font-bold text-sm">{b.bookingNumber}</span>
-                      <span className={`px-1.5 py-0.5 rounded text-[10px] font-bold ${
+                      <span className={`px-1.5 py-0.5 rounded text-[14px] font-bold ${
                         b.bookingSource === 'استقبال'
                           ? 'bg-emerald-500/15 text-emerald-400 border border-emerald-500/20'
                           : b.bookingSource === 'بوكينج'
                           ? 'bg-orange-500/15 text-orange-400 border border-orange-500/20'
                           : 'bg-slate-500/15 text-slate-400 border border-slate-500/20'
                       }`}>{b.bookingSource}</span>
-                      <span className={`px-1.5 py-0.5 rounded text-[10px] font-bold ${
+                      <span className={`px-1.5 py-0.5 rounded text-[14px] font-bold ${
                         b.shift === 'صباح' ? 'bg-amber-500/15 text-amber-400 border border-amber-500/20'
                         : b.shift === 'مساء' ? 'bg-indigo-500/15 text-indigo-400 border border-indigo-500/20'
                         : 'bg-slate-500/15 text-slate-400 border border-slate-500/20'
                       }`}>{b.shift}</span>
                       {b.roomCategory === 'VIP' && (
-                        <span className="px-1.5 py-0.5 rounded text-[10px] font-bold bg-violet-500/15 text-violet-400 border border-violet-500/20">
+                        <span className="px-1.5 py-0.5 rounded text-[14px] font-bold bg-violet-500/15 text-violet-400 border border-violet-500/20">
                           <Crown className="w-3 h-3 inline -mt-0.5 ml-0.5" />VIP
                         </span>
                       )}
                       {b.isMerged && (
-                        <span className="px-1.5 py-0.5 rounded text-[10px] font-bold bg-cyan-500/15 text-cyan-400 border border-cyan-500/20">دمج</span>
+                        <span className="px-1.5 py-0.5 rounded text-[14px] font-bold bg-cyan-500/15 text-cyan-400 border border-cyan-500/20">دمج</span>
                       )}
                       {b.isMonthly && (
-                        <span className="px-1.5 py-0.5 rounded text-[10px] font-bold bg-purple-500/15 text-purple-400 border border-purple-500/20">شهري</span>
+                        <span className="px-1.5 py-0.5 rounded text-[14px] font-bold bg-purple-500/15 text-purple-400 border border-purple-500/20">شهري</span>
                       )}
                       {b.isRoomTransfer && (
-                        <span className="px-1.5 py-0.5 rounded text-[10px] font-bold bg-blue-500/15 text-blue-400 border border-blue-500/20">↔ نقل غرفة</span>
+                        <span className="px-1.5 py-0.5 rounded text-[14px] font-bold bg-blue-500/15 text-blue-400 border border-blue-500/20">↔ نقل غرفة</span>
                       )}
                     </div>
                     {/* Detail grid */}
-                    <div className="grid grid-cols-2 sm:grid-cols-4 gap-x-4 gap-y-1.5 text-xs mr-7">
+                    <div className="grid grid-cols-2 sm:grid-cols-4 gap-x-4 gap-y-1.5 text-sm mr-7">
                       <div>
                         <span className="text-slate-600 block">العميل</span>
                         <span className="text-slate-300 truncate block">{b.guestName || '—'}</span>
@@ -3516,18 +3619,18 @@ function EmployeeBreakdown({ staffList, data, config, dateRange }: {
                       </div>
                     </div>
                     {b.priceShortfall > 0 && (
-                      <div className="mt-2 mr-7 px-2.5 py-1.5 rounded-lg bg-red-500/10 border border-red-500/15 flex items-center gap-2 text-xs">
-                        <TrendingDown className="w-3.5 h-3.5 text-red-400 shrink-0" />
+                      <div className="mt-2 mr-7 px-2.5 py-1.5 rounded-lg bg-red-500/10 border border-red-500/15 flex items-center gap-2 text-sm">
+                        <TrendingDown className="w-3.5 h-3.5 text-[var(--adora-error)] shrink-0" />
                         <span className="text-red-300">
-                          النقص: <span className="font-mono font-bold text-red-400">{Math.round(b.priceShortfall).toLocaleString('en-SA')}</span> ريال
-                          <span className="text-red-400/60 mr-2">
+                          النقص: <span className="font-mono font-bold text-[var(--adora-error)]">{Math.round(b.priceShortfall).toLocaleString('en-SA')}</span> ريال
+                          <span className="text-[var(--adora-error)]/60 mr-2">
                             ({b.minPrice} × {b.nights} = {(b.minPrice * b.nights).toLocaleString('en-SA')} − {b.priceSAR.toLocaleString('en-SA')} = {Math.round(b.priceShortfall).toLocaleString('en-SA')})
                           </span>
                         </span>
                       </div>
                     )}
                     {b.isRoomTransfer && (
-                      <div className="mt-2 mr-7 px-2.5 py-1.5 rounded-lg bg-blue-500/10 border border-blue-500/15 flex items-center gap-2 text-xs">
+                      <div className="mt-2 mr-7 px-2.5 py-1.5 rounded-lg bg-blue-500/10 border border-blue-500/15 flex items-center gap-2 text-sm">
                         <span className="text-blue-300">↔ تم نقل النزيل بين غرفتين — التنبيه السعري مستبعد (لا يمكن تقسيم السعر بدقة)</span>
                       </div>
                     )}

@@ -60,14 +60,24 @@ export interface RewardPricing {
   rateNight: number;
   /** ريال لكل حجز بوكينج عادي (غير VIP) — قيمة ثابتة لكل الشفتات */
   rateBooking: number;
+  /** ريال لكل عقد شهري (قائمة الأسعار) */
+  rateContract: number;
   /** سعر VIP لكل غرفة حسب الفرع — key = اسم الفرع, value = { رقم الغرفة: { reception, booking } } */
   rateVipByBranch: Record<string, Record<string, VipSourceRate>>;
   /** سعر VIP افتراضي لغرف لم تُحدد */
   rateVipDefault: VipSourceRate;
+  /** نص توضيحي لحجوزات VIP (يظهر في شروط المكافآت) */
+  vipDescription: string;
   /** ريال لكل تقييم Booking */
   rateEvalBooking: number;
   /** ريال لكل تقييم Google Maps */
   rateEvalGoogle: number;
+  /** حد التقييم الأدنى للفندق — الكورنيش */
+  minEvalCorniche: number;
+  /** حد التقييم الأدنى للفندق — الأندلس */
+  minEvalAndalus: number;
+  /** حد التقييم الأدنى — خرائط جوجل */
+  minEvalGoogle: number;
 }
 
 /** Full application config */
@@ -131,10 +141,15 @@ export const DEFAULT_REWARD_PRICING: RewardPricing = {
   rateEvening: 1,
   rateNight: 2,
   rateBooking: 1,
+  rateContract: 200,
   rateVipByBranch: {},
   rateVipDefault: { reception: 0, booking: 0 },
+  vipDescription: 'حجوزات VIP — تُسعّر من خانات VIP (استقبال/بوكينج لكل غرفة)',
   rateEvalBooking: 20,
   rateEvalGoogle: 10,
+  minEvalCorniche: 8.7,
+  minEvalAndalus: 8.2,
+  minEvalGoogle: 4.3,
 };
 
 export const DEFAULT_CONFIG: AppConfig = {
@@ -203,10 +218,15 @@ function mergeRewardPricing(base: RewardPricing, overlay: Partial<RewardPricing>
     rateEvening: typeof overlay.rateEvening === 'number' ? overlay.rateEvening : base.rateEvening,
     rateNight: typeof overlay.rateNight === 'number' ? overlay.rateNight : base.rateNight,
     rateBooking: typeof overlay.rateBooking === 'number' ? overlay.rateBooking : base.rateBooking,
+    rateContract: typeof overlay.rateContract === 'number' ? overlay.rateContract : (base as RewardPricing).rateContract ?? 200,
     rateVipByBranch: vipByBranch,
     rateVipDefault: vipDefault,
+    vipDescription: typeof overlay.vipDescription === 'string' ? overlay.vipDescription : (base as RewardPricing).vipDescription ?? 'حجوزات VIP — تُسعّر من خانات VIP (استقبال/بوكينج لكل غرفة)',
     rateEvalBooking: typeof overlay.rateEvalBooking === 'number' ? overlay.rateEvalBooking : base.rateEvalBooking,
     rateEvalGoogle: typeof overlay.rateEvalGoogle === 'number' ? overlay.rateEvalGoogle : base.rateEvalGoogle,
+    minEvalCorniche: typeof overlay.minEvalCorniche === 'number' ? overlay.minEvalCorniche : (base as RewardPricing).minEvalCorniche ?? 8.7,
+    minEvalAndalus: typeof overlay.minEvalAndalus === 'number' ? overlay.minEvalAndalus : (base as RewardPricing).minEvalAndalus ?? 8.2,
+    minEvalGoogle: typeof overlay.minEvalGoogle === 'number' ? overlay.minEvalGoogle : (base as RewardPricing).minEvalGoogle ?? 4.3,
   };
 }
 
@@ -304,10 +324,15 @@ export function loadConfig(): AppConfig {
       rateEvening: savedPricing?.rateEvening ?? DEFAULT_REWARD_PRICING.rateEvening,
       rateNight: savedPricing?.rateNight ?? DEFAULT_REWARD_PRICING.rateNight,
       rateBooking: savedPricing?.rateBooking ?? DEFAULT_REWARD_PRICING.rateBooking,
+      rateContract: savedPricing?.rateContract ?? DEFAULT_REWARD_PRICING.rateContract,
       rateVipByBranch: vipByBranch,
       rateVipDefault: vipDefault,
+      vipDescription: savedPricing?.vipDescription ?? DEFAULT_REWARD_PRICING.vipDescription,
       rateEvalBooking: savedPricing?.rateEvalBooking ?? DEFAULT_REWARD_PRICING.rateEvalBooking,
       rateEvalGoogle: savedPricing?.rateEvalGoogle ?? DEFAULT_REWARD_PRICING.rateEvalGoogle,
+      minEvalCorniche: savedPricing?.minEvalCorniche ?? DEFAULT_REWARD_PRICING.minEvalCorniche,
+      minEvalAndalus: savedPricing?.minEvalAndalus ?? DEFAULT_REWARD_PRICING.minEvalAndalus,
+      minEvalGoogle: savedPricing?.minEvalGoogle ?? DEFAULT_REWARD_PRICING.minEvalGoogle,
     };
     return {
       minBookingThreshold: parsed.minBookingThreshold ?? DEFAULT_CONFIG.minBookingThreshold,
@@ -323,6 +348,8 @@ export function loadConfig(): AppConfig {
 export function saveConfig(config: AppConfig): void {
   try {
     localStorage.setItem(STORAGE_KEY, JSON.stringify(config));
+    // Keep Rewards app in sync (reads from adora_rewards_pricing)
+    localStorage.setItem(REWARDS_PRICING_KEY, JSON.stringify(config.rewardPricing));
   } catch {
     // localStorage might be full or disabled — silently ignore
   }

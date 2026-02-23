@@ -1,8 +1,10 @@
 @import "tailwindcss";
 @import "../shared/action-header-buttons.css";
 
-/* ===== Adora Unified Design System ===== */
-:root {
+/* ===== Adora Unified Design System + Theme (dark/light) ===== */
+/* خط عربي حديث: IBM Plex Sans Arabic — هرمية أحجام منطقية */
+:root,
+[data-theme="dark"] {
   --turquoise: #40E0D0;
   --turquoise-light: #7FFFD4;
   --primary-500: #14b8a6;
@@ -10,22 +12,247 @@
   --dark-bg: #0a0e1a;
   --dark-card: #0f1729;
   --glow-turquoise: rgba(64, 224, 208, 0.4);
+  /* Semantic theme variables */
+  --adora-bg: #0a0e1a;
+  --adora-bg-card: #0f1729;
+  --adora-text: #e2e8f0;
+  --adora-text-secondary: #94a3b8;
+  --adora-accent: #14b8a6;
+  --adora-border: rgba(255, 255, 255, 0.1);
+  --adora-hover-bg: rgba(20, 184, 166, 0.15);
+  --adora-active-bg: rgba(20, 184, 166, 0.25);
+  --adora-focus-border: rgba(20, 184, 166, 0.5);
+  --adora-disabled: rgba(148, 163, 184, 0.5);
+  --adora-success: #22c55e;
+  --adora-warning: #eab308;
+  --adora-error: #ef4444;
+  --adora-scrollbar-track: rgba(15, 23, 41, 0.6);
+  --adora-scrollbar-thumb: rgba(64, 224, 208, 0.4);
+  --adora-scrollbar-thumb-hover: rgba(64, 224, 208, 0.6);
+  --adora-panel-subtle: rgba(0, 0, 0, 0.18);
+  --adora-modal-bg: rgba(15, 23, 41, 0.98);
+  --adora-modal-header-bg: rgba(30, 41, 59, 0.6);
+  --adora-input-bg: #1e293b;
+  --adora-table-header-bg: rgba(15, 23, 41, 0.6);
+  --adora-section-bg: linear-gradient(to bottom right, rgba(15, 23, 41, 0.8), rgba(30, 41, 59, 0.6), rgba(15, 23, 41, 0.8));
+  /* فواصل الجداول: خفيف بين الأعمدة، ثقيل بين الأقسام، خفيف بين الصفوف */
+  --adora-divider-row: 1px solid rgba(255, 255, 255, 0.08);
+  --adora-divider-column: 1px solid rgba(255, 255, 255, 0.04);
+  --adora-divider-section: 2px solid rgba(64, 224, 208, 0.35);
+}
+
+[data-theme="light"] {
+  --dark-bg: #f1f5f9;
+  --dark-card: #f8fafc;
+  --glow-turquoise: rgba(15, 118, 110, 0.2);
+  --adora-bg: #f1f5f9;
+  --adora-bg-card: #f8fafc;
+  --adora-text: #334155;
+  --adora-text-secondary: #475569;
+  --adora-accent: #0f766e;
+  --adora-border: rgba(100, 116, 139, 0.25);
+  --adora-hover-bg: rgba(148, 163, 184, 0.15);
+  --adora-active-bg: rgba(148, 163, 184, 0.2);
+  --adora-focus-border: rgba(15, 118, 110, 0.5);
+  --adora-disabled: rgba(71, 85, 105, 0.5);
+  --adora-success: #166534;
+  --adora-warning: #854d0e;
+  --adora-error: #991b1b;
+  --adora-scrollbar-track: rgba(100, 116, 139, 0.1);
+  --adora-scrollbar-thumb: rgba(100, 116, 139, 0.3);
+  --adora-scrollbar-thumb-hover: rgba(100, 116, 139, 0.45);
+  --adora-panel-subtle: rgba(100, 116, 139, 0.06);
+  --adora-modal-bg: #f1f5f9;
+  --adora-modal-header-bg: #e2e8f0;
+  --adora-input-bg: #f8fafc;
+  --adora-table-header-bg: #e2e8f0;
+  --adora-section-bg: linear-gradient(to bottom right, #f8fafc, #f1f5f9, #e2e8f0);
+  --adora-divider-row: 1px solid rgba(100, 116, 139, 0.2);
+  --adora-divider-column: 1px solid rgba(100, 116, 139, 0.12);
+  --adora-divider-section: 2px solid rgba(15, 118, 110, 0.35);
+}
+
+/* Typography — خط عربي حديث + هرمية أحجام */
+:root {
+  --adora-font-sans: 'IBM Plex Sans Arabic', 'Segoe UI', Tahoma, sans-serif;
+  --adora-font-mono: 'IBM Plex Mono', 'Courier New', monospace;
+  /* هرمية الأحجام — عنوان كبير > قسم > محتوى > توضيح */
+  --adora-text-display: clamp(1.5rem, 4vw, 2rem);      /* عرض رئيسي */
+  --adora-text-h1: clamp(1.25rem, 2.5vw, 1.5rem);     /* عنوان الصفحة */
+  --adora-text-h2: clamp(1.1rem, 2vw, 1.25rem);       /* أقسام */
+  --adora-text-h3: clamp(1rem, 1.5vw, 1.125rem);      /* عناوين فرعية */
+  --adora-text-h4: 1rem;                               /* عناوين صغيرة */
+  --adora-text-body: 0.9375rem;                        /* محتوى أساسي 15px */
+  --adora-text-small: 0.875rem;                        /* نص ثانوي 14px */
+  --adora-text-caption: 0.8125rem;                     /* تسميات، توضيحات 13px */
+  --adora-text-tiny: 0.75rem;                          /* شارات، بيانات صغيرة 12px */
+}
+
+/* صفحات قائمة بذاتها (دخول، بوابة مفتاح) — ألوان هادئة مريحة للعين */
+:root {
+  --adora-page-bg: linear-gradient(to bottom right, #f8fafc, #f1f5f9, #e2e8f0);
+  --adora-standalone-card-bg: linear-gradient(to right, #f8fafc, #e2e8f0);
+  --adora-standalone-card-radius: 28px;
+  --adora-standalone-card-shadow: 0 20px 60px rgba(0, 0, 0, 0.08);
+  --adora-standalone-input-bg: #f8fafc;
+  --adora-standalone-input-border: #cbd5e1;
+  --adora-standalone-heading: #334155;
+  --adora-standalone-muted: #64748b;
+}
+
+html {
+  transition: background-color 0.3s ease, color 0.3s ease, border-color 0.3s ease;
+}
+
+[data-theme="light"] {
+  font-size: 106.25%;
+}
+
+[data-theme="light"] body {
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
 }
 
 body {
-  background: linear-gradient(135deg, var(--dark-bg) 0%, #1a1f35 100%);
+  font-family: var(--adora-font-sans);
+  font-size: var(--adora-text-body);
+  line-height: 1.6;
+  background: linear-gradient(135deg, var(--adora-bg) 0%, var(--dark-card) 100%);
+  color: var(--adora-text);
   min-height: 100vh;
 }
 
-/* Glass morphism */
+/* هرمية العناوين — تطبيق تلقائي */
+.typography-display { font-size: var(--adora-text-display); font-weight: 800; line-height: 1.2; }
+.typography-h1 { font-size: var(--adora-text-h1); font-weight: 700; }
+.typography-h2 { font-size: var(--adora-text-h2); font-weight: 700; }
+.typography-h3 { font-size: var(--adora-text-h3); font-weight: 600; }
+.typography-h4 { font-size: var(--adora-text-h4); font-weight: 600; }
+.typography-body { font-size: var(--adora-text-body); }
+.typography-small { font-size: var(--adora-text-small); }
+.typography-caption { font-size: var(--adora-text-caption); }
+
+/* Glass morphism — border-width 1px fixed in both themes */
 .glass {
   background: linear-gradient(135deg, rgba(255, 255, 255, 0.05) 0%, rgba(255, 255, 255, 0.01) 100%);
   backdrop-filter: blur(20px) saturate(180%);
   -webkit-backdrop-filter: blur(20px) saturate(180%);
-  border: 1px solid rgba(255, 255, 255, 0.1);
+  border: 1px solid var(--adora-border);
   box-shadow:
     0 8px 32px rgba(0, 0, 0, 0.3),
     inset 0 1px 0 rgba(255, 255, 255, 0.1);
+}
+
+[data-theme="light"] .glass {
+  background: linear-gradient(135deg, #f8fafc 0%, #f1f5f9 100%);
+  border: 1px solid var(--adora-border);
+  box-shadow: 0 10px 40px rgba(0, 0, 0, 0.06), inset 0 1px 0 rgba(255, 255, 255, 0.6);
+}
+
+/* Summary table section — theme-aware background */
+.summary-section {
+  background: var(--adora-section-bg);
+}
+
+/* إزالة الظل الأسود على يسار الصفوف (جدول التفاصيل + جدول الملخص) — كلا الوضعين */
+.table-section-no-side-shadow {
+  box-shadow: none !important;
+}
+.table-section-no-side-shadow.neon-glow {
+  box-shadow: none !important;
+}
+/* إجبار إلغاء ظل .glass عندما يكون القسم جدولاً (يتفوق على [data-theme="light"] .glass) */
+.glass.table-section-no-side-shadow,
+[data-theme="light"] .glass.table-section-no-side-shadow {
+  box-shadow: none !important;
+}
+
+/* إزالة ظل يسار المحتوى في النوافذ المنبثقة — كلا الوضعين */
+.modal-no-side-shadow {
+  box-shadow: none !important;
+}
+
+/* الوضع الفاتح: حدود وهوفر جدول الملخص (الألوان من متغيرات الثيم) */
+[data-theme="light"] .app-summary-table tbody tr {
+  border-bottom-color: var(--adora-border) !important;
+}
+[data-theme="light"] .app-summary-table tbody tr:hover {
+  background: var(--adora-hover-bg) !important;
+}
+/* الوضع الفاتح — تباين ووضوح النص داخل النوافذ المنبثقة */
+[data-theme="light"] .modal-no-side-shadow .text-slate-400,
+[data-theme="light"] .modal-no-side-shadow .text-slate-300,
+[data-theme="light"] .modal-no-side-shadow .text-slate-500,
+[data-theme="light"] .modal-no-side-shadow .text-gray-400,
+[data-theme="light"] .modal-no-side-shadow .text-gray-300 {
+  color: var(--adora-text-secondary) !important;
+}
+[data-theme="light"] .modal-no-side-shadow .text-slate-200,
+[data-theme="light"] .modal-no-side-shadow .text-slate-100,
+[data-theme="light"] .modal-no-side-shadow .text-white {
+  color: var(--adora-text) !important;
+}
+[data-theme="light"] .modal-no-side-shadow .text-cyan-300,
+[data-theme="light"] .modal-no-side-shadow .text-cyan-400,
+[data-theme="light"] .modal-no-side-shadow .text-teal-300,
+[data-theme="light"] .modal-no-side-shadow .text-teal-400 {
+  color: var(--adora-accent) !important;
+}
+[data-theme="light"] .modal-no-side-shadow .text-red-300 {
+  color: var(--adora-error) !important;
+}
+[data-theme="light"] .modal-no-side-shadow .text-sky-300,
+[data-theme="light"] .modal-no-side-shadow .text-sky-400,
+[data-theme="light"] .modal-no-side-shadow .text-blue-300,
+[data-theme="light"] .modal-no-side-shadow .text-blue-400 {
+  color: #0369a1 !important;
+}
+[data-theme="light"] .modal-no-side-shadow .text-purple-300,
+[data-theme="light"] .modal-no-side-shadow .text-purple-400,
+[data-theme="light"] .modal-no-side-shadow .text-violet-400 {
+  color: #6d28d9 !important;
+}
+[data-theme="light"] .modal-no-side-shadow .text-emerald-300,
+[data-theme="light"] .modal-no-side-shadow .text-emerald-400 {
+  color: var(--adora-success) !important;
+}
+[data-theme="light"] .modal-no-side-shadow .text-amber-300,
+[data-theme="light"] .modal-no-side-shadow .text-amber-400,
+[data-theme="light"] .modal-no-side-shadow .text-orange-400 {
+  color: var(--adora-warning) !important;
+}
+[data-theme="light"] .modal-no-side-shadow .text-indigo-400 {
+  color: #4338ca !important;
+}
+[data-theme="light"] .modal-no-side-shadow .text-slate-600 {
+  color: var(--adora-text-secondary) !important;
+}
+[data-theme="light"] .modal-no-side-shadow .border-white\/10,
+[data-theme="light"] .modal-no-side-shadow .border-slate-700\/20,
+[data-theme="light"] .modal-no-side-shadow .border-slate-700\/30,
+[data-theme="light"] .modal-no-side-shadow .border-slate-800\/50,
+[data-theme="light"] .modal-no-side-shadow .border-slate-600\/30 {
+  border-color: var(--adora-border) !important;
+}
+[data-theme="light"] .modal-no-side-shadow .bg-slate-800\/40,
+[data-theme="light"] .modal-no-side-shadow .bg-slate-800\/60,
+[data-theme="light"] .modal-no-side-shadow .bg-slate-800\/30,
+[data-theme="light"] .modal-no-side-shadow .bg-slate-800\/50 {
+  background: var(--adora-input-bg) !important;
+}
+[data-theme="light"] .modal-no-side-shadow .bg-slate-700\/50,
+[data-theme="light"] .modal-no-side-shadow .hover\:bg-slate-600\/50:hover {
+  background: var(--adora-hover-bg) !important;
+}
+[data-theme="light"] .modal-no-side-shadow .hover\:text-white:hover,
+[data-theme="light"] .modal-no-side-shadow .hover\:text-slate-100:hover {
+  color: var(--adora-text) !important;
+}
+[data-theme="light"] .modal-no-side-shadow .hover\:bg-white\/10:hover {
+  background: var(--adora-hover-bg) !important;
+}
+[data-theme="light"] .modal-no-side-shadow .hover\:text-slate-200:hover {
+  color: var(--adora-text) !important;
 }
 
 /* Neon glow for cards */
@@ -37,21 +264,38 @@ body {
     inset 0 0 20px rgba(64, 224, 208, 0.03);
 }
 
-/* Turquoise accent color */
-.border-turquoise { border-color: var(--turquoise); }
-.text-turquoise { color: var(--turquoise); }
-.bg-turquoise { background-color: var(--turquoise); }
-.bg-turquoise\/10 { background-color: rgba(64, 224, 208, 0.1); }
-.border-turquoise\/30 { border-color: rgba(64, 224, 208, 0.3); }
+/* لون التمييز الموحد: يتبع الثيم (داكن = تركواز، فاتح = أخضر غامق) لتقليل الألوان ووضوح الوضع الفاتح */
+.border-turquoise { border-color: var(--adora-accent); }
+.text-turquoise { color: var(--adora-accent); }
+.bg-turquoise { background-color: var(--adora-accent); }
+.bg-turquoise\/10 { background-color: color-mix(in srgb, var(--adora-accent) 12%, transparent); }
+.border-turquoise\/30 { border-color: color-mix(in srgb, var(--adora-accent) 30%, transparent); }
 
-/* Turquoise group dividers for tables */
+/* فواصل الجداول: ثقيل بين الأقسام، خفيف بين الأعمدة */
 .group-divider {
-  border-right: 2px solid rgba(64, 224, 208, 0.3);
-  box-shadow: 2px 0 12px rgba(64, 224, 208, 0.08);
+  border-right: var(--adora-divider-section);
+}
+.table-section-no-side-shadow .group-divider,
+.summary-section .group-divider {
+  box-shadow: none !important;
 }
 .group-divider-subtle {
-  border-right: 1px solid rgba(64, 224, 208, 0.2);
+  border-right: var(--adora-divider-column);
 }
+
+/* ===== لوحة ألوان موحدة (نص + شارات فقط) ===== */
+.adora-text { color: var(--adora-text); }
+.adora-text-muted { color: var(--adora-text-secondary); }
+.adora-accent { color: var(--adora-accent); }
+.adora-success { color: var(--adora-success); }
+.adora-warning { color: var(--adora-warning); }
+.adora-error { color: var(--adora-error); }
+.badge-adora { background: color-mix(in srgb, var(--adora-accent) 12%, transparent); color: var(--adora-accent); border: 1px solid color-mix(in srgb, var(--adora-accent) 25%, transparent); }
+.badge-success { background: color-mix(in srgb, var(--adora-success) 12%, transparent); color: var(--adora-success); border: 1px solid color-mix(in srgb, var(--adora-success) 25%, transparent); }
+.badge-warning { background: color-mix(in srgb, var(--adora-warning) 12%, transparent); color: var(--adora-warning); border: 1px solid color-mix(in srgb, var(--adora-warning) 25%, transparent); }
+.badge-error { background: color-mix(in srgb, var(--adora-error) 12%, transparent); color: var(--adora-error); border: 1px solid color-mix(in srgb, var(--adora-error) 25%, transparent); }
+.badge-muted { background: color-mix(in srgb, var(--adora-text-secondary) 15%, transparent); color: var(--adora-text-secondary); border: 1px solid color-mix(in srgb, var(--adora-text-secondary) 20%, transparent); }
+.bg-adora-error-subtle { background: color-mix(in srgb, var(--adora-error) 20%, transparent); }
 
 /* Entrance animation */
 @keyframes fadeInUp {
@@ -71,57 +315,62 @@ body {
   100% { background-position: -200% 0; }
 }
 
-/* ===== Global Scrollbar Styling ===== */
+/* ===== Global Scrollbar — theme variables, fixed size ===== */
 ::-webkit-scrollbar {
   width: 8px;
   height: 8px;
 }
 ::-webkit-scrollbar-track {
-  background: rgba(15, 23, 41, 0.6);
+  background: var(--adora-scrollbar-track);
   border-radius: 4px;
 }
 ::-webkit-scrollbar-thumb {
-  background: rgba(64, 224, 208, 0.4);
+  background: var(--adora-scrollbar-thumb);
   border-radius: 4px;
-  border: 1px solid rgba(64, 224, 208, 0.15);
+  border: 1px solid transparent;
 }
 ::-webkit-scrollbar-thumb:hover {
-  background: rgba(64, 224, 208, 0.6);
+  background: var(--adora-scrollbar-thumb-hover);
 }
 ::-webkit-scrollbar-corner {
-  background: rgba(15, 23, 41, 0.6);
+  background: var(--adora-scrollbar-track);
 }
-/* Firefox scrollbar */
 * {
   scrollbar-width: thin;
-  scrollbar-color: rgba(64, 224, 208, 0.4) rgba(15, 23, 41, 0.6);
+  scrollbar-color: var(--adora-scrollbar-thumb) var(--adora-scrollbar-track);
 }
 
-/* ===== Global Select & Option Styling ===== */
+/* ===== Global Select — theme variables, border 1px fixed ===== */
 select {
   appearance: none;
   -webkit-appearance: none;
-  background-color: rgba(15, 23, 41, 0.98);
-  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 24 24' fill='none' stroke='%2340E0D0' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpolyline points='6 9 12 15 18 9'%3E%3C/polyline%3E%3C/svg%3E");
+  background-color: var(--adora-bg-card);
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 24 24' fill='none' stroke='%2314b8a6' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpolyline points='6 9 12 15 18 9'%3E%3C/polyline%3E%3C/svg%3E");
   background-repeat: no-repeat;
   background-position: left 10px center;
   padding-left: 30px !important;
-  color: #e2e8f0;
+  color: var(--adora-text);
+  border: 1px solid var(--adora-border);
   color-scheme: dark;
 }
+
+[data-theme="light"] select {
+  color-scheme: light;
+}
+
 select option {
-  background-color: rgba(15, 23, 41, 0.98);
-  color: #e2e8f0;
+  background-color: var(--adora-bg-card);
+  color: var(--adora-text);
   padding: 8px 12px;
 }
 select option:hover,
 select option:checked {
-  background-color: rgba(64, 224, 208, 0.15);
-  color: #ffffff;
+  background-color: var(--adora-hover-bg);
+  color: var(--adora-text);
 }
 select:focus option:checked {
-  background: linear-gradient(0deg, rgba(64, 224, 208, 0.2), rgba(64, 224, 208, 0.2));
-  color: #ffffff;
+  background: var(--adora-active-bg);
+  color: var(--adora-text);
 }
 
 /* ===== Global Input Styling ===== */
@@ -138,8 +387,8 @@ textarea {
 .action-header-btn {
   position: relative;
   overflow: hidden;
-  padding: clamp(0.4rem, 1vw, 0.625rem) clamp(0.6rem, 1.5vw, 1rem) !important;
-  font-size: clamp(0.65rem, 1.2vw, 0.875rem) !important;
+  padding: clamp(0.5rem, 1.2vw, 0.75rem) clamp(0.75rem, 1.8vw, 1.125rem) !important;
+  font-size: clamp(0.8rem, 1.5vw, 1rem) !important;
   border-radius: clamp(0.5rem, 1vw, 0.75rem) !important;
   gap: clamp(0.25rem, 0.5vw, 0.5rem) !important;
   white-space: nowrap;
@@ -169,16 +418,38 @@ textarea {
   height: clamp(0.75rem, 1.2vw, 1rem) !important;
   flex-shrink: 0;
 }
+/* Header typography — عنوان الصفحة أكبر من الوصف */
+header h1 {
+  font-size: var(--adora-text-h1) !important;
+  font-weight: 800 !important;
+  letter-spacing: -0.02em;
+}
+header p, header .header-sub {
+  font-size: var(--adora-text-small) !important;
+}
+/* Modal titles — عناوين النوافذ أوضح من المحتوى */
+.modal-no-side-shadow h3 {
+  font-size: var(--adora-text-h2) !important;
+  font-weight: 700 !important;
+}
+.modal-no-side-shadow h4 {
+  font-size: var(--adora-text-h3) !important;
+  font-weight: 600 !important;
+}
+.modal-no-side-shadow .overflow-y-auto {
+  font-size: var(--adora-text-body);
+}
+
 @media (max-width: 480px) {
   header .glass, header.glass {
     padding: 0.75rem 1rem !important;
     gap: 0.75rem !important;
   }
   header h1 {
-    font-size: clamp(0.9rem, 4vw, 1.3rem) !important;
+    font-size: clamp(1rem, 4vw, 1.35rem) !important;
   }
   header p {
-    font-size: clamp(0.7rem, 3vw, 0.95rem) !important;
+    font-size: var(--adora-text-small) !important;
   }
   .action-header-btn {
     min-height: 36px !important;
@@ -190,9 +461,17 @@ textarea {
     min-height: 38px !important;
   }
 }
+/* Typography: readability — +35–40% for data/numbers */
+main .text-\[10px\] { font-size: 14px !important; }
+main .text-\[11px\] { font-size: 15px !important; }
+main section .text-xs { font-size: 0.875rem !important; }
+.app-summary-table button,
+.app-summary-table .font-mono,
+.app-summary-table span { font-size: inherit; }
+
 /* Header badges — fluid */
 .header-badge {
-  font-size: clamp(0.6rem, 1.1vw, 0.875rem) !important;
+  font-size: clamp(0.75rem, 1.3vw, 1rem) !important;
   padding: clamp(0.3rem, 0.8vw, 0.5rem) clamp(0.5rem, 1.2vw, 0.75rem) !important;
   border-radius: clamp(0.375rem, 0.8vw, 0.75rem) !important;
   white-space: nowrap;
@@ -204,23 +483,34 @@ textarea {
   table-layout: auto;
   border-collapse: collapse;
 }
+/* خطوط خفيفة بين الصفوف، وأخف جداً بين الأعمدة */
+.app-detail-table tbody tr,
+.app-summary-table tbody tr {
+  border-bottom: var(--adora-divider-row);
+}
+.app-detail-table td + td,
+.app-detail-table th + th,
+.app-summary-table td + td,
+.app-summary-table th + th {
+  border-left: var(--adora-divider-column);
+}
 .app-detail-table th,
 .app-detail-table td,
 .app-summary-table th,
 .app-summary-table td {
   white-space: nowrap;
-  font-size: clamp(0.6rem, 1.1vw, 0.8125rem);
+  font-size: clamp(0.8rem, 1.4vw, 1rem);
 }
 @media (max-width: 768px) {
   .app-detail-table th,
   .app-detail-table td {
-    padding: 0.25rem 0.35rem !important;
-    font-size: 0.65rem !important;
+    padding: 0.3rem 0.4rem !important;
+    font-size: 0.8rem !important;
   }
   .app-summary-table th,
   .app-summary-table td {
-    padding: 0.25rem 0.3rem !important;
-    font-size: 0.65rem !important;
+    padding: 0.3rem 0.4rem !important;
+    font-size: 0.8rem !important;
   }
 }
 
@@ -269,4 +559,17 @@ textarea {
 @keyframes drawCheck {
   0% { stroke-dashoffset: 24; }
   100% { stroke-dashoffset: 0; }
+}
+
+/* ===== Print — unified for both themes ===== */
+@media print {
+  html, body {
+    background: #fff !important;
+    color: #000 !important;
+  }
+  .glass, .neon-glow {
+    background: #fff !important;
+    border-color: #ddd !important;
+    box-shadow: none !important;
+  }
 }

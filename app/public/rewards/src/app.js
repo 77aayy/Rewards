@@ -77,6 +77,21 @@ function clearLocalRewardsDirty(ts) {
 function escAttr(s) { return String(s == null ? '' : s).replace(/\\/g, '\\\\').replace(/'/g, "\\'").replace(/"/g, '&quot;'); }
 function escHtml(s) { return String(s == null ? '' : s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;'); }
 
+/** تحميل سكربت خارجي عند الطلب (لتحسين الأداء — SheetJS، html2pdf). */
+function loadScript(url) {
+  return new Promise(function (resolve, reject) {
+    var existing = document.querySelector('script[src="' + url + '"]');
+    if (existing) { resolve(); return; }
+    if (url.indexOf('xlsx') !== -1 && typeof window.XLSX !== 'undefined') { resolve(); return; }
+    if (url.indexOf('html2pdf') !== -1 && typeof window.html2pdf !== 'undefined') { resolve(); return; }
+    var s = document.createElement('script');
+    s.src = url;
+    s.onload = resolve;
+    s.onerror = reject;
+    document.head.appendChild(s);
+  });
+}
+
 // === أزرار الترويسة: مصدر واحد مع تطبيق التحليل (App) — headerButtonsConfig.json ===
 var REWARDS_HEADER_VARIANT_CLASS = { default: 'action-header-btn action-header-btn-default', red: 'action-header-btn action-header-btn--red', cyan: 'action-header-btn action-header-btn--cyan', primary: 'action-header-btn action-header-btn--primary', amber: 'action-header-btn action-header-btn--amber', violet: 'action-header-btn action-header-btn--violet' };
 var REWARDS_HEADER_ICONS = {
@@ -147,10 +162,15 @@ var DEFAULT_REWARD_PRICING = {
   rateEvening: 1,
   rateNight: 2,
   rateBooking: 1,
+  rateContract: 200,
   rateVipByBranch: {},
   rateVipDefault: { reception: 0, booking: 0 },
+  vipDescription: 'حجوزات VIP — تُسعّر من خانات VIP (استقبال/بوكينج لكل غرفة)',
   rateEvalBooking: 20,
-  rateEvalGoogle: 10
+  rateEvalGoogle: 10,
+  minEvalCorniche: 8.7,
+  minEvalAndalus: 8.2,
+  minEvalGoogle: 4.3
 };
 
 /**
@@ -197,10 +217,15 @@ function getPricingConfig() {
       rateEvening: p.rateEvening != null ? p.rateEvening : DEFAULT_REWARD_PRICING.rateEvening,
       rateNight: p.rateNight != null ? p.rateNight : DEFAULT_REWARD_PRICING.rateNight,
       rateBooking: p.rateBooking != null ? p.rateBooking : DEFAULT_REWARD_PRICING.rateBooking,
+      rateContract: p.rateContract != null ? p.rateContract : DEFAULT_REWARD_PRICING.rateContract,
       rateVipByBranch: _normalizeVipByBranch(p.rateVipByBranch),
       rateVipDefault: _normalizeVipDefault(p.rateVipDefault),
+      vipDescription: p.vipDescription != null ? p.vipDescription : DEFAULT_REWARD_PRICING.vipDescription,
       rateEvalBooking: p.rateEvalBooking != null ? p.rateEvalBooking : DEFAULT_REWARD_PRICING.rateEvalBooking,
-      rateEvalGoogle: p.rateEvalGoogle != null ? p.rateEvalGoogle : DEFAULT_REWARD_PRICING.rateEvalGoogle
+      rateEvalGoogle: p.rateEvalGoogle != null ? p.rateEvalGoogle : DEFAULT_REWARD_PRICING.rateEvalGoogle,
+      minEvalCorniche: p.minEvalCorniche != null ? p.minEvalCorniche : DEFAULT_REWARD_PRICING.minEvalCorniche,
+      minEvalAndalus: p.minEvalAndalus != null ? p.minEvalAndalus : DEFAULT_REWARD_PRICING.minEvalAndalus,
+      minEvalGoogle: p.minEvalGoogle != null ? p.minEvalGoogle : DEFAULT_REWARD_PRICING.minEvalGoogle
     };
   }
   // 2. From localStorage
@@ -213,10 +238,15 @@ function getPricingConfig() {
         rateEvening: p2.rateEvening != null ? p2.rateEvening : DEFAULT_REWARD_PRICING.rateEvening,
         rateNight: p2.rateNight != null ? p2.rateNight : DEFAULT_REWARD_PRICING.rateNight,
         rateBooking: p2.rateBooking != null ? p2.rateBooking : DEFAULT_REWARD_PRICING.rateBooking,
+        rateContract: p2.rateContract != null ? p2.rateContract : DEFAULT_REWARD_PRICING.rateContract,
         rateVipByBranch: _normalizeVipByBranch(p2.rateVipByBranch),
         rateVipDefault: _normalizeVipDefault(p2.rateVipDefault),
+        vipDescription: p2.vipDescription != null ? p2.vipDescription : DEFAULT_REWARD_PRICING.vipDescription,
         rateEvalBooking: p2.rateEvalBooking != null ? p2.rateEvalBooking : DEFAULT_REWARD_PRICING.rateEvalBooking,
-        rateEvalGoogle: p2.rateEvalGoogle != null ? p2.rateEvalGoogle : DEFAULT_REWARD_PRICING.rateEvalGoogle
+        rateEvalGoogle: p2.rateEvalGoogle != null ? p2.rateEvalGoogle : DEFAULT_REWARD_PRICING.rateEvalGoogle,
+        minEvalCorniche: p2.minEvalCorniche != null ? p2.minEvalCorniche : DEFAULT_REWARD_PRICING.minEvalCorniche,
+        minEvalAndalus: p2.minEvalAndalus != null ? p2.minEvalAndalus : DEFAULT_REWARD_PRICING.minEvalAndalus,
+        minEvalGoogle: p2.minEvalGoogle != null ? p2.minEvalGoogle : DEFAULT_REWARD_PRICING.minEvalGoogle
       };
     }
   } catch (_) {}
@@ -544,7 +574,7 @@ function toggleBreakdownColumns(showBreakdown) {
       var vipHtml = '';
       window.adoraActiveVipRooms.forEach(function(num, vipIdx) {
         var isLastVip = vipIdx === window.adoraActiveVipRooms.length - 1;
-        vipHtml += '<th class="col-breakdown col-breakdown-vip ' + (isLastVip ? 'th-section-start ' : '') + 'text-center text-amber-300 text-xs font-bold cursor-pointer hover:bg-white/10 transition-colors select-none" style="' + (isLastVip ? 'border-left:2px solid rgba(139,92,246,0.25);' : '') + '" data-sort-key="vip_' + num + '" title="فرز حسب ' + num + '">' +
+        vipHtml += '<th class="col-breakdown col-breakdown-vip ' + (isLastVip ? 'th-section-start ' : '') + 'text-center text-amber-300 text-sm font-semibold cursor-pointer hover:bg-white/10 transition-colors select-none" style="' + (isLastVip ? 'border-left:2px solid rgba(139,92,246,0.25);' : '') + '" data-sort-key="vip_' + num + '" title="فرز حسب ' + num + '">' +
           '<svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="display:inline-block;vertical-align:middle;margin-left:2px;margin-top:-2px;"><path d="M11.562 3.266a.5.5 0 0 1 .876 0L15.39 8.87a1 1 0 0 0 1.516.294L21.183 5.5a.5.5 0 0 1 .798.519l-2.834 10.246a1 1 0 0 1-.956.734H5.81a1 1 0 0 1-.957-.734L2.02 6.02a.5.5 0 0 1 .798-.519l4.276 3.664a1 1 0 0 0 1.516-.294z"/><path d="M5.75 17h12.5a1 1 0 0 1 1 1v1a1 1 0 0 1-1 1H5.75a1 1 0 0 1-1-1v-1a1 1 0 0 1 1-1z"/></svg>' +
           num + '</th>';
       });
@@ -561,21 +591,26 @@ function toggleBreakdownColumns(showBreakdown) {
         footVip.removeAttribute('colspan');
       }
     }
-
-    // Update colspan for negative ratings row
-    var negRow = document.getElementById('negativeRatingsHeaderRow');
-    if (negRow) {
-      var firstTd = negRow.querySelector('td');
-      if (firstTd) {
-        var extraCols = 9 + (window.adoraActiveVipRooms ? window.adoraActiveVipRooms.length : 0) - 1;
-        firstTd.setAttribute('colspan', String(5 + extraCols));
-      }
-    }
   } else {
     if (footVip) {
       footVip.style.display = 'none';
       footVip.setAttribute('colspan', '1');
     }
+  }
+
+  // تحديث colspan لصف التقييمات السلبية دائماً ليطابق عدد الأعمدة
+  var negRow = document.getElementById('negativeRatingsHeaderRow');
+  if (negRow) {
+    var firstTd = negRow.querySelector('td');
+    if (firstTd) {
+      var mainRow = document.querySelector('#targetTable thead tr.main-header-row');
+      var colCount = mainRow ? mainRow.querySelectorAll('th').length : 100;
+      firstTd.setAttribute('colspan', String(colCount));
+    }
+  }
+
+  if (typeof updateFooterSummaryColspans === 'function') {
+    setTimeout(updateFooterSummaryColspans, 80);
   }
 }
 
@@ -852,8 +887,8 @@ function loadEmployeeCodesMap() {
 }
 
 // === Security: Admin Secret Key ===
-// مفتاح الأدمن: غيّر القيمة قبل النشر إلى الإنتاج. مصدر الحقيقة لبوابة الأدمن: app/src/adminConfig.ts (يجب أن تتطابق القيمتان). راجع SECURITY.md. لا تضع المفتاح في ريبو عام.
-const ADMIN_SECRET_KEY = 'ayman5255';
+// يُحقَن من .env عبر inject-firebase-config.js (window.__ADMIN_SECRET_KEY__). fallback للتطوير.
+const ADMIN_SECRET_KEY = (typeof window !== 'undefined' && window.__ADMIN_SECRET_KEY__) ? window.__ADMIN_SECRET_KEY__ : 'ayman5255';
 // ADMIN_AUTH_SESSION_KEY و ADMIN_SESSION_MAX_AGE_MS معرّفان في rewards-rbac.js — لا تُعرّفهما هنا لتجنّب "already been declared"
 if (typeof window !== 'undefined') {
   window.getAdminSecretKey = function () { return ADMIN_SECRET_KEY; };
@@ -1246,7 +1281,7 @@ async function doAppInit() {
             ? 'تحقق من الاتصال بالإنترنت وإعدادات Firebase. ثم أعد المحاولة.'
             : 'البيانات غير موجودة في Firebase (ملف الفترة أو live.json). يجب على الأدمن تنفيذ «الانتقال إلى حساب المكافآت» من نظام التحليل ثم انتظار ظهور «تمت المزامنة» قبل فتح رابط المشرف.';
           if (el) {
-            el.innerHTML = '<div class="text-center"><p class="font-bold text-amber-400 mb-2">' + errTitle + '</p><p class="text-sm text-gray-400 mb-4">' + errDesc + '</p><button type="button" id="retryPeriodBtn" onclick="location.reload()" class="px-4 py-2 rounded-xl font-bold focus:outline-none focus:ring-2 focus:ring-[#14b8a6] focus:ring-offset-2 focus:ring-offset-[#0f172a]" style="background:rgba(20,184,166,0.2);color:#14b8a6;border:1px solid rgba(20,184,166,0.5);">إعادة المحاولة</button></div>';
+            el.innerHTML = '<div class="text-center"><p class="font-bold text-amber-400 mb-2">' + escHtml(errTitle) + '</p><p class="text-sm text-gray-400 mb-4">' + escHtml(errDesc) + '</p><button type="button" id="retryPeriodBtn" onclick="location.reload()" class="px-4 py-2 rounded-xl font-bold focus:outline-none focus:ring-2 focus:ring-[#14b8a6] focus:ring-offset-2 focus:ring-offset-[#0f172a]" style="background:rgba(20,184,166,0.2);color:#14b8a6;border:1px solid rgba(20,184,166,0.5);">إعادة المحاولة</button></div>';
             el.classList.remove('flex', 'flex-col', 'items-center', 'justify-center', 'gap-3', 'py-12', 'px-4', 'text-white/90');
             el.classList.add('text-center', 'py-8', 'px-4');
             setTimeout(function () {
@@ -1670,6 +1705,42 @@ if (document.readyState === 'loading') {
 } else {
   doRbacThenInit();
 }
+
+// Theme toggle: wire button to AdoraTheme (shared/theme.js)
+function updateThemeButtonIcon() {
+  var btn = document.getElementById('themeToggleBtn');
+  if (!btn) return;
+  var sun = btn.querySelector('.theme-icon-sun');
+  var moon = btn.querySelector('.theme-icon-moon');
+  if (!sun || !moon) return;
+  var theme = (typeof window.AdoraTheme !== 'undefined' && window.AdoraTheme.getTheme) ? window.AdoraTheme.getTheme() : 'dark';
+  if (theme === 'dark') {
+    sun.classList.remove('hidden');
+    moon.classList.add('hidden');
+  } else {
+    sun.classList.add('hidden');
+    moon.classList.remove('hidden');
+  }
+}
+function setupThemeToggle() {
+  var btn = document.getElementById('themeToggleBtn');
+  if (!btn) return;
+  if (typeof window.AdoraTheme === 'undefined') {
+    setTimeout(setupThemeToggle, 30);
+    return;
+  }
+  btn.addEventListener('click', function () {
+    window.AdoraTheme.toggleTheme();
+    updateThemeButtonIcon();
+  });
+  updateThemeButtonIcon();
+}
+if (document.readyState === 'loading') {
+  document.addEventListener('DOMContentLoaded', setupThemeToggle);
+} else {
+  setupThemeToggle();
+}
+
 // إغلاق النوافذ المنبثقة بمفتاح Escape (UX)
 (function setupEscapeCloseModals() {
   var modalCloseMap = {
@@ -1724,6 +1795,9 @@ const reader = new FileReader();
 reader.onload = async (evt) => {
 if (typeof showLoadingOverlay === 'function') showLoadingOverlay('جاري تحميل الملف...');
 try {
+await loadScript('https://cdn.sheetjs.com/xlsx-0.20.3/package/dist/xlsx.full.min.js');
+var XLSX = typeof window.XLSX !== 'undefined' ? window.XLSX : null;
+if (!XLSX) { showToast('تعذر تحميل أداة قراءة الإكسيل', 'error'); return; }
 const wb = XLSX.read(new Uint8Array(evt.target.result), { type: 'array' });
 const sheet = wb.Sheets[wb.SheetNames[0]];
 // 1. Parse with formatting for robust Date Extraction
@@ -2860,6 +2934,10 @@ if (currentRole && currentRole !== 'hr' && currentRole !== 'admin') {
 }
 const oldValue = item.attendance26Days === true;
 item.attendance26Days = checked;
+// للمتكرر: تفعيل المؤشر = كتابة 26 يوم — ليتطابق عرض «تم» في الكل
+if (typeof updateAttendanceDaysForBranch === 'function' && db.filter(e => e.name === item.name).length > 1) {
+  updateAttendanceDaysForBranch(item.name, item.branch, checked ? 26 : 0, false);
+}
 markLocalRewardsDirty();
 // Log admin action
 if (typeof logAdminAction === 'function' && currentRole) {
@@ -2921,7 +2999,7 @@ const baseNet = gross - fund;
 const finalNet = baseNet + attendanceBonus + excellenceBonus + commitmentBonus;
 // Show final net (white) - الرقم الأبيض فقط بدون إضافات (الإضافات موجودة في تقرير الموظف)
 display = `<span class="text-white print:text-black font-black">${finalNet.toFixed(2)}</span>`;
-netCell.className = 'col-net p-2 text-left font-black text-white bg-white/[0.04] px-2 print:text-black number-display';
+netCell.className = 'col-net p-2 text-left font-mono text-sm font-semibold text-white bg-white/[0.04] px-2 print:text-black number-display';
 netCell.innerHTML = display;
 }
 }
@@ -3132,8 +3210,11 @@ if (activeFilter === 'الكل') {
   if (bestEvalId != null) { viewWinners.eval.val = bestEval; viewWinners.eval.ids = [bestEvalId]; }
   if (bestBookId != null) { viewWinners.book.val = bestBook; viewWinners.book.ids = [bestBookId]; }
 }
-// Update badges in all rows (including badges-row)
-// First, find all employee rows and ensure they have badges-rows
+// Update badges in all rows (including badges-row) — في عرض «الكل» إخفاء صف الشارات (تظهر في الفروع فقط)
+const activeFilterBadges = typeof currentFilter !== 'undefined' ? currentFilter : 'الكل';
+if (activeFilterBadges === 'الكل') {
+  document.querySelectorAll('#mainTable tr.badges-row').forEach(function(r) { r.remove(); });
+}
 const employeeRows = document.querySelectorAll('#mainTable tr[data-name]:not(.badges-row)');
 employeeRows.forEach(empRow => {
 const empId = empRow.dataset.id || empRow.dataset.empId;
@@ -3143,6 +3224,7 @@ if (!empId && !rName) return;
 // Find employee
 const emp = empId ? db.find(d => d.id === empId) : (rName && rBranch ? db.find(d => d.name === rName && d.branch === rBranch) : null);
 if (!emp) return;
+if (activeFilterBadges === 'الكل') return;
 // Check if badges-row exists for this employee
 // Try multiple selectors to find the badges-row
 let badgesRow = document.querySelector(`tr.badges-row[data-emp-id="${emp.id}"]`);
@@ -3601,7 +3683,7 @@ displayCommitmentBonus = displayCommitmentEmployees.length * 50;
 if (commitmentBlock) commitmentBlock.style.display = displayCommitmentEmployees.length > 0 ? '' : 'none';
 if (commitmentText) {
 if (displayCommitmentEmployees.length > 0) {
-const employeesHtml = formatBonusEmployeesAsRows(displayCommitmentEmployees, true);
+const employeesHtml = formatBonusEmployeesAsRows(displayCommitmentEmployees, false);
 commitmentText.innerHTML = employeesHtml;
 } else commitmentText.innerHTML = '';
 }
@@ -3656,7 +3738,7 @@ displayExcellenceBonus = displayExcellenceEmployees.length * 50;
 if (excellenceBlock) excellenceBlock.style.display = displayExcellenceEmployees.length > 0 ? '' : 'none';
 if (excellenceText) {
 if (displayExcellenceEmployees.length > 0) {
-const employeesHtml = formatBonusEmployeesAsRows(displayExcellenceEmployees, true);
+const employeesHtml = formatBonusEmployeesAsRows(displayExcellenceEmployees, false);
 excellenceText.innerHTML = employeesHtml;
 } else excellenceText.innerHTML = '';
 }
@@ -3762,13 +3844,14 @@ return String(value == null ? '' : value)
 }
 function formatBonusEmployeesAsRows(employees, includeReason) {
 if (!employees || employees.length === 0) return '';
-return employees.map(e => {
+return employees.map((e, i) => {
 const safeName = escapeBonusHtml(e.name);
 const safeBranch = escapeBonusHtml(e.branch);
 const safeReason = includeReason ? escapeBonusHtml(e.reason) : '';
-const reasonPart = includeReason ? `<div class="text-[10px] sm:text-[11px] text-turquoise/80">${safeReason}</div>` : '';
-return `<div class="rounded-md bg-white/[0.04] border border-white/10 px-2 py-1.5 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-1"><div class="min-w-0"><span class="font-bold text-white">${safeName}</span> <span class="text-turquoise/80 text-[10px]">(${safeBranch})</span></div>${reasonPart}</div>`;
-}).join('');
+const num = i + 1;
+const reasonPart = includeReason && safeReason ? ` <span class="text-turquoise/70">${safeReason}</span>` : '';
+return `<span class="inline text-[10.5px] leading-tight"><span class="text-turquoise/60">${num}.</span> <span class="font-semibold text-white/90">${safeName}</span> <span class="text-turquoise/70">(${safeBranch})</span>${reasonPart}</span>`;
+}).join(' · ');
 }
 function renderUI(filter) {
 // Update currentFilter to match the filter parameter (واحدّث window حتى rewards-table.js وغيره يقرؤونه)
@@ -4061,27 +4144,16 @@ if (filter === 'الكل') {
   const nameToLevel = {};
   const namesList = Object.keys(nameAgg);
   if (namesList.length > 0) {
-    const minCount = Math.min(...namesList.map(n => nameAgg[n].aggCount));
-    const maxCount = Math.max(...namesList.map(n => nameAgg[n].aggCount));
-    const totalEvals = namesList.map(n => nameAgg[n].aggEval + (nameAgg[n].totalEvalGoogle || 0));
-    const minEval = Math.min(...totalEvals);
-    const maxEval = Math.max(...totalEvals);
-    const maxEvalBooking = Math.max(...namesList.map(n => nameAgg[n].aggEval || 0));
-    const maxEvalGoogle = Math.max(...namesList.map(n => nameAgg[n].totalEvalGoogle || 0));
+    const minNet = Math.min(...namesList.map(n => nameAgg[n].aggNet || 0));
+    const maxNet = Math.max(...namesList.map(n => nameAgg[n].aggNet || 0));
+    const rangeNet = maxNet - minNet;
     namesList.forEach(name => {
       const a = nameAgg[name];
-      const count = a.aggCount || 0;
-      const evalBooking = a.aggEval || 0;
-      const evalGoogle = a.totalEvalGoogle || 0;
-      const totalEval = evalBooking + evalGoogle;
+      const aggNet = a.aggNet || 0;
       const has26 = !!a.hasAttendance26;
-      const rangeCount = maxCount - minCount;
-      const rangeEval = maxEval - minEval;
-      const pctCount = rangeCount <= 0 ? 0.5 : (count - minCount) / rangeCount;
-      const pctEval = rangeEval <= 0 ? 0.5 : (totalEval - minEval) / rangeEval;
-      const combined = (pctCount + pctEval) / 2;
+      const pctNet = rangeNet <= 0 ? 0.5 : (aggNet - minNet) / rangeNet;
       const boost = has26 ? 0.15 : 0;
-      let score = Math.min(1, combined + boost);
+      let score = Math.min(1, pctNet + boost);
       let discountPoints = 0;
       if (typeof getTotalDiscountForEmployee === 'function' && getTotalDiscountForEmployee(name) > 0) discountPoints += 0.25;
       if (typeof getHotelRatingDeductionForEmployee === 'function' && getHotelRatingDeductionForEmployee(name) > 0) discountPoints += 0.10;
@@ -4090,8 +4162,8 @@ if (filter === 'الكل') {
       const points = Math.round(score * 100);
       let level = 'سيء';
       if (points >= 90) level = 'ممتاز';
-      else if (points >= 80) level = 'جيد';
-      else if (points >= 60) level = 'متوسط';
+      else if (points >= 80) level = 'جيد جداً';
+      else if (points >= 60) level = 'جيد';
       else if (points >= 40) level = 'ضعيف';
       nameToPoints[name] = points;
       nameToLevel[name] = level;
@@ -4429,7 +4501,7 @@ style="animation: fadeInUp 0.4s ease-out ${displayIndex * 0.03}s both;">
 class="emp-checkbox cursor-pointer accent-turquoise" 
 onclick="updateSelectedUI()">
 </td>
-<td class="col-m p-2 text-right text-gray-400 text-sm font-semibold">
+<td class="col-m p-2 text-right font-mono text-gray-400 text-sm font-medium">
 ${displayIndex + 1}
 </td>
 <td class="col-name p-2 text-right">
@@ -4601,7 +4673,7 @@ ${emp.branch}
 ` : ''}
 `}
 </td>
-<td class="col-count col-count-single p-2 text-center font-black text-white print:text-black text-lg number-display" ${window.adoraTransferMode ? 'style="display:none"' : ''}>
+<td class="col-count col-count-single p-2 text-center font-mono font-semibold text-white print:text-black text-sm number-display" ${window.adoraTransferMode ? 'style="display:none"' : ''}>
 ${(filter === 'الكل' && isDuplicate) ? (s.aggregatedCount || emp.count) : emp.count}
 </td>
 ${window.adoraTransferMode ? (function() {
@@ -4628,14 +4700,14 @@ ${window.adoraTransferMode ? (function() {
   var empNameEsc = typeof escAttr === 'function' ? escAttr(emp.name) : String(emp.name || '').replace(/'/g, "\\'");
   var empBranchEsc = isDup ? '' : (typeof escAttr === 'function' ? escAttr(emp.branch) : String(emp.branch || '').replace(/'/g, "\\'"));
   function cell(val, type, extraClass) {
-    var cls = 'col-breakdown p-2 text-center font-mono text-sm ' + (extraClass || '');
+    var cls = 'col-breakdown p-2 text-center font-mono text-sm font-medium ' + (extraClass || '');
     if (val > 0) {
-      return '<td class="' + cls + '"><button onclick="openBreakdownDrilldown(\'' + empNameEsc + '\', \'' + empBranchEsc + '\', \'' + type + '\')" class="hover:underline cursor-pointer transition-colors font-bold">' + val + '</button></td>';
+      return '<td class="' + cls + '"><button onclick="openBreakdownDrilldown(\'' + empNameEsc + '\', \'' + empBranchEsc + '\', \'' + type + '\')" class="hover:underline cursor-pointer transition-colors font-medium">' + val + '</button></td>';
     }
     return '<td class="' + cls + '">—</td>';
   }
   var html = '';
-  html += '<td class="col-breakdown td-section-end p-2 text-center font-mono font-bold text-cyan-300 text-sm">' + staffCount + '</td>';
+  html += '<td class="col-breakdown td-section-end p-2 text-center font-mono font-semibold text-cyan-300 text-sm">' + staffCount + '</td>';
   html += cell(reception, 'استقبال', 'text-emerald-300');
   html += cell(booking, 'بوكينج', 'text-orange-300 td-section-start');
   html += cell(morning, 'صباح', 'text-amber-300');
@@ -4646,19 +4718,20 @@ ${window.adoraTransferMode ? (function() {
     var count = vipRooms[num] || 0;
     var sectionClass = vipIdx === activeVips.length - 1 ? ' td-section-start' : '';
     if (count > 0) {
-      html += '<td class="col-breakdown p-2 text-center font-mono font-bold text-amber-300 text-sm' + sectionClass + '"><button onclick="openBreakdownDrilldown(\'' + empNameEsc + '\', \'' + empBranchEsc + '\', \'vip\', \'' + num + '\')" class="hover:underline cursor-pointer">' + count + '</button></td>';
+      html += '<td class="col-breakdown p-2 text-center font-mono font-semibold text-amber-300 text-sm' + sectionClass + '"><button onclick="openBreakdownDrilldown(\'' + empNameEsc + '\', \'' + empBranchEsc + '\', \'vip\', \'' + num + '\')" class="hover:underline cursor-pointer">' + count + '</button></td>';
     } else {
-      html += '<td class="col-breakdown p-2 text-center text-gray-700 text-sm' + sectionClass + '">0</td>';
+      html += '<td class="col-breakdown p-2 text-center font-mono text-sm text-gray-500' + sectionClass + '">0</td>';
     }
   });
-  html += cell(alertCount, 'alert', 'text-red-400');
-  html += '<td class="col-breakdown td-section-start p-2 text-center font-mono text-sm">' + (alertTotal > 0 ? '<button onclick="openBreakdownDrilldown(\'' + empNameEsc + '\', \'' + empBranchEsc + '\', \'alertTotal\')" class="text-red-400 hover:underline cursor-pointer font-bold">' + Math.round(alertTotal).toLocaleString('en-SA') + '</button>' : '<span class="text-gray-700">—</span>') + '</td>';
+  html += cell(alertCount, 'alert', 'text-red-300');
+  html += '<td class="col-breakdown td-section-start p-2 text-center font-mono text-sm">' + (alertTotal > 0 ? '<button onclick="openBreakdownDrilldown(\'' + empNameEsc + '\', \'' + empBranchEsc + '\', \'alertTotal\')" class="text-red-300 hover:underline cursor-pointer font-medium">' + Math.round(alertTotal).toLocaleString('en-SA') + '</button>' : '<span class="text-gray-500">—</span>') + '</td>';
   return html;
 })() : ''}
 <td class="col-attendance td-section-start p-2 text-center${(() => { try { var r = localStorage.getItem('adora_current_role'); var submitted = typeof isAdminLinkSubmitted === 'function' && isAdminLinkSubmitted(); return (r === 'hr' && !submitted) ? ' admin-entry-zone admin-entry-hr' : ''; } catch(e) { return ''; } })()}">
 <div class="flex flex-row items-center justify-center gap-1">
-<div class="attendance-readonly-accounting flex flex-col items-center gap-1" style="display:none;">${(() => { const allEb = db.filter(e => e.name === emp.name); const isDup = filter === 'الكل' && allEb.length > 1; let days = 0, totalDays = 0, branchDaysStr = (emp.attendanceDaysPerBranch && emp.attendanceDaysPerBranch[emp.branch]) || '0'; if (isDup && filter === 'الكل') { totalDays = allEb.reduce((s, eb) => s + (parseInt(eb.attendanceDaysPerBranch && eb.attendanceDaysPerBranch[eb.branch]) || 0), 0); days = totalDays; } else { days = parseInt(branchDaysStr) || 0; } const colorClass = days >= 26 ? 'text-green-400' : 'text-red-400'; const statusText = days >= 26 ? 'تم' : 'لم يتم'; const daysSpan = days < 26 ? '<span class="text-yellow-300 text-sm font-bold">' + days + ' يوم</span>' : ''; const totalSpan = (isDup && filter === 'الكل') ? '<div class="text-[9px] text-green-400 font-bold">المجموع: ' + totalDays + '</div>' : (!isDup ? '<span class="text-[10px] text-yellow-300">' + emp.branch + ': ' + branchDaysStr + '</span>' : ''); return '<span class="text-[10px] font-bold ' + colorClass + '">' + statusText + '</span>' + daysSpan + totalSpan; })()}</div>
-<div class="attendance-editable inline-flex items-center justify-center gap-1.5">
+<div class="attendance-readonly-accounting flex flex-col items-center gap-1" style="display:none;">${(() => { const allEb = db.filter(e => e.name === emp.name); const isDup = filter === 'الكل' && allEb.length > 1; let days = 0, totalDays = 0, branchDaysStr = (emp.attendanceDaysPerBranch && emp.attendanceDaysPerBranch[emp.branch]) || '0'; if (isDup && filter === 'الكل') { totalDays = allEb.reduce((s, eb) => s + (parseInt(eb.attendanceDaysPerBranch && eb.attendanceDaysPerBranch[eb.branch]) || 0), 0); days = totalDays; } else { days = parseInt(branchDaysStr) || 0; } const colorClass = days >= 26 ? 'text-green-400' : 'text-red-400'; const statusText = days >= 26 ? 'تم' : 'لم يتم'; const daysSpan = days < 26 ? '<span class="text-yellow-300 text-sm font-bold">' + days + ' يوم</span>' : ''; const totalSpan = (isDup && filter === 'الكل') ? '' : (!isDup ? '<span class="text-[9px] text-yellow-300">' + emp.branch + ': ' + branchDaysStr + '</span>' : ''); const statusWithTotal = (isDup && filter === 'الكل' && days >= 26) ? (statusText + ' ' + totalDays) : statusText;
+return '<span class="text-[9px] font-bold ' + colorClass + '">' + statusWithTotal + '</span>' + daysSpan + totalSpan; })()}</div>
+<div class="attendance-editable inline-flex flex-col items-center justify-center gap-0.5 text-[9px] leading-tight max-w-[85px]">
 ${filter === 'الكل' ? (() => {
 // الكل: عرض نص الحالة فقط بدون toggle — التعديل من الفروع
 let statusText, statusColor;
@@ -4671,13 +4744,25 @@ totalDays = Object.values(firstEmp.attendanceDaysPerBranch).reduce((sum, d) => s
 } else {
 totalDays = firstEmp?.totalAttendanceDays || 0;
 }
-statusText = totalDays >= 26 ? 'تم' : 'لم يتم';
-statusColor = totalDays >= 26 ? 'text-green-400' : 'text-red-400';
+// تفعيل المؤشر في أي فرع = تم — يعادل 26 يوم
+const hasToggleInAnyBranch = allEmpBranches.some(eb => eb.attendance26Days === true);
+const ok = totalDays >= 26 || hasToggleInAnyBranch;
+statusText = ok ? '✓ تم ' + totalDays : '✗ لم يتم';
+const badgeClass = ok ? 'px-1 py-0.5 rounded text-[9px] font-bold bg-green-500/15 text-green-400 border border-green-500/20 whitespace-nowrap' : 'px-1 py-0.5 rounded text-[9px] font-bold bg-red-500/15 text-red-400 border border-red-500/20 whitespace-nowrap';
+return '<div class="text-center leading-tight max-w-[75px] mx-auto truncate"><span class="inline-block max-w-full truncate ' + badgeClass + '">' + statusText + '</span></div>';
 } else {
-statusText = emp.attendance26Days === true ? 'تم' : 'لم يتم';
-statusColor = emp.attendance26Days === true ? 'text-green-400' : 'text-red-400';
+let totalDaysSingle = 0;
+if (emp.attendanceDaysPerBranch && emp.branch) {
+  totalDaysSingle = parseInt(emp.attendanceDaysPerBranch[emp.branch], 10) || 0;
+} else if (typeof emp.totalAttendanceDays === 'number') {
+  totalDaysSingle = emp.totalAttendanceDays;
 }
-return '<div class="text-center"><span class="text-[10px] font-bold ' + statusColor + ' print:text-[9px] print:font-black">' + statusText + '</span></div>';
+statusText = emp.attendance26Days === true ? 'تم ' + totalDaysSingle : 'لم يتم';
+statusColor = emp.attendance26Days === true ? 'text-green-400' : 'text-red-400';
+const okSingle = emp.attendance26Days === true;
+const badgeClassSingle = okSingle ? 'px-1 py-0.5 rounded text-[9px] font-bold bg-green-500/15 text-green-400 border border-green-500/20' : 'px-1 py-0.5 rounded text-[9px] font-bold bg-red-500/15 text-red-400 border border-red-500/20';
+return '<div class="text-center leading-tight max-w-[75px] mx-auto"><span class="inline-block ' + badgeClassSingle + '">' + (okSingle ? '✓ ' : '✗ ') + statusText + '</span></div>';
+}
 })() : `<div class="attendance-indicator">
 <label class="relative inline-flex items-center" style="justify-content: center; ${(() => {
 const rr = typeof localStorage !== 'undefined' ? localStorage.getItem('adora_current_role') : null;
@@ -4685,7 +4770,7 @@ const canEditAttendance = rr === 'hr' || rr === 'admin';
 // In branch views: check if employee is duplicate
 const allEmpBranches = db.filter(e => e.name === emp.name);
 const isEmpDuplicate = allEmpBranches.length > 1;
-return isEmpDuplicate ? 'cursor: default;' : 'cursor: pointer;';
+return 'cursor: pointer;';
 })()}">
 <input type="checkbox" 
 class="attendance-toggle" 
@@ -4718,15 +4803,9 @@ const allEmpBranches = db.filter(function(e) { return e.name === emp.name; });
 const isDuplicate = allEmpBranches.length > 1;
 const roleForHr = typeof localStorage !== 'undefined' ? localStorage.getItem('adora_current_role') : null;
 const canEditHr = roleForHr === 'hr' || roleForHr === 'admin';
-// الكل للعرض فقط — عرض المجموع (أو أيام الفرع) للموظف غير المكرر أيضاً حتى تظهر البيانات المُدخلة في الفروع
+// الكل للعرض فقط — العدد مُضمَّن في البادج (تم 26) أعلاه — لا نكرر
 if (!isDuplicate && filter === 'الكل') {
-  var totalDaysSingle = 0;
-  if (emp.attendanceDaysPerBranch && emp.branch) {
-    totalDaysSingle = parseInt(emp.attendanceDaysPerBranch[emp.branch], 10) || 0;
-  } else if (typeof emp.totalAttendanceDays === 'number') {
-    totalDaysSingle = emp.totalAttendanceDays;
-  }
-  return '<div class="text-[9px] text-green-400 font-bold">المجموع: ' + totalDaysSingle + '</div>';
+  return '';
 }
 // غير متكرر في عرض الفرع: حقل أيام البصمة — HR وأدمن (خانات إدخال نشطة لجميع الموظفين في الفروع)
 if (!isDuplicate && filter !== 'الكل') {
@@ -4751,12 +4830,8 @@ return '<div class="inline-flex items-center justify-center gap-1.5">' +
 if (!isDuplicate) return '';
 let inputsHtml = '';
 if (filter === 'الكل') {
-const totalDays = allEmpBranches.reduce(function(sum, eb) {
-const days = eb.attendanceDaysPerBranch && eb.attendanceDaysPerBranch[eb.branch] ? parseInt(eb.attendanceDaysPerBranch[eb.branch]) || 0 : 0;
-return sum + days;
-}, 0);
-// الكل للعرض فقط — عرض المجموع فقط بدون حقول إدخال (التعديل في الفروع)
-inputsHtml += '<div class="text-[9px] text-green-400 font-bold">المجموع: ' + totalDays + '</div>';
+// المتكرر في الكل: «تم/لم يتم · المجموع» مُضمَّن في الـ badge أعلاه — لا نكرر
+inputsHtml = '';
 } else {
 // In branch view: show only current branch input (editable)
 const branchDays = emp.attendanceDaysPerBranch && emp.attendanceDaysPerBranch[emp.branch] 
@@ -4768,8 +4843,10 @@ const currentRole = localStorage.getItem('adora_current_role');
 let isReadOnly = currentRole && currentRole !== 'hr' && currentRole !== 'admin';
 if (currentRole === 'hr' && typeof isAdminLinkSubmitted === 'function' && isAdminLinkSubmitted()) isReadOnly = true;
 if (isReadOnly) {
+  const branchOk = (emp.attendance26Days === true) || (parseInt(branchDays, 10) || 0) >= 26;
+  const branchBadge = branchOk ? 'px-1 py-0.5 rounded text-[9px] font-bold bg-green-500/15 text-green-400 border border-green-500/20' : 'px-1 py-0.5 rounded text-[9px] font-bold bg-red-500/15 text-red-400 border border-red-500/20';
   inputsHtml += '<div class="inline-flex items-center justify-center gap-1.5">' +
-  '<span class="text-yellow-300 font-bold text-sm">' + branchDays + '</span>' +
+  '<span class="' + branchBadge + '">' + (branchOk ? '✓ تم' : '✗ لم يتم') + ' · ' + (branchDays || '0') + '</span>' +
   '</div>';
 } else {
   inputsHtml += '<div class="inline-flex items-center justify-center gap-1.5">' +
@@ -4791,7 +4868,7 @@ return inputsHtml;
 </div>
 </div>
 </td>
-<td class="col-rate p-2 text-center text-xs text-gray-300 print:text-black font-medium">
+<td class="col-rate p-2 text-center font-mono text-sm text-gray-300 print:text-black font-medium">
 ${(emp.count > 100 ? 3 : (emp.count > 50 ? 2 : 1))} ريال
 </td>
 <td class="col-eval-booking p-2 text-center${(() => { try { var r = localStorage.getItem('adora_current_role'); var submitted = typeof isAdminLinkSubmitted === 'function' && isAdminLinkSubmitted(); return (r === 'supervisor' && filter !== 'الكل' && !submitted) ? ' admin-entry-zone admin-entry-supervisor' : ''; } catch(e) { return ''; } })()}">
@@ -4801,7 +4878,7 @@ ${(() => {
   const submittedViewOnly = typeof isAdminLinkSubmitted === 'function' && isAdminLinkSubmitted();
   const isReadOnly = viewOnlyAll || (currentRole && currentRole !== 'supervisor' && currentRole !== 'admin') || submittedViewOnly;
   if (isReadOnly) {
-    return `<span class="text-blue-400 font-bold text-base number-display">${isDuplicate ? (s.aggregatedEvalBooking || emp.evaluationsBooking || 0) : (emp.evaluationsBooking || 0)}</span>`;
+    return `<span class="text-blue-400 font-mono font-semibold text-sm number-display">${isDuplicate ? (s.aggregatedEvalBooking || emp.evaluationsBooking || 0) : (emp.evaluationsBooking || 0)}</span>`;
   }
   return `<input type="text" inputmode="numeric" pattern="[0-9]*" lang="en" dir="ltr" tabindex="${++evalTabIndex}"
 data-emp-id="${(typeof escAttr === 'function' ? escAttr(emp.id) : String(emp.id || '').replace(/"/g, '&quot;').replace(/'/g, "\\'"))}"
@@ -4820,7 +4897,7 @@ ${(() => {
   const submittedViewOnly = typeof isAdminLinkSubmitted === 'function' && isAdminLinkSubmitted();
   const isReadOnly = viewOnlyAll || (currentRole && currentRole !== 'supervisor' && currentRole !== 'admin') || submittedViewOnly;
   if (isReadOnly) {
-    return `<span class="text-green-400 font-bold text-base number-display">${isDuplicate ? (s.aggregatedEvalGoogle || emp.evaluationsGoogle || 0) : (emp.evaluationsGoogle || 0)}</span>`;
+    return `<span class="text-green-400 font-mono font-semibold text-sm number-display">${isDuplicate ? (s.aggregatedEvalGoogle || emp.evaluationsGoogle || 0) : (emp.evaluationsGoogle || 0)}</span>`;
   }
   return `<input type="text" inputmode="numeric" pattern="[0-9]*" lang="en" dir="ltr" tabindex="${++evalTabIndex}"
 data-emp-id="${(typeof escAttr === 'function' ? escAttr(emp.id) : String(emp.id || '').replace(/"/g, '&quot;').replace(/'/g, "\\'"))}"
@@ -4832,13 +4909,13 @@ onkeydown="handleEvalKey(event, this)"
 class="eval-input text-green-400 w-16 bg-white/5 border border-green-400/50 rounded px-2 py-1 text-center focus:outline-none focus:border-green-400 transition-colors number-display font-sans">`;
 })()}
 </td>
-<td class="col-net p-2 text-left font-black px-2 print:text-black number-display text-white bg-white/[0.04]">
+<td class="col-net p-2 text-left font-mono text-sm font-semibold px-2 print:text-black number-display text-white bg-white/[0.04]">
 ${(() => {
 // مصدر واحد: نفس رقم التقرير والجدول — بدون إعادة حساب
 const displayNet = (filter === 'الكل' && isDuplicate)
   ? (typeof getDisplayNetForEmployee === 'function' ? getDisplayNetForEmployee(emp.name, { aggregated: true }) : 0)
   : (typeof getDisplayNetForEmployee === 'function' ? getDisplayNetForEmployee(emp.id) : 0);
-return `<span class="text-white print:text-black font-black">${Number(displayNet).toFixed(2)}</span>`;
+return `<span class="text-white print:text-black font-semibold">${Number(displayNet).toFixed(2)}</span>`;
 })()}
 </td>
 </tr>
@@ -5097,7 +5174,7 @@ return '';
 displayIndex++;
 });
 // رسم الجدول تدريجياً (chunked) لتقليل تجميد الواجهة عند عدد كبير من الموظفين
-var RENDER_CHUNK_SIZE = 14;
+var RENDER_CHUNK_SIZE = 35;
 tbody.innerHTML = '';
 function appendChunk(startIndex) {
   var end = Math.min(startIndex + RENDER_CHUNK_SIZE, rowHtmls.length);
@@ -5851,114 +5928,118 @@ return `<!DOCTYPE html>
 <title>تقرير المكافآت - ${reportTitle}</title>
 <style>
 @page {
-size: A4 ${pageOrientation};
-margin: 5mm;
+  size: A4 ${pageOrientation};
+  margin: 10mm;
 }
 * { margin: 0; padding: 0; box-sizing: border-box; }
 body {
-font-family: 'IBM Plex Sans Arabic', 'Arial', sans-serif;
-direction: rtl;
-background: white;
-color: #000;
-padding: 2mm;
-font-size: 8px;
-line-height: 1.2;
+  font-family: 'IBM Plex Sans Arabic', 'Arial', sans-serif;
+  direction: rtl;
+  background: #fff;
+  color: #111;
+  padding: 4mm;
+  font-size: 10px;
+  line-height: 1.35;
 }
 .header {
-border-bottom: 2px solid #14b8a6;
-padding-bottom: 4px;
-margin-bottom: 6px;
-text-align: center;
+  border-bottom: 2px solid #0d9488;
+  padding-bottom: 8px;
+  margin-bottom: 8px;
+  text-align: center;
+  page-break-after: avoid;
 }
-.header h1 { font-size: 14px; font-weight: 900; margin-bottom: 2px; }
-.header h2 { font-size: 11px; font-weight: 700; color: #333; margin-bottom: 2px; }
+.header h1 { font-size: 16px; font-weight: 900; margin-bottom: 4px; color: #111; }
+.header h2 { font-size: 12px; font-weight: 700; color: #333; margin-bottom: 4px; }
 .header .info {
-font-size: 8px;
-color: #666;
-margin-top: 3px;
-display: flex;
-justify-content: space-between;
-align-items: center;
+  font-size: 10px;
+  color: #444;
+  margin-top: 6px;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 4px;
 }
 table {
-width: 100%;
-border-collapse: collapse;
-margin: 4px 0;
-font-size: 7.5px;
-page-break-inside: auto;
+  width: 100%;
+  border-collapse: collapse;
+  margin: 6px 0;
+  font-size: 9px;
+  page-break-inside: auto;
 }
-thead { background: #f8f9fa; border-bottom: 1.5px solid #14b8a6; }
+thead { display: table-header-group; background: #f0fdfa; border-bottom: 2px solid #0d9488; }
 thead th {
-padding: 3px 2px;
-text-align: center;
-font-weight: 800;
-font-size: 7.5px;
-color: #000;
-border: 0.5px solid #ddd;
-background: #e8f4f8;
+  padding: 5px 3px;
+  text-align: center;
+  font-weight: 800;
+  font-size: 9px;
+  color: #0f766e;
+  border: 1px solid #99f6e4;
+  background: #ccfbf1;
 }
-tbody tr { border-bottom: 0.5px solid #e0e0e0; page-break-inside: avoid; }
-tbody tr:nth-child(even) { background: #f9f9f9; }
+tbody tr { border-bottom: 1px solid #e5e7eb; page-break-inside: avoid; }
+tbody tr:nth-child(even) { background: #f8fafc; }
 tbody td {
-padding: 2px 2px;
-text-align: center;
-border: 0.5px solid #e0e0e0;
-font-size: 7.5px;
-vertical-align: middle;
+  padding: 4px 3px;
+  text-align: center;
+  border: 1px solid #e2e8f0;
+  font-size: 9px;
+  vertical-align: middle;
 }
-td.name-col { text-align: right; font-weight: 700; padding-right: 4px; }
-td.branch-col { text-align: center; color: #555; font-size: 7px; }
-td.badge-col { text-align: right; padding-right: 4px; font-size: 6.5px; }
+td.name-col { text-align: right; font-weight: 700; padding-right: 6px; color: #111; }
+td.branch-col { text-align: center; color: #475569; font-size: 8.5px; }
+td.badge-col { text-align: right; padding-right: 6px; font-size: 8px; }
 td.badge-col span {
-display: inline-block;
-background: #e8f4f8;
-color: #0066cc;
-padding: 1px 3px;
-margin: 1px;
-border-radius: 2px;
-font-weight: 600;
+  display: inline-block;
+  background: #e0f2fe;
+  color: #0369a1;
+  padding: 2px 4px;
+  margin: 1px;
+  border-radius: 2px;
+  font-weight: 600;
 }
-td.number-col { font-weight: 700; font-family: 'Courier New', monospace; }
-td.bonus-col { color: #006400; font-weight: 800; }
-tfoot { background: #f0f0f0; border-top: 1.5px solid #14b8a6; }
-tfoot tr.summary-row { background: #e8f4f8; font-weight: 800; }
+td.number-col { font-weight: 700; font-family: 'IBM Plex Sans Arabic', 'Courier New', monospace; }
+td.bonus-col { color: #047857; font-weight: 800; }
+tfoot { background: #f0fdfa; border-top: 2px solid #0d9488; }
+tfoot tr.summary-row { background: #ccfbf1; font-weight: 800; }
 tfoot td {
-padding: 3px 3px;
-font-size: 8px;
-font-weight: 900;
-border: 1px solid #14b8a6;
-text-align: center;
+  padding: 5px 4px;
+  font-size: 10px;
+  font-weight: 900;
+  border: 1px solid #0d9488;
+  text-align: center;
+  color: #111;
 }
-tfoot td.label-col { text-align: right; padding-right: 6px; font-size: 8px; }
+tfoot td.label-col { text-align: right; padding-right: 8px; font-size: 10px; }
 .footer {
-margin-top: 6px;
-padding-top: 4px;
-border-top: 1px solid #ddd;
-text-align: center;
-font-size: 7px;
-color: #666;
+  margin-top: 10px;
+  padding-top: 6px;
+  border-top: 1px solid #cbd5e1;
+  text-align: center;
+  font-size: 9px;
+  color: #64748b;
 }
 .approval-stamp-inline {
-display: inline-flex;
-flex-direction: column;
-justify-content: center;
-align-items: center;
-width: 60px;
-padding: 4px 6px;
-border: 1.5px solid #8b0000;
-border-radius: 50%;
-background: rgba(255,255,255,0.98);
-text-align: center;
+  display: inline-flex;
+  flex-direction: column;
+  justify-content: center;
+  align-items: center;
+  width: 60px;
+  padding: 5px 6px;
+  border: 1.5px solid #991b1b;
+  border-radius: 50%;
+  background: #fef2f2;
+  text-align: center;
 }
-.approval-stamp-inline .checkmark { display: block; color: #006400; font-size: 12px; font-weight: 900; }
-.approval-stamp-inline .dept { display: block; color: #8b0000; font-size: 7px; font-weight: 700; }
-.approval-stamp-inline .approv { display: block; color: #8b0000; font-size: 8px; font-weight: 800; }
-@media print { body { margin: 0; padding: 1mm; } }
+.approval-stamp-inline .checkmark { display: block; color: #047857; font-size: 12px; font-weight: 900; }
+.approval-stamp-inline .dept { display: block; color: #991b1b; font-size: 7px; font-weight: 700; }
+.approval-stamp-inline .approv { display: block; color: #991b1b; font-size: 8px; font-weight: 800; }
+@media print { body { margin: 0; padding: 0; } }
 </style>
 </head>
 <body>
 <div class="header">
-<h1>فندق إليت <span style="color: #40E0D0;">Elite Hotel</span></h1>
+<h1>فندق إليت <span style="color: #0d9488;">Elite Hotel</span></h1>
 <h2>تقرير استحقاق المكافآت الرسمي</h2>
 <div class="info">
 <span><strong>الفرع:</strong> ${reportTitle}</span>
@@ -6382,7 +6463,9 @@ function getConditionsContentSchema(callback) {
     callback(conditionsContentSchemaCache);
     return;
   }
-  var url = 'shared/conditions-content.json';
+  var pathname = (typeof window !== 'undefined' && window.location && window.location.pathname) ? window.location.pathname : '';
+  var base = (typeof window !== 'undefined' && window.location && window.location.origin) ? window.location.origin : '';
+  var url = pathname.indexOf('/rewards') >= 0 ? (base + '/rewards/shared/conditions-content.json') : (base + '/shared/conditions-content.json');
   fetch(url).then(function(r) { return r.ok ? r.json() : Promise.reject(new Error('Not ok')); }).then(function(data) {
     conditionsContentSchemaCache = data;
     callback(data);
@@ -6398,8 +6481,13 @@ function conditionsReplaceTemplates(str, pricing) {
     .replace(/\{\{rateEvening\}\}/g, pricing.rateEvening)
     .replace(/\{\{rateNight\}\}/g, pricing.rateNight)
     .replace(/\{\{rateBooking\}\}/g, pricing.rateBooking)
+    .replace(/\{\{rateContract\}\}/g, pricing.rateContract != null ? pricing.rateContract : 200)
+    .replace(/\{\{vipDescription\}\}/g, pricing.vipDescription != null ? pricing.vipDescription : 'حجوزات VIP — تُسعّر من خانات VIP (استقبال/بوكينج لكل غرفة)')
     .replace(/\{\{rateEvalBooking\}\}/g, pricing.rateEvalBooking)
-    .replace(/\{\{rateEvalGoogle\}\}/g, pricing.rateEvalGoogle);
+    .replace(/\{\{rateEvalGoogle\}\}/g, pricing.rateEvalGoogle)
+    .replace(/\{\{minEvalCorniche\}\}/g, pricing.minEvalCorniche != null ? pricing.minEvalCorniche : 8.7)
+    .replace(/\{\{minEvalAndalus\}\}/g, pricing.minEvalAndalus != null ? pricing.minEvalAndalus : 8.2)
+    .replace(/\{\{minEvalGoogle\}\}/g, pricing.minEvalGoogle != null ? pricing.minEvalGoogle : 4.3);
 }
 
 // مطابق لـ THEME_CLASSES في React (App.tsx ConditionsPopup) — لون التوركواز الموحد #14b8a6
@@ -6524,7 +6612,7 @@ function buildConditionsPrintDocument(pricing, schema) {
 
   return '<!DOCTYPE html><html dir="rtl" lang="ar"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0">' +
     '<title>' + escHtml(title) + '</title>' +
-    '<style>@page { size: A4 portrait; margin: 6mm; } * { margin: 0; padding: 0; box-sizing: border-box; } body { font-family: "Arial", "Segoe UI", "Tahoma", sans-serif; padding: 4px 8px; background: #fff; color: #000; line-height: 1.25; direction: rtl; font-size: 9px; } h1 { font-size: 14px; font-weight: 900; color: #000; margin-bottom: 4px; text-align: center; border-bottom: 1.5px solid #14b8a6; padding-bottom: 3px; } .section { margin-bottom: 3px; padding: 3px 6px; border-radius: 3px; border: 0.5px solid #ddd; page-break-inside: avoid; } .section.contracts { background-color: rgba(59, 130, 246, 0.06); border-color: rgba(59, 130, 246, 0.3); border-right: 3px solid rgba(59, 130, 246, 0.5); } .section.evaluations { background-color: rgba(234, 179, 8, 0.06); border-color: rgba(234, 179, 8, 0.3); border-right: 3px solid rgba(234, 179, 8, 0.5); } .section.attendance { background-color: rgba(16, 185, 129, 0.06); border-color: rgba(16, 185, 129, 0.3); border-right: 3px solid rgba(16, 185, 129, 0.5); } .section.discounts { background-color: rgba(239, 68, 68, 0.06); border-color: rgba(239, 68, 68, 0.3); border-right: 3px solid rgba(239, 68, 68, 0.5); } h2 { font-size: 10px; font-weight: 800; color: #000; margin: 0 0 2px 0; } ul { list-style: none; padding: 0; margin: 0; } li { font-size: 8.5px; font-weight: 600; color: #000; margin: 1.5px 0; padding-right: 12px; position: relative; line-height: 1.3; text-align: right; } li::before { content: "•"; position: absolute; right: 0; top: 0; font-weight: 900; } @media print { body { padding: 2px 6px; } .conditions-one-page { page-break-after: avoid; page-break-inside: avoid; } }</style></head><body><div class="conditions-one-page">' +
+    '<style>@page { size: A4 portrait; margin: 10mm; } * { margin: 0; padding: 0; box-sizing: border-box; } body { font-family: "IBM Plex Sans Arabic", Arial, sans-serif; padding: 8px 12px; background: #fff; color: #111; line-height: 1.4; direction: rtl; font-size: 10px; } h1 { font-size: 16px; font-weight: 900; color: #111; margin-bottom: 8px; text-align: center; border-bottom: 2px solid #0d9488; padding-bottom: 6px; } .section { margin-bottom: 8px; padding: 8px 12px; border-radius: 6px; border: 1px solid #e2e8f0; page-break-inside: avoid; } .section.contracts { background-color: rgba(59, 130, 246, 0.08); border-color: rgba(59, 130, 246, 0.35); border-right: 4px solid rgba(59, 130, 246, 0.6); } .section.evaluations { background-color: rgba(234, 179, 8, 0.08); border-color: rgba(234, 179, 8, 0.35); border-right: 4px solid rgba(234, 179, 8, 0.6); } .section.attendance { background-color: rgba(16, 185, 129, 0.08); border-color: rgba(16, 185, 129, 0.35); border-right: 4px solid rgba(16, 185, 129, 0.6); } .section.discounts { background-color: rgba(239, 68, 68, 0.08); border-color: rgba(239, 68, 68, 0.35); border-right: 4px solid rgba(239, 68, 68, 0.6); } h2 { font-size: 11px; font-weight: 800; color: #111; margin: 0 0 6px 0; } ul { list-style: none; padding: 0; margin: 0; } li { font-size: 9.5px; font-weight: 600; color: #111; margin: 4px 0; padding-right: 14px; position: relative; line-height: 1.4; text-align: right; } li::before { content: "•"; position: absolute; right: 0; top: 0; font-weight: 900; color: #0d9488; } @media print { body { padding: 4mm 6mm; } .conditions-one-page { page-break-after: avoid; page-break-inside: avoid; } }</style></head><body><div class="conditions-one-page">' +
     body +
     '</div></body></html>';
 }
@@ -6568,7 +6656,7 @@ function populatePrintConditionsInline() {
     var end = doc.indexOf('</div></body>');
     if (start !== -1 && end !== -1) {
       var inner = doc.substring(start + 31, end);
-      container.innerHTML = '<h3 style="font-size: 16px; font-weight: 900; color: #000; margin: 0 0 20px 0; text-align: center; direction: rtl; border-bottom: 2px solid #40E0D0; padding-bottom: 10px;">' + (schema.modalTitle || 'شروط الحصول على المكافآت') + '</h3>' + inner;
+      container.innerHTML = '<h3 style="font-size: 16px; font-weight: 900; color: #111; margin: 0 0 12px 0; text-align: center; direction: rtl; border-bottom: 2px solid #0d9488; padding-bottom: 8px;">' + escHtml(schema.modalTitle || 'شروط الحصول على المكافآت') + '</h3>' + inner;
     } else {
       container.innerHTML = '<p style="text-align:right;direction:rtl;">تعذر تحميل محتوى الشروط.</p>';
     }
@@ -6642,9 +6730,9 @@ var content = typeof getInstructionsContent === 'function' ? getInstructionsCont
 var base = window.location.origin + (window.location.pathname || '').replace(/[^/]*$/, '');
 var printWin = window.open('', '_blank');
 if (!printWin) { if (typeof showToast === 'function') showToast('❌ يرجى السماح بالنوافذ المنبثقة للطباعة', 'error'); return; }
-printWin.document.write('<!DOCTYPE html><html dir="rtl" lang="ar"><head><meta charset="UTF-8"><title>لائحة تعليمات وسياسات عمل موظفي الاستقبال</title><link rel="stylesheet" href="' + base + 'src/styles.css"><style>@page{size:A4 portrait;margin:6mm}body{background:#fff!important;color:#000!important;padding:4mm;font-family:"IBM Plex Sans Arabic",Arial,sans-serif;font-size:9px;line-height:1.25}@media print{body{background:#fff!important;color:#000!important} .no-print{display:none} *{color:#000!important;background:transparent!important}}</style></head><body>' +
-  '<h1 style="font-size:14px;font-weight:900;color:#000;margin-bottom:6px;text-align:center;border-bottom:1.5px solid #14b8a6;padding-bottom:3px;">لائحة تعليمات وسياسات عمل موظفي الاستقبال</h1>' +
-  '<div style="max-width:100%;margin:0 auto;font-size:9px;line-height:1.25;">' + content + '</div></body></html>');
+printWin.document.write('<!DOCTYPE html><html dir="rtl" lang="ar"><head><meta charset="UTF-8"><title>لائحة تعليمات وسياسات عمل موظفي الاستقبال</title><link rel="stylesheet" href="' + base + 'src/styles.css"><style>@page{size:A4 portrait;margin:10mm}body{background:#fff!important;color:#111!important;padding:6mm 8mm;font-family:"IBM Plex Sans Arabic",Arial,sans-serif;font-size:10px;line-height:1.4}@media print{body{background:#fff!important;color:#111!important}.no-print{display:none!important}</style></head><body>' +
+  '<h1 style="font-size:16px;font-weight:900;color:#111;margin-bottom:10px;text-align:center;border-bottom:2px solid #0d9488;padding-bottom:8px;">لائحة تعليمات وسياسات عمل موظفي الاستقبال</h1>' +
+  '<div style="max-width:100%;margin:0 auto;font-size:10px;line-height:1.4;">' + content + '</div></body></html>');
 printWin.document.close();
 printWin.focus();
 setTimeout(function () { if (typeof scaleToFitA4 === 'function') scaleToFitA4(printWin.document); printWin.print(); }, 400);
@@ -7762,93 +7850,98 @@ html, body { height: auto; overflow: visible; }
 body {
   font-family: 'IBM Plex Sans Arabic', Arial, sans-serif;
   direction: rtl;
-  background: white;
-  color: #000;
+  background: #fff;
+  color: #111;
   padding: 0;
-  font-size: 8.5px;
-  line-height: 1.15;
+  font-size: 10px;
+  line-height: 1.35;
 }
+@page { size: A4 portrait; margin: 10mm; }
 .print-page {
   width: 100%;
   page-break-inside: avoid;
   page-break-after: always;
-  padding: 2mm 3mm;
-  /* scale-to-fit is handled by JS — see scaleToFitA4() */
+  padding: 4mm 5mm;
 }
 .print-page:last-child { page-break-after: avoid; }
 .header {
-  border-bottom: 1.5px solid #14b8a6;
-  padding-bottom: 2px;
-  margin-bottom: 3px;
+  border-bottom: 2px solid #0d9488;
+  padding-bottom: 6px;
+  margin-bottom: 6px;
   display: flex;
   justify-content: space-between;
   align-items: flex-end;
 }
-.header h1 { font-size: 12px; font-weight: 900; color: #000; }
-.header p { font-size: 8px; color: #333; margin: 0.5px 0; }
+.header h1 { font-size: 14px; font-weight: 900; color: #111; }
+.header p { font-size: 9px; color: #333; margin: 1px 0; line-height: 1.3; }
 .header-right { text-align: left; }
 .detail-section {
-  margin-bottom: 2px;
-  padding: 2px 4px;
-  border: 0.5px solid #d1d5db;
-  border-radius: 2px;
-  background: #f9fafb;
+  margin-bottom: 6px;
+  padding: 8px 10px;
+  border: 1px solid #e2e8f0;
+  border-radius: 4px;
+  background: #f8fafc;
+  page-break-inside: avoid;
 }
 .detail-section h3 {
-  font-size: 9px;
+  font-size: 11px;
   font-weight: 800;
-  color: #000;
-  margin-bottom: 1px;
-  border-bottom: 1px solid #14b8a6;
-  padding-bottom: 1px;
+  color: #111;
+  margin-bottom: 4px;
+  border-bottom: 1px solid #0d9488;
+  padding-bottom: 3px;
 }
 .summary-box {
-  background: linear-gradient(135deg, #10b981 0%, #059669 100%);
-  color: white;
-  padding: 3px 6px;
-  border-radius: 2px;
+  background: linear-gradient(135deg, #0d9488 0%, #0f766e 100%);
+  color: #fff;
+  padding: 10px 12px;
+  border-radius: 6px;
   text-align: center;
-  margin: 2px 0;
+  margin: 8px 0;
+  page-break-inside: avoid;
 }
-.summary-box h2 { font-size: 9px; font-weight: 800; margin-bottom: 1px; }
-.summary-box .amount { font-size: 16px; font-weight: 900; margin-top: 1px; }
+.summary-box h2 { font-size: 11px; font-weight: 800; margin-bottom: 2px; }
+.summary-box .amount { font-size: 18px; font-weight: 900; margin-top: 2px; }
 .row {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  padding: 1px 0;
-  border-bottom: 0.5px solid #e5e7eb;
-  font-size: 8.5px;
+  padding: 3px 0;
+  border-bottom: 0.5px solid #e2e8f0;
+  font-size: 9px;
+  line-height: 1.3;
 }
 .row:last-child { border-bottom: none; }
 .row > div { flex: 1; min-width: 0; }
-.row > div > span:first-child { display: block; font-weight: 600; }
-.row > div > span:last-child { display: block; font-size: 7px; color: #666; line-height: 1.1; }
+.row > div > span:first-child { display: block; font-weight: 600; color: #111; }
+.row > div > span:last-child { display: block; font-size: 8px; color: #475569; line-height: 1.2; }
 .total-row {
   font-weight: 900;
-  font-size: 9px;
-  border-top: 1px solid #14b8a6;
-  padding-top: 1px;
-  margin-top: 1px;
+  font-size: 10px;
+  border-top: 1.5px solid #0d9488;
+  padding-top: 3px;
+  margin-top: 3px;
+  color: #111;
 }
 .approval-stamp {
-  margin: 3mm auto 0;
+  margin: 4mm auto 0;
   text-align: center;
-  width: 60px;
-  min-height: 60px;
-  border: 1.5px solid #8b0000;
+  width: 64px;
+  min-height: 64px;
+  border: 2px solid #991b1b;
   border-radius: 50%;
-  padding: 6px;
+  padding: 8px;
   display: flex;
   flex-direction: column;
   justify-content: center;
   align-items: center;
   page-break-inside: avoid;
+  background: #fef2f2;
 }
-.approval-stamp .checkmark { color: #006400; font-size: 16px; font-weight: 900; line-height: 1; }
-.approval-stamp .department { color: #8b0000; font-size: 7px; font-weight: 700; line-height: 1; }
-.approval-stamp .approved { color: #8b0000; font-size: 8px; font-weight: 800; line-height: 1; }
-.fund-note { font-size: 7px; color: #666; margin-top: 1px; }
+.approval-stamp .checkmark { color: #047857; font-size: 18px; font-weight: 900; line-height: 1; }
+.approval-stamp .department { color: #991b1b; font-size: 8px; font-weight: 700; line-height: 1.1; }
+.approval-stamp .approved { color: #991b1b; font-size: 9px; font-weight: 800; line-height: 1.1; }
+.fund-note { font-size: 8px; color: #475569; margin-top: 2px; line-height: 1.25; }
 `;
 }
 
@@ -8275,55 +8368,62 @@ function printEmployeeReport() {
 }
 
 /**
- * مصدر واحد: تحويل محتوى مودال تقرير الموظف إلى PDF (نفس الشكل المعروض، دون بناء تقرير جديد).
- * يُستدعى مرة واحدة من زر التحميل وزر الواتساب — لا تكرار لعمليات الـ PDF.
+ * مصدر واحد: تحويل تقرير الموظف إلى PDF باستخدام نفس HTML المُنسّق المستخدم في الطباعة
+ * (بدلاً من نسخ محتوى المودال الذي كان ينتج PDF سيئاً).
+ * يُستدعى من زر التحميل وزر الواتساب.
  * @returns {Promise<{blob: Blob, fileName: string}>}
  */
 function generateEmployeeReportPdfBlob() {
-  var titleEl = document.getElementById('reportEmployeeName');
-  var contentEl = document.getElementById('employeeReportContent');
-  if (!contentEl || typeof html2pdf === 'undefined') {
-    return Promise.reject(new Error('html2pdf or content missing'));
+  var modal = document.getElementById('employeeReportModal');
+  if (!modal) return Promise.reject(new Error('employeeReportModal missing'));
+  var empId = modal.dataset.empId;
+  var aggregatedName = modal.dataset.aggregatedName;
+  var pointsMode = modal.dataset.pointsMode === '1';
+  var report = null;
+  if (aggregatedName && typeof calculateAggregatedEmployeeReport === 'function') {
+    report = calculateAggregatedEmployeeReport(aggregatedName);
+  } else if (empId && typeof calculateEmployeeReport === 'function') {
+    report = calculateEmployeeReport(empId);
   }
-  var fileName = (titleEl && titleEl.textContent) ? titleEl.textContent.replace(/[^\w\u0600-\u06FF\s-]/g, '').trim() || 'تقرير-موظف' : 'تقرير-موظف';
-  fileName = fileName.substring(0, 50) + '.pdf';
+  if (!report || !report.emp) return Promise.reject(new Error('لا يوجد تقرير للتحميل. افتح تقرير موظف أولاً.'));
+  var periodText = (document.getElementById('headerPeriodRange') && document.getElementById('headerPeriodRange').innerText) || '-';
+  var reportDate = typeof getReportDateGregorian === 'function' ? getReportDateGregorian() : new Date().toLocaleDateString('en-GB', { day: '2-digit', month: '2-digit', year: 'numeric' });
+  var bodyContent = (report.branchReports && report.branchReports.length > 1 && typeof buildEmployeeReportBodyContentMultiBranch === 'function')
+    ? buildEmployeeReportBodyContentMultiBranch(report, periodText, reportDate, { pointsMode: pointsMode })
+    : buildEmployeeReportBodyContent(report, periodText, reportDate, { pointsMode: pointsMode });
+  var printStyles = typeof getEmployeeReportPrintStyles === 'function' ? getEmployeeReportPrintStyles() : '';
+  var fileName = (report.emp.name || 'تقرير-موظف').replace(/[^\w\u0600-\u06FF\s-]/g, '').trim();
+  fileName = (fileName.length > 50 ? fileName.substring(0, 50) : fileName) + '.pdf';
 
-  var wrapper = document.createElement('div');
-  wrapper.setAttribute('dir', 'rtl');
-  wrapper.setAttribute('lang', 'ar');
-  wrapper.style.cssText = 'width: 800px; max-width: 100%; padding: 20px; margin: 0; background: linear-gradient(135deg, #0f1729 0%, #1a1f35 100%); color: #e2e8f0; font-family: inherit; box-sizing: border-box;';
-  var titleClone = titleEl ? titleEl.cloneNode(true) : null;
-  if (titleClone) {
-    titleClone.style.cssText = 'font-size: 1.25rem; font-weight: 900; color: #14b8a6; margin: 0 0 0.5rem 0;';
-    wrapper.appendChild(titleClone);
-  }
-  wrapper.appendChild(contentEl.cloneNode(true));
-  document.body.appendChild(wrapper);
-
-  var opt = {
-    margin: 10,
-    filename: fileName,
-    image: { type: 'jpeg', quality: 0.95 },
-    html2canvas: { scale: 2, useCORS: true, logging: false },
-    jsPDF: { unit: 'mm', format: 'a4', orientation: 'portrait' },
-    pagebreak: { mode: 'auto', before: '.pdf-page-break-before', after: '.pdf-page-break-after', avoid: ['tr', 'table'] }
-  };
-
-  return html2pdf().set(opt).from(wrapper).outputPdf('blob').then(function (blob) {
-    document.body.removeChild(wrapper);
-    return { blob: blob, fileName: fileName };
-  }).catch(function (err) {
-    if (document.body.contains(wrapper)) document.body.removeChild(wrapper);
-    throw err;
+  return loadScript('https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.1/html2pdf.bundle.min.js').then(function () {
+    var html2pdfFn = typeof window.html2pdf !== 'undefined' ? window.html2pdf : null;
+    if (!html2pdfFn) return Promise.reject(new Error('html2pdf not available'));
+    var wrapper = document.createElement('div');
+    wrapper.setAttribute('dir', 'rtl');
+    wrapper.setAttribute('lang', 'ar');
+    wrapper.style.cssText = 'width: 210mm; max-width: 100%; margin: 0; padding: 0; background: #fff; color: #111; font-family: "IBM Plex Sans Arabic", Arial, sans-serif; box-sizing: border-box;';
+    wrapper.innerHTML = '<style>' + printStyles + '</style>' + bodyContent;
+    document.body.appendChild(wrapper);
+    var opt = {
+      margin: 10,
+      filename: fileName,
+      image: { type: 'jpeg', quality: 0.98 },
+      html2canvas: { scale: 2, useCORS: true, logging: false },
+      jsPDF: { unit: 'mm', format: 'a4', orientation: 'portrait' },
+      pagebreak: { mode: 'auto', avoid: ['.row', '.detail-section', '.summary-box', '.approval-stamp', '.header'] }
+    };
+    return html2pdfFn().set(opt).from(wrapper).outputPdf('blob').then(function (blob) {
+      if (document.body.contains(wrapper)) document.body.removeChild(wrapper);
+      return { blob: blob, fileName: fileName };
+    }).catch(function (err) {
+      if (document.body.contains(wrapper)) document.body.removeChild(wrapper);
+      throw err;
+    });
   });
 }
 
 /** تحميل تقرير الموظف كـ PDF فقط — لا مشاركة ولا فتح واتساب. */
 function downloadEmployeeReportPdf() {
-  if (typeof html2pdf === 'undefined') {
-    alert('تحميل أداة PDF جاري… أعد المحاولة بعد ثوانٍ.');
-    return;
-  }
   generateEmployeeReportPdfBlob().then(function (result) {
     var url = URL.createObjectURL(result.blob);
     var a = document.createElement('a');
@@ -8341,10 +8441,6 @@ function downloadEmployeeReportPdf() {
 
 /** إرسال تقرير الموظف PDF على الواتساب: مشاركة (اختر واتساب) أو تحميل + فتح ويب واتساب. */
 function shareEmployeeReportViaWhatsApp() {
-  if (typeof html2pdf === 'undefined') {
-    alert('تحميل أداة PDF جاري… أعد المحاولة بعد ثوانٍ.');
-    return;
-  }
   generateEmployeeReportPdfBlob().then(function (result) {
     var file = new File([result.blob], result.fileName, { type: 'application/pdf' });
     if (typeof navigator !== 'undefined' && navigator.share && navigator.canShare && navigator.canShare({ files: [file] })) {

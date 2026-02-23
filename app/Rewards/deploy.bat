@@ -1,4 +1,5 @@
 @echo off
+REM Rewards-only deploy from app\Rewards. For full app deploy use deploy-github-firebase.bat from root.
 chcp 65001 >nul
 echo ========================================
 echo   رفع إلى GitHub + نشر Firebase
@@ -6,6 +7,12 @@ echo ========================================
 echo.
 
 cd /d "%~dp0"
+
+if not exist "package.json" (
+  echo ERROR: package.json not found. Run this script from app\Rewards.
+  pause
+  exit /b 1
+)
 
 echo [1/3] تجهيز مجلد public ونشر على Firebase...
 call npm run deploy
@@ -27,7 +34,7 @@ echo.
 echo [3/3] رفع إلى GitHub...
 git push origin HEAD
 if errorlevel 1 (
-  echo فشل الرفع. تأكد من: git remote، واسم الفرع، وتسجيل الدخول (مثلاً عبر GitHub Desktop أو token).
+  echo فشل الرفع. تأكد من: git remote واسم الفرع وتسجيل الدخول - مثلاً عبر GitHub Desktop أو token.
   pause
   exit /b 1
 )
