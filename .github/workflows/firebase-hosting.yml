@@ -5,8 +5,8 @@ on:
   push:
     branches: [main]
 jobs:
-  build:
-    name: Build & Lint
+  deploy:
+    name: Build and Deploy
     runs-on: ubuntu-latest
     defaults:
       run:
@@ -25,44 +25,21 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
-      - name: Pre-deploy check (non-blocking in CI)
+      - name: Pre-deploy check
         run: npm run pre-deploy-check || true
         env:
           CHECK_SECRETS: '0'
 
-      - name: Build
-        run: npm run build
-
       - name: Lint
         run: npm run lint
 
-      - name: Upload dist
-        uses: actions/upload-artifact@v4
-        with:
-          name: dist
-          path: app/dist
-
-  deploy:
-    name: Deploy to Firebase
-    needs: build
-    runs-on: ubuntu-latest
-    steps:
-      - name: Checkout
-        uses: actions/checkout@v4
-
-      - name: Download dist
-        uses: actions/download-artifact@v4
-        with:
-          name: dist
-
-      - name: Place dist in app
-        run: mv dist app/dist
+      - name: Build
+        run: npm run build
 
       - name: Install Firebase CLI
         run: npm install -g firebase-tools
 
       - name: Deploy to Firebase Hosting
-        working-directory: app
         env:
           FIREBASE_TOKEN: ${{ secrets.FIREBASE_TOKEN }}
         run: |
