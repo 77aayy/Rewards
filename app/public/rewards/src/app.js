@@ -48,12 +48,31 @@ if (typeof window !== 'undefined') {
 }
 const LOCAL_REWARDS_EDIT_TS_KEY = 'adora_rewards_last_local_edit_ts';
 const LOCAL_REWARDS_DIRTY_KEY = 'adora_rewards_local_dirty';
-// REWARDS_PRICING_STORAGE_KEY معرّف في rewards-firebase.js ويُعرّض على window — نستخدمه من هنا.
-// Capture transfer payload at script start so doRbacThenInit can use it even if something clears localStorage
-(function () {
-  if (typeof window === 'undefined' || !window.location || window.location.search.indexOf('transfer=1') < 0) return;
-  try { window._adoraTransferPayloadCapture = localStorage.getItem('adora_transfer_payload'); } catch (_) {}
-})();
+function hideTransferLoadingOverlay() {
+  var el = document.getElementById('transferLoadingOverlay');
+  if (!el) return;
+
+  function doReveal() {
+    document.body.classList.remove('adora-transfer-loading');
+    requestAnimationFrame(function() {
+      requestAnimationFrame(function() {
+        setTimeout(function() {
+          el.classList.remove('flex');
+          el.style.display = 'none';
+        }, 400);
+      });
+    });
+  }
+
+  if (document.readyState === 'complete') {
+    doReveal();
+  } else {
+    window.addEventListener('load', function onLoad() {
+      window.removeEventListener('load', onLoad);
+      doReveal();
+    });
+  }
+}
 function markLocalRewardsDirty() {
   try {
     var ts = Date.now();
@@ -456,6 +475,7 @@ function _processAdoraTransferPayload(payload) {
     renderUI('الكل');
 
     logVerbose('✅ ADORA_TRANSFER initial render done:', db.length, 'employees');
+    if (typeof hideTransferLoadingOverlay === 'function') hideTransferLoadingOverlay();
 
     // ======================================================================
     // PHASE 2: BACKGROUND FIREBASE SYNC — جلب أدخالات المشرف/HR من Firebase ودمجها وإعادة الرسم
@@ -1307,7 +1327,13 @@ async function doAppInit() {
         if (typeof updatePrintButtonText === 'function') updatePrintButtonText();
         if (typeof renderUI === 'function') renderUI('الكل');
       }
-      if (!isEmployeeMode() && typeof startLivePeriodPolling === 'function' && !(typeof isAdminMode === 'function' && isAdminMode())) startLivePeriodPolling();
+      if (!isEmployeeMode() && typeof startLivePeriodPolling === 'function') {
+    if (typeof isAdminMode === 'function' && isAdminMode()) {
+      startLivePeriodPolling();
+    } else {
+      startLivePeriodPolling();
+    }
+  }
     })();
     if (!isEmployeeMode() && typeof syncLivePeriodToFirebase === 'function') syncLivePeriodToFirebase();
     return;
@@ -1353,6 +1379,13 @@ async function doAppInit() {
     // إذا جلبنا بيانات من Firebase: نطبقها ونعرض اللوحة (الرصيد التراكمي من Firebase أيضاً — مصدر واحد من أي جهاز)
     if (!isEmployeeMode() && live && Array.isArray(live.db) && live.db.length > 0 && typeof applyLivePeriod === 'function') {
       applyLivePeriod(live);
+      // نفس آلية جلب db: التقييمات السلبية من نفس الـ payload (live) حتى لا تبقى أصفار
+      if (live.negativeRatingsCount && typeof live.negativeRatingsCount === 'object') {
+        branchNegativeRatingsCount = live.negativeRatingsCount;
+        if (typeof window !== 'undefined') window.branchNegativeRatingsCount = branchNegativeRatingsCount;
+        try { localStorage.setItem('adora_rewards_negativeRatingsCount', JSON.stringify(branchNegativeRatingsCount)); } catch (_) {}
+        if (typeof updateNegativeRatingsHeader === 'function') updateNegativeRatingsHeader();
+      }
       if (typeof loadCumulativePointsFromFirebase === 'function') await loadCumulativePointsFromFirebase();
       loadDataFromStorage();
       // إذا كنا في وضع الأدمن: إظهار اللوحة
@@ -1387,7 +1420,13 @@ async function doAppInit() {
     loadDataFromStorage();
   }
   if (!isEmployeeMode() && typeof syncLivePeriodToFirebase === 'function') syncLivePeriodToFirebase();
-  if (!isEmployeeMode() && typeof startLivePeriodPolling === 'function' && !(typeof isAdminMode === 'function' && isAdminMode())) startLivePeriodPolling();
+  if (!isEmployeeMode() && typeof startLivePeriodPolling === 'function') {
+    if (typeof isAdminMode === 'function' && isAdminMode()) {
+      startLivePeriodPolling();
+    } else {
+      startLivePeriodPolling();
+    }
+  }
   if (isAdminMode()) {
     if (db.length > 0 && typeof doSyncLivePeriodNow === 'function') {
       doSyncLivePeriodNow().catch(function () {});
@@ -1558,6 +1597,7 @@ function doRbacThenInit() {
           if (_urlAdmin) try { localStorage.setItem('adora_current_role', 'admin'); } catch (_) {}
           if (_role) initializeRoleBasedUI(_role);
         }
+        if (typeof hideTransferLoadingOverlay === 'function') hideTransferLoadingOverlay();
         logVerbose('✅ Refresh fast-path complete — ' + db.length + ' employees loaded');
         // Background: fetch latest from Firebase (HR/supervisor inputs, discounts, etc.)
         // then sync current state back to Firebase
@@ -1570,6 +1610,7 @@ function doRbacThenInit() {
 
     // FALLBACK: Ask opener for payload (postMessage) and retry localStorage; then show help
     logVerbose('⏳ No localStorage payload — requesting from opener and retrying...');
+    if (typeof hideTransferLoadingOverlay === 'function') hideTransferLoadingOverlay();
     var tbody = document.getElementById('mainTable');
     if (tbody) {
       tbody.innerHTML = '<tr><td colspan="9" class="p-8 text-center text-white/60 text-sm"><div class="flex flex-col items-center gap-3"><div class="w-8 h-8 border-2 border-cyan-400 border-t-transparent rounded-full animate-spin"></div><span>جاري استقبال البيانات من نظام التحليل...</span></div></td></tr>';
@@ -1598,6 +1639,7 @@ function doRbacThenInit() {
       requestPayloadFromOpener();
       if (lsRetries >= 24) {
         clearInterval(lsRetryInterval);
+        if (typeof hideTransferLoadingOverlay === 'function') hideTransferLoadingOverlay();
         if (tbody) {
           tbody.innerHTML = '<tr><td colspan="9" class="p-8 text-center text-slate-300 text-sm"><div class="flex flex-col items-center gap-4">'
             + '<p>لم تُستلم بيانات. من نظام التحليل اضغط زر «نقل للمكافآت» بعد تشغيل التحليل.</p>'
@@ -2211,6 +2253,7 @@ if (data.negativeRatingsCount && typeof data.negativeRatingsCount === 'object') 
     branchNegativeRatingsCount = data.negativeRatingsCount;
     if (typeof window !== 'undefined') window.branchNegativeRatingsCount = branchNegativeRatingsCount;
   } catch (_) {}
+  if (typeof updateNegativeRatingsHeader === 'function') updateNegativeRatingsHeader();
 }
 if (Array.isArray(data.discounts)) {
   try { localStorage.setItem('adora_rewards_discounts', JSON.stringify(data.discounts)); } catch (_) {}
@@ -2230,6 +2273,7 @@ if (oldDb.length > 0 && typeof window.fetchLivePeriodFromFirebase === 'function'
       if (!(branchNegativeRatingsCount && Object.keys(branchNegativeRatingsCount).length > 0) && liveData.negativeRatingsCount && typeof liveData.negativeRatingsCount === 'object') {
         branchNegativeRatingsCount = liveData.negativeRatingsCount;
         if (typeof window !== 'undefined') window.branchNegativeRatingsCount = branchNegativeRatingsCount;
+        if (typeof updateNegativeRatingsHeader === 'function') updateNegativeRatingsHeader();
       }
       if (Array.isArray(liveData.discounts) && (!data.discounts || data.discounts.length === 0)) {
         try { localStorage.setItem('adora_rewards_discounts', JSON.stringify(liveData.discounts)); } catch (_) {}
@@ -2389,6 +2433,7 @@ if (!hasNegativeRatings && db.length > 0) {
     if (liveData && liveData.negativeRatingsCount && typeof liveData.negativeRatingsCount === 'object') {
       branchNegativeRatingsCount = liveData.negativeRatingsCount;
       if (typeof window !== 'undefined') window.branchNegativeRatingsCount = branchNegativeRatingsCount;
+      if (typeof updateNegativeRatingsHeader === 'function') updateNegativeRatingsHeader();
     }
   } catch (_) {}
 }
@@ -4142,33 +4187,27 @@ if (filter === 'الكل') {
   Object.keys(nameAgg).forEach(n => { nameToAggNet[n] = nameAgg[n].aggNet; });
   const nameToPoints = {};
   const nameToLevel = {};
+  const nameToRank = {};
   const namesList = Object.keys(nameAgg);
   if (namesList.length > 0) {
-    const minNet = Math.min(...namesList.map(n => nameAgg[n].aggNet || 0));
-    const maxNet = Math.max(...namesList.map(n => nameAgg[n].aggNet || 0));
-    const rangeNet = maxNet - minNet;
-    namesList.forEach(name => {
-      const a = nameAgg[name];
-      const aggNet = a.aggNet || 0;
-      const has26 = !!a.hasAttendance26;
-      const pctNet = rangeNet <= 0 ? 0.5 : (aggNet - minNet) / rangeNet;
-      const boost = has26 ? 0.15 : 0;
-      let score = Math.min(1, pctNet + boost);
-      let discountPoints = 0;
-      if (typeof getTotalDiscountForEmployee === 'function' && getTotalDiscountForEmployee(name) > 0) discountPoints += 0.25;
-      if (typeof getHotelRatingDeductionForEmployee === 'function' && getHotelRatingDeductionForEmployee(name) > 0) discountPoints += 0.10;
-      discountPoints = Math.min(0.10, discountPoints);
-      score = Math.max(0, score - discountPoints);
-      const points = Math.round(score * 100);
+    // ترتيب حسب الصافي المُجمّع فقط: الأعلى = أفضل تقييم، الأقل = سيء (بدون معادلات)
+    const sorted = [...namesList].sort((a, b) => (nameAgg[b].aggNet || 0) - (nameAgg[a].aggNet || 0));
+    const N = sorted.length;
+    sorted.forEach((name, index) => {
+      const rank = index + 1;
+      const percentile = N > 1 ? (rank - 1) / (N - 1) : 0;
       let level = 'سيء';
-      if (points >= 90) level = 'ممتاز';
-      else if (points >= 80) level = 'جيد جداً';
-      else if (points >= 60) level = 'جيد';
-      else if (points >= 40) level = 'ضعيف';
+      if (percentile < 0.2) level = 'ممتاز';
+      else if (percentile < 0.4) level = 'جيد جداً';
+      else if (percentile < 0.6) level = 'جيد';
+      else if (percentile < 0.8) level = 'ضعيف';
+      const points = Math.round((1 - percentile) * 100);
       nameToPoints[name] = points;
       nameToLevel[name] = level;
+      nameToRank[name] = rank;
     });
   }
+  const totalNames = namesList.length;
   let bestNetName = null, bestEvalName = null, bestBookName = null;
   let bestNetVal = -1, bestEvalVal = -1, bestBookVal = -1;
   Object.keys(nameAgg).forEach(name => {
@@ -4517,8 +4556,10 @@ if (filter === 'الكل' && typeof nameToPoints !== 'undefined' && nameToPoints
 const pts = nameToPoints[emp.name];
 const lvl = nameToLevel[emp.name];
 const barPct = Math.min(100, Math.max(0, pts));
-const ratingColor = pts >= 80 ? 'text-green-400' : pts >= 60 ? 'text-yellow-400' : pts >= 40 ? 'text-orange-400' : 'text-red-400';
-return '<div class="mt-1.5 w-full max-w-[180px] rounded-full overflow-hidden relative" style="height: 6px;"><div style="position: absolute; inset: 0; background: #4b5563;"></div><div style="position: absolute; left: 0; top: 0; width: ' + barPct + '%; height: 100%; background: linear-gradient(90deg, #ef4444 0%, #f97316 25%, #eab308 50%, #84cc16 75%, #22c55e 100%);"></div><span style="position: absolute; left: ' + barPct + '%; top: 0; transform: translateX(-50%); width: 4px; height: 100%; background: #fff; border-radius: 2px; box-shadow: 0 0 2px rgba(0,0,0,0.5);"></span></div><div class="flex flex-col items-start gap-0.5 mt-1"><span class="font-bold ' + ratingColor + ' tabular-nums text-sm">' + pts + ' نقطة</span><div class="text-xs font-semibold ' + ratingColor + '">' + lvl + '</div></div>';
+const rank = typeof nameToRank !== 'undefined' ? nameToRank[emp.name] : 0;
+const total = typeof totalNames !== 'undefined' ? totalNames : 0;
+const ratingColor = lvl === 'ممتاز' ? 'text-green-400' : lvl === 'جيد جداً' ? 'text-green-300' : lvl === 'جيد' ? 'text-yellow-400' : lvl === 'ضعيف' ? 'text-orange-400' : 'text-red-400';
+return '<div class="mt-1.5 w-full max-w-[180px] rounded-full overflow-hidden relative" style="height: 6px;"><div style="position: absolute; inset: 0; background: #4b5563;"></div><div style="position: absolute; left: 0; top: 0; width: ' + barPct + '%; height: 100%; background: linear-gradient(90deg, #ef4444 0%, #f97316 25%, #eab308 50%, #84cc16 75%, #22c55e 100%);"></div><span style="position: absolute; left: ' + barPct + '%; top: 0; transform: translateX(-50%); width: 4px; height: 100%; background: #fff; border-radius: 2px; box-shadow: 0 0 2px rgba(0,0,0,0.5);"></span></div><div class="flex flex-col items-start gap-0.5 mt-1"><span class="text-xs ' + ratingColor + '">ترتيب ' + rank + ' من ' + total + '</span><div class="text-xs font-semibold ' + ratingColor + '">' + lvl + '</div></div>';
 }
 if (filter === 'الكل') {
 const branchBadges = { eval: [], book: [] };
@@ -5226,7 +5267,10 @@ function updateNegativeRatingsHeader() {
     branchList = [currentFilter];
   }
   row.style.display = 'table-row';
-  const counts = typeof branchNegativeRatingsCount !== 'undefined' ? branchNegativeRatingsCount : {};
+  // مصدر واحد مع التقييمات والحضور: من نفس الـ payload (Firebase أو localStorage). نفضّل window لأن applyLivePeriod والـ polling يحدّثانه.
+  const counts = (typeof window !== 'undefined' && window.branchNegativeRatingsCount && typeof window.branchNegativeRatingsCount === 'object')
+    ? window.branchNegativeRatingsCount
+    : (typeof branchNegativeRatingsCount !== 'undefined' ? branchNegativeRatingsCount : {});
   let total = 0;
   function escapeHtmlBranch(s) {
     return String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
@@ -6909,16 +6953,19 @@ function showAdminSubmittedScreen() {
     localStorage.removeItem('adora_current_token');
     localStorage.removeItem('adora_current_period');
   } catch (e) {}
-  document.body.innerHTML = `
-    <div style="display:flex;align-items:center;justify-content:center;min-height:100vh;background:linear-gradient(135deg,#0f172a 0%,#1a1f35 100%);color:#fff;font-family:'IBM Plex Sans Arabic',Arial,sans-serif;text-align:center;padding:2rem;">
-      <div style="max-width:480px;">
-        <div style="font-size:4rem;margin-bottom:1rem;">✅</div>
-        <h1 style="font-size:1.5rem;font-weight:900;margin-bottom:1rem;color:#6ee7b7;">تم ربط البيانات بالجدول</h1>
-        <p style="color:#94a3b8;margin-bottom:2rem;">شكراً. تم حفظ إدخالك ولا يمكنك الرجوع لتعديل البيانات من هذا الرابط.</p>
-        <p style="color:#64748b;font-size:0.875rem;">يمكنك إغلاق هذه الصفحة.</p>
-      </div>
-    </div>
-  `;
+  var countdownSec = 3;
+  var countdownElId = 'adora-close-countdown';
+  document.body.innerHTML = '\n    <div style="display:flex;align-items:center;justify-content:center;min-height:100vh;background:linear-gradient(135deg,#0f172a 0%,#1a1f35 100%);color:#fff;font-family:\'IBM Plex Sans Arabic\',Arial,sans-serif;text-align:center;padding:2rem;">\n      <div style="max-width:480px;">\n        <div style="font-size:4rem;margin-bottom:1rem;">✅</div>\n        <h1 style="font-size:1.5rem;font-weight:900;margin-bottom:1rem;color:#6ee7b7;">تم ربط البيانات بالجدول</h1>\n        <p style="color:#94a3b8;margin-bottom:1rem;">شكراً. تم حفظ إدخالك ولا يمكنك الرجوع لتعديل البيانات من هذا الرابط.</p>\n        <p id="' + countdownElId + '" style="color:#6ee7b7;font-size:1rem;font-weight:700;margin-bottom:1.5rem;">جاري إغلاق الصفحة خلال ' + countdownSec + ' ثانية...</p>\n        <p style="color:#64748b;font-size:0.875rem;">يمكنك إغلاق هذه الصفحة يدوياً إذا لم تُغلق تلقائياً.</p>\n      </div>\n    </div>\n  ';
+  var countdownEl = document.getElementById(countdownElId);
+  var t = setInterval(function () {
+    countdownSec--;
+    if (countdownEl) countdownEl.textContent = countdownSec > 0 ? 'جاري إغلاق الصفحة خلال ' + countdownSec + ' ثانية...' : 'جاري الإغلاق...';
+    if (countdownSec <= 0) {
+      clearInterval(t);
+      try { window.close(); } catch (e) {}
+      if (countdownEl) countdownEl.textContent = 'يمكنك إغلاق هذه الصفحة الآن.';
+    }
+  }, 1000);
 }
 
 function submitAdminAndLock() {

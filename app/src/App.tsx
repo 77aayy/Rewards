@@ -53,6 +53,7 @@ import {
   Send,
   ChevronUp,
   ChevronDown,
+  Loader2,
 } from 'lucide-react';
 import { getTheme, toggleTheme } from '../shared/theme.js';
 import type { MatchedRow, StaffRecord, BookingSource, ShiftType, RoomCategory } from './types';
@@ -445,7 +446,7 @@ function clearAnalysisStorage() {
 
 export default function App() {
   const [authState, setAuthState] = useState<'checking' | 'signed_out' | 'signed_in'>('checking');
-  const [authUserEmail, setAuthUserEmail] = useState('');
+  const [_authUserEmail, setAuthUserEmail] = useState('');
   const [loginEmail, setLoginEmail] = useState(() => {
     try {
       return (localStorage.getItem(ADMIN_LAST_EMAIL_KEY) || '').toLowerCase();
@@ -609,6 +610,7 @@ export default function App() {
   const [config, setConfig] = useState<AppConfig>(() => loadConfig());
   // Last transfer payload — child tab can request it via postMessage if localStorage fails
   const transferPayloadRef = useRef<Record<string, unknown> | null>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
   // On first load: if no local config (new device), try fetching from Firebase
   useEffect(() => {
@@ -671,6 +673,8 @@ export default function App() {
 
   // Detect and classify files from content
   const handleFiles = useCallback(async (files: FileList | File[]) => {
+    const fileArray = Array.from(files);
+    if (fileArray.length === 0) return;
     setDetecting(true);
     setAnalyzed(false);
     const newSlots = { ...fileSlots };
@@ -678,10 +682,17 @@ export default function App() {
     const rejectionMessages: string[] = [];
     let updatedConfig = config;
 
-    const xlsxMod = await import('xlsx');
-    setXLSXModule(xlsxMod);
+    try {
+      const xlsxMod = await import('xlsx');
+      setXLSXModule(xlsxMod);
+    } catch (err) {
+      setDetecting(false);
+      alert('تعذّر تحميل مكتبة قراءة Excel. جرّب تحديث الصفحة.\n' + (err instanceof Error ? err.message : String(err)));
+      return;
+    }
 
-    for (const file of Array.from(files)) {
+    try {
+    for (const file of fileArray) {
       const validation = validateExcelFile(file);
       if (!validation.ok) {
         newUnknown.push(file.name);
@@ -764,6 +775,10 @@ export default function App() {
     setFileSlots(newSlots);
     setUnknownFiles(newUnknown);
     setDetecting(false);
+    } catch (err) {
+      setDetecting(false);
+      alert('حدث خطأ أثناء معالجة الملفات:\n' + (err instanceof Error ? err.message : String(err)));
+    }
   }, [fileSlots, unknownFiles, config]);
 
   const removeSlot = useCallback((key: string) => {
@@ -1044,14 +1059,26 @@ export default function App() {
     ) : (adminEntryMode === 'checking' || adminEntryMode === 'redirecting') ? (
       <div dir="rtl" className="min-h-screen text-[var(--adora-text)] relative flex items-center justify-center px-4">
         <ThemeToggle className="fixed top-4 left-4 z-[100]" />
-        <div className="glass rounded-2xl border border-white/15 p-6 max-w-xl w-full text-center">
-          <h2 className="text-xl font-black text-turquoise mb-2">
-            {adminEntryMode === 'redirecting' ? 'جاري فتح شاشة المكافآت' : 'جاري فحص حالة الفترة'}
-          </h2>
-          <p className="text-sm text-[var(--adora-text-secondary)] leading-7">
-            إذا كانت الفترة مفتوحة سيتم تحويلك تلقائيا إلى شاشة المكافآت، وإذا كانت مغلقة ستظهر صفحة رفع الملفات.
-          </p>
-          {authUserEmail && <p className="text-sm text-[var(--adora-text-secondary)] mt-2">{authUserEmail}</p>}
+        <div className="fixed inset-0 bg-[var(--adora-overlay-bg)] backdrop-blur-md z-[100] flex items-center justify-center p-4">
+          <div className="relative">
+            <div className="absolute -inset-20 bg-cyan-500/10 rounded-full blur-3xl animate-pulse pointer-events-none" />
+            <div className="absolute -inset-14 bg-teal-500/5 rounded-full blur-2xl pointer-events-none" />
+            <div className="relative bg-[var(--adora-modal-bg)] backdrop-blur-xl border border-[var(--adora-border)] rounded-3xl px-8 sm:px-12 py-10 text-center modal-no-side-shadow max-w-md mx-auto">
+              <div className="relative w-16 h-16 mx-auto mb-6">
+                <div className="absolute inset-0 rounded-full border-2 border-transparent border-t-cyan-400 border-r-cyan-400/40 animate-spin" />
+                <div className="absolute inset-1.5 rounded-full border-2 border-transparent border-b-teal-400/60 border-l-teal-400/20 animate-spin" style={{ animationDirection: 'reverse', animationDuration: '1.5s' }} />
+                <div className="absolute inset-0 flex items-center justify-center">
+                  <Loader2 className="w-7 h-7 text-[var(--adora-accent)] animate-pulse" />
+                </div>
+              </div>
+              <h2 className="text-xl font-black text-[var(--adora-accent)] mb-2">
+                {adminEntryMode === 'redirecting' ? 'جاري فتح شاشة المكافآت' : 'جاري فحص حالة الفترة'}
+              </h2>
+              <p className="text-sm text-[var(--adora-text-secondary)] leading-7">
+                إذا كانت الفترة مفتوحة سيتم تحويلك تلقائياً إلى شاشة المكافآت، وإذا كانت مغلقة ستظهر صفحة رفع الملفات.
+              </p>
+            </div>
+          </div>
         </div>
       </div>
     ) : (
@@ -1060,7 +1087,7 @@ export default function App() {
       <div className="particles-bg" />
       {/* Loading overlay */}
       {analyzing && (
-        <div className="fixed inset-0 bg-slate-950/80 backdrop-blur-md z-100 flex items-center justify-center">
+        <div className="fixed inset-0 bg-[var(--adora-overlay-bg)] backdrop-blur-md z-100 flex items-center justify-center">
           <div className="relative">
             {/* Ambient glow */}
             <div className="absolute -inset-20 bg-cyan-500/10 rounded-full blur-3xl animate-pulse pointer-events-none" />
@@ -1155,11 +1182,18 @@ export default function App() {
           <>
             {/* Unified Dropzone */}
             <section className="space-y-6">
-              <label
+              <div
+                role="button"
+                tabIndex={0}
+                onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); fileInputRef.current?.click(); } }}
                 onDragOver={(e) => { e.preventDefault(); }}
                 onDrop={(e) => {
                   e.preventDefault();
                   if (e.dataTransfer.files.length > 0) handleFiles(e.dataTransfer.files);
+                }}
+                onClick={(e) => {
+                  if ((e.target as HTMLElement).closest('button')) return;
+                  fileInputRef.current?.click();
                 }}
                 className={`
                   relative flex flex-col items-center justify-center gap-4 rounded-2xl sm:rounded-[28px] border-2 border-dashed
@@ -1188,13 +1222,35 @@ export default function App() {
                     <div className="flex items-center gap-2 text-[var(--adora-text-secondary)] text-sm mt-1">
                       <Upload className="w-3.5 h-3.5" /> xlsx / xls
                     </div>
+                    <button
+                      type="button"
+                      onClick={(e) => { e.preventDefault(); e.stopPropagation(); fileInputRef.current?.click(); }}
+                      className="mt-2 px-5 py-2.5 rounded-xl bg-[var(--adora-accent)] text-white font-semibold text-sm hover:opacity-90 transition-opacity pointer-events-auto z-10 relative"
+                    >
+                      اختر ملفات
+                    </button>
                   </>
                 )}
-                <input type="file" accept=".xlsx,.xls" multiple
-                  className="absolute inset-0 opacity-0 cursor-pointer"
-                  onChange={(e) => { if (e.target.files && e.target.files.length > 0) handleFiles(e.target.files); e.target.value = ''; }}
+                <input
+                  ref={fileInputRef}
+                  type="file"
+                  accept=".xlsx,.xls"
+                  multiple
+                  aria-label="اختر ملفات Excel"
+                  style={{ position: 'absolute', inset: 0, width: '100%', height: '100%', opacity: 0, cursor: 'pointer', pointerEvents: 'auto', zIndex: 2 }}
+                  onChange={(e) => {
+                    const target = e.target;
+                    const list = target.files;
+                    if (list && list.length > 0) {
+                      handleFiles(list).catch((err) => {
+                        setDetecting(false);
+                        alert('خطأ في الرفع: ' + (err instanceof Error ? err.message : String(err)));
+                      });
+                    }
+                    target.value = '';
+                  }}
                 />
-              </label>
+              </div>
 
               {/* Detected Files Summary — collapsible */}
               {filledCount > 0 && (
@@ -3101,9 +3157,12 @@ function EmployeeBreakdown({ staffList, data, config, dateRange }: {
     setTimeout(() => setTransferDone(false), 3000);
     const adminKey = typeof window !== 'undefined' ? new URLSearchParams(window.location.search).get('admin') || '' : '';
     const rewardsQuery = adminKey ? `?admin=${encodeURIComponent(adminKey)}&transfer=1&t=${Date.now()}` : `?transfer=1&t=${Date.now()}`;
+    // حد أدنى لعرض طبقة الانتقال (400ms) ثم الانتقال — تجربة أكثر سلاسة
+    const minOverlayMs = 400;
+    const navDelay = Math.max(150, minOverlayMs);
     setTimeout(() => {
       window.location.href = '/rewards/' + rewardsQuery;
-    }, 150);
+    }, navDelay);
   };
 
   const totals = rows.reduce(
@@ -3137,6 +3196,24 @@ function EmployeeBreakdown({ staffList, data, config, dateRange }: {
 
   return (
     <section className="summary-section relative rounded-2xl overflow-hidden backdrop-blur-xl neon-glow table-section-no-side-shadow">
+      {/* طبقة انتقال احترافية عند النقر على "الانتقال إلى حساب المكافآت" */}
+      {transferring && (
+        <div
+          className="fixed inset-0 z-[9999] flex items-center justify-center bg-black/70 backdrop-blur-md transition-opacity duration-300"
+          aria-live="polite"
+          role="status"
+        >
+          <div className="flex flex-col items-center gap-5 rounded-2xl px-8 py-8 shadow-2xl border border-[var(--adora-focus-border)] bg-[var(--adora-card-bg)] min-w-[280px]">
+            <div className="w-12 h-12 rounded-full border-2 border-[var(--adora-accent)] border-t-transparent animate-spin" />
+            <p className="text-[var(--adora-text)] font-bold text-base">
+              جاري التحويل إلى صفحة المكافآت...
+            </p>
+            <p className="text-[var(--adora-text-secondary)] text-sm">
+              سيتم فتح الصفحة خلال لحظات
+            </p>
+          </div>
+        </div>
+      )}
       {/* Glow effect */}
       <div className="absolute inset-0 bg-gradient-to-br from-cyan-500/[0.03] via-transparent to-violet-500/[0.03] pointer-events-none" />
 

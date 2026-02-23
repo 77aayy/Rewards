@@ -18,8 +18,8 @@ export default defineConfig({
     },
   },
   server: {
-    port: 5173,
-    strictPort: false, // لو 5173 مشغول يختار أول منفذ متاح (5174، 5175، …)
+    port: 5180,
+    strictPort: true, // منفذ ثابت لهذا المشروع (5180)؛ 5173 و 5175 قد تكون لمشاريع أخرى
   },
   plugins: [
     react(),

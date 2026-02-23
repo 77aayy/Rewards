@@ -36,6 +36,7 @@
   --adora-table-header-bg: rgba(15, 23, 41, 0.6);
   --adora-section-bg: linear-gradient(to bottom right, rgba(15, 23, 41, 0.8), rgba(30, 41, 59, 0.6), rgba(15, 23, 41, 0.8));
   /* فواصل الجداول: خفيف بين الأعمدة، ثقيل بين الأقسام، خفيف بين الصفوف */
+  --adora-overlay-bg: rgba(2, 6, 23, 0.88);
   --adora-divider-row: 1px solid rgba(255, 255, 255, 0.08);
   --adora-divider-column: 1px solid rgba(255, 255, 255, 0.04);
   --adora-divider-section: 2px solid rgba(64, 224, 208, 0.35);
@@ -70,6 +71,7 @@
   --adora-divider-row: 1px solid rgba(100, 116, 139, 0.2);
   --adora-divider-column: 1px solid rgba(100, 116, 139, 0.12);
   --adora-divider-section: 2px solid rgba(15, 118, 110, 0.35);
+  --adora-overlay-bg: rgba(15, 23, 41, 0.82);
 }
 
 /* Typography — خط عربي حديث + هرمية أحجام */
@@ -111,6 +113,36 @@ html {
 [data-theme="light"] body {
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
+  /* نفس هوية Rewards: تباين واضح + نقشة هندسية وتأثير جلد */
+  background: linear-gradient(160deg, #cbd5e1 0%, #e2e8f0 25%, #f1f5f9 50%, #e2e8f0 75%, #cbd5e1 100%) !important;
+  background-attachment: fixed;
+  min-height: 100vh;
+}
+[data-theme="light"] body::before {
+  content: "";
+  position: fixed;
+  inset: 0;
+  z-index: 0;
+  pointer-events: none;
+  background-image:
+    radial-gradient(ellipse 70% 40% at 90% 10%, rgba(100, 116, 139, 0.08) 0%, transparent 45%),
+    radial-gradient(ellipse 60% 35% at 10% 90%, rgba(100, 116, 139, 0.06) 0%, transparent 45%),
+    linear-gradient(180deg, rgba(255,255,255,0.03) 0%, transparent 30%, transparent 70%, rgba(0,0,0,0.02) 100%);
+  opacity: 1;
+}
+[data-theme="light"] body::after {
+  content: "";
+  position: fixed;
+  inset: 0;
+  z-index: 0;
+  pointer-events: none;
+  background-image:
+    repeating-linear-gradient(105deg, transparent 0, transparent 1px, rgba(100, 116, 139, 0.04) 1px, rgba(100, 116, 139, 0.04) 2px),
+    repeating-linear-gradient(-105deg, transparent 0, transparent 1px, rgba(100, 116, 139, 0.03) 1px, rgba(100, 116, 139, 0.03) 2px),
+    url("data:image/svg+xml,%3Csvg viewBox='0 0 256 256' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='4' stitchTiles='stitch'/%3E%3CfeColorMatrix type='saturate' values='0'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E");
+  background-size: 8px 8px, 8px 8px, 256px 256px;
+  opacity: 0.4;
+  mix-blend-mode: multiply;
 }
 
 body {

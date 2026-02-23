@@ -25,3 +25,13 @@
 
 - **مصدر التعديلات:** مجلد `app/Rewards/` (الملفات أعلاه + `app.js`, `index.html`, …).
 - **النشر:** من مجلد `app` تشغيل `npm run sync:rewards` لنسخ محتويات Rewards إلى `app/public/rewards/`؛ ثم استخدام البناء العادي (`npm run build`) للتطبيق الرئيسي.
+
+### عرض التعديلات على localhost:5180
+
+عند فتح `http://localhost:5180/rewards/` الملفات تُقدَّم من **نسخة** `app/public/rewards/` وليس من مجلد المصدر. بعد أي تعديل في `app/Rewards/src/` (مثل `discount-clauses-55.js`) شغّل من جذر المشروع (مجلد `app`):
+
+```bash
+npm run sync:rewards
+```
+
+ثم حدّث الصفحة في المتصفح (F5 أو Ctrl+Shift+R). أو شغّل من مجلد Rewards في طرفية ثانية: `npm run dev:watch` ليعيد المزامنة تلقائياً عند كل حفظ ثم حدّث المتصفح.

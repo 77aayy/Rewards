@@ -1,7 +1,7 @@
 /**
  * مزامنة نظام المكافآت إلى app/public/rewards
  * — يشغّل predeploy في Rewards ثم ينسخ public/ إلى app/public/rewards/
- * — النتيجة: منفذ واحد (5173) يقدّم التحليل على / والمكافآت على /rewards/
+ * — النتيجة: منفذ واحد (5180) يقدّم التحليل على / والمكافآت على /rewards/
  */
 import { spawnSync } from 'child_process';
 import fs from 'fs';

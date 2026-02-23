@@ -369,32 +369,78 @@ function syncLivePeriodToFirebase() {
   syncLivePeriodTimer = setTimeout(function () { doSyncLivePeriodToFirebase(); }, 150);
 }
 
+/** تجميع إدخالات المشرف/HR من DOM وكتابتها إلى window.db ثم localStorage.
+ *  مسار الظهور في جدول «الكل»: بعد الإرسال يُستدعى doSyncLivePeriodNow فيرفع من localStorage إلى periods/live.json؛
+ *  صفحة الأدمن عند التحميل أو الاستطلاع الدوري تجلب live وتطبّق applyLivePeriod ثم تعيد رسم الجدول من window.db. */
 function flushAdminInputsToStorage() {
   try {
     var db = (typeof window !== 'undefined' && window.db) ? window.db : [];
     if (typeof db === 'undefined' || !db.length) return;
-    var inputs = document.querySelectorAll('.attendance-days-input');
-    inputs.forEach(function (el) {
-      var name = el.getAttribute('data-emp-name');
-      var branch = el.getAttribute('data-emp-branch');
-      if (!name || !branch) return;
-      var val = parseInt(el.value, 10) || 0;
-      if (typeof updateAttendanceDaysForBranch === 'function') {
-        updateAttendanceDaysForBranch(name, branch, val, false);
-      }
-    });
-    var evalInputs = document.querySelectorAll('.eval-input');
-    evalInputs.forEach(function (el) {
-      var id = el.getAttribute('data-emp-id');
-      var type = el.getAttribute('data-eval-type');
-      if (!id || !type) return;
-      var val = parseInt(el.value, 10) || 0;
-      if (type === 'booking' && typeof updateEvalBooking === 'function') {
-        updateEvalBooking(id, val, el, false);
-      } else if (type === 'google' && typeof updateEvalGoogle === 'function') {
-        updateEvalGoogle(id, val, el, false);
-      }
-    });
+    // تطبيق قيم DOM مباشرة على window.db حتى لو كان الفلتر «الكل» (دوال التحديث ترفض التعديل في وضع الكل)
+    var currentFilter = (typeof localStorage !== 'undefined' && localStorage.getItem('adora_current_role')) ? (typeof window !== 'undefined' && window.currentFilter !== undefined ? window.currentFilter : '') : '';
+    var applyDirect = (currentFilter === 'الكل');
+    if (applyDirect) {
+      // أيام الحضور: من كل .attendance-days-input إلى db (نفس منطق updateAttendanceDaysForBranch بدون منع الكل)
+      document.querySelectorAll('.attendance-days-input').forEach(function (el) {
+        var name = el.getAttribute('data-emp-name');
+        var branch = el.getAttribute('data-emp-branch');
+        if (!name || !branch) return;
+        var days = Math.max(0, parseInt(el.value, 10) || 0);
+        var employeesWithSameName = db.filter(function (emp) { return emp.name === name; });
+        var sharedMap = {};
+        employeesWithSameName.forEach(function (emp) {
+          if (emp.attendanceDaysPerBranch && typeof emp.attendanceDaysPerBranch === 'object') {
+            Object.keys(emp.attendanceDaysPerBranch).forEach(function (b) { sharedMap[b] = emp.attendanceDaysPerBranch[b]; });
+          }
+        });
+        sharedMap[branch] = days;
+        var totalDays = Object.keys(sharedMap).reduce(function (sum, b) { return sum + (parseInt(sharedMap[b], 10) || 0); }, 0);
+        employeesWithSameName.forEach(function (emp) {
+          emp.attendanceDaysPerBranch = sharedMap;
+          emp.totalAttendanceDays = totalDays;
+          emp.attendance26Days = totalDays >= 26;
+        });
+      });
+      // التقييمات: من كل .eval-input إلى db (نفس منطق updateEvalBooking/updateEvalGoogle بدون منع الكل)
+      document.querySelectorAll('.eval-input').forEach(function (el) {
+        var id = el.getAttribute('data-emp-id');
+        var type = el.getAttribute('data-eval-type');
+        if (!id || !type) return;
+        var val = parseInt(el.value, 10) || 0;
+        var item = db.find(function (i) { return i.id === id; });
+        if (!item) return;
+        var empName = item.name;
+        if (type === 'booking') {
+          db.filter(function (i) { return i.name === empName; }).forEach(function (row) { row.evaluationsBooking = val; });
+        } else if (type === 'google') {
+          db.filter(function (i) { return i.name === empName; }).forEach(function (row) { row.evaluationsGoogle = val; });
+        }
+      });
+    } else {
+      // الوضع العادي: استدعاء الدوال المعرّفة في rewards-table.js
+      var inputs = document.querySelectorAll('.attendance-days-input');
+      inputs.forEach(function (el) {
+        var name = el.getAttribute('data-emp-name');
+        var branch = el.getAttribute('data-emp-branch');
+        if (!name || !branch) return;
+        var val = parseInt(el.value, 10) || 0;
+        if (typeof updateAttendanceDaysForBranch === 'function') {
+          updateAttendanceDaysForBranch(name, branch, val, false);
+        }
+      });
+      var evalInputs = document.querySelectorAll('.eval-input');
+      evalInputs.forEach(function (el) {
+        var id = el.getAttribute('data-emp-id');
+        var type = el.getAttribute('data-eval-type');
+        if (!id || !type) return;
+        var val = parseInt(el.value, 10) || 0;
+        if (type === 'booking' && typeof updateEvalBooking === 'function') {
+          updateEvalBooking(id, val, el, false);
+        } else if (type === 'google' && typeof updateEvalGoogle === 'function') {
+          updateEvalGoogle(id, val, el, false);
+        }
+      });
+    }
     if (typeof window !== 'undefined' && window.db && window.db.length > 0) {
       localStorage.setItem('adora_rewards_db', JSON.stringify(window.db));
     }
@@ -727,6 +773,7 @@ function _adoraBackgroundFirebaseSync(payload, options) {
                       if (typeof window !== 'undefined') window.branchNegativeRatingsCount = liveData.negativeRatingsCount;
                       localStorage.setItem('adora_rewards_negativeRatingsCount', JSON.stringify(liveData.negativeRatingsCount));
                     } catch (_) {}
+                    if (typeof updateNegativeRatingsHeader === 'function') updateNegativeRatingsHeader();
                   }
                   if (Array.isArray(liveData.discounts)) {
                     try { localStorage.setItem('adora_rewards_discounts', JSON.stringify(liveData.discounts)); if (typeof window !== 'undefined') window.discounts = liveData.discounts; } catch (_) {}

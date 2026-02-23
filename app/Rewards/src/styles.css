@@ -86,12 +86,13 @@
 --adora-section-bg: linear-gradient(135deg, #f8fafc 0%, #f1f5f9 50%, #e2e8f0 100%);
 }
 
-/* خلفية الوضع الفاتح: ألوان هادئة مريحة للعين */
+/* خلفية الوضع الفاتح: تباين واضح حتى لا يذوب المحتوى مع الخلفية */
 [data-theme="light"] body {
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
-  background: linear-gradient(135deg, #f8fafc 0%, #f1f5f9 30%, #e2e8f0 70%, #f1f5f9 100%) !important;
+  background: linear-gradient(160deg, #cbd5e1 0%, #e2e8f0 25%, #f1f5f9 50%, #e2e8f0 75%, #cbd5e1 100%) !important;
   background-attachment: fixed;
+  min-height: 100vh;
 }
 [data-theme="light"] body::before {
   content: "";
@@ -100,10 +101,39 @@
   z-index: 0;
   pointer-events: none;
   background-image:
-    radial-gradient(ellipse 80% 50% at 20% 0%, rgba(100, 116, 139, 0.03) 0%, transparent 50%),
-    radial-gradient(ellipse 60% 40% at 80% 100%, rgba(100, 116, 139, 0.02) 0%, transparent 50%),
-    linear-gradient(180deg, transparent 0%, rgba(100, 116, 139, 0.01) 50%, transparent 100%);
+    radial-gradient(ellipse 70% 40% at 90% 10%, rgba(100, 116, 139, 0.08) 0%, transparent 45%),
+    radial-gradient(ellipse 60% 35% at 10% 90%, rgba(100, 116, 139, 0.06) 0%, transparent 45%),
+    linear-gradient(180deg, rgba(255,255,255,0.03) 0%, transparent 30%, transparent 70%, rgba(0,0,0,0.02) 100%);
   opacity: 1;
+}
+/* نقشة هندسية خفيفة + تأثير جلد (حبيبات) على الخلفية — الوضع الفاتح */
+[data-theme="light"] body::after {
+  content: "";
+  position: fixed;
+  inset: 0;
+  z-index: 0;
+  pointer-events: none;
+  background-image:
+    /* شبكة خطوط قطرية خفيفة */
+    repeating-linear-gradient(
+      105deg,
+      transparent 0,
+      transparent 1px,
+      rgba(100, 116, 139, 0.04) 1px,
+      rgba(100, 116, 139, 0.04) 2px
+    ),
+    repeating-linear-gradient(
+      -105deg,
+      transparent 0,
+      transparent 1px,
+      rgba(100, 116, 139, 0.03) 1px,
+      rgba(100, 116, 139, 0.03) 2px
+    ),
+    /* حبيبات شبيهة بالجلد (SVG noise) */
+    url("data:image/svg+xml,%3Csvg viewBox='0 0 256 256' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='4' stitchTiles='stitch'/%3E%3CfeColorMatrix type='saturate' values='0'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E");
+  background-size: 8px 8px, 8px 8px, 256px 256px;
+  opacity: 0.4;
+  mix-blend-mode: multiply;
 }
 
 html {
@@ -131,9 +161,9 @@ body {
 .footer-summary-val { font-size: 0.875rem !important; }
 
 [data-theme="light"] .glass {
-  background: linear-gradient(135deg, rgba(255, 255, 255, 0.98) 0%, rgba(240, 253, 250, 0.95) 100%);
-  border: 1px solid rgba(13, 148, 136, 0.18);
-  box-shadow: 0 10px 40px rgba(13, 148, 136, 0.08), 0 4px 12px rgba(0, 0, 0, 0.06), inset 0 1px 0 rgba(255, 255, 255, 0.9);
+  background: linear-gradient(135deg, rgba(255, 255, 255, 0.98) 0%, rgba(248, 250, 252, 0.98) 50%, rgba(241, 245, 249, 0.95) 100%);
+  border: 1px solid rgba(100, 116, 139, 0.28);
+  box-shadow: 0 10px 40px rgba(0, 0, 0, 0.08), 0 4px 12px rgba(0, 0, 0, 0.05), inset 0 1px 0 rgba(255, 255, 255, 0.95);
 }
 
 /* هوية بصرية مميزة للترويسة في الوضع الفاتح — حد تيل واضح مع توهج خفيف */
@@ -1512,6 +1542,34 @@ transition: all 0.2s ease;
 font-size: 0.65rem !important;
 line-height: 1.4;
 }
+/* تصغير شارات صف الشارات (badges-row) — حجم مقروء وصف مناسب بدون قص */
+tr.badges-row .badges-wrapper {
+  max-height: none !important;
+  min-height: 28px !important;
+  gap: 6px 8px !important;
+  padding: 4px 0 !important;
+  overflow: visible !important;
+  align-items: center !important;
+}
+tr.badges-row:hover .badges-wrapper {
+  max-height: none !important;
+}
+tr.badges-row td {
+  padding: 6px 8px 8px !important;
+  vertical-align: middle !important;
+  line-height: 1.4 !important;
+}
+tr.badges-row .badges-wrapper span {
+  font-size: 0.7rem !important;
+  padding: 3px 6px !important;
+  border-radius: 6px;
+  line-height: 1.4;
+}
+#targetTable tr.badges-row .badges-wrapper span,
+#mainTable tr.badges-row .badges-wrapper span {
+  font-size: 0.7rem !important;
+  padding: 3px 6px !important;
+}
 .badges-wrapper span:hover {
 filter: brightness(1.2);
 box-shadow: 0 1px 4px rgba(0, 0, 0, 0.3);
@@ -1628,15 +1686,15 @@ transform: translate(50px, -50px) scale(1.5);
 opacity: 0.8;
 }
 }
-/* الوضع الفاتح: أنيميشن النقاط أوضح ومرئي على الخلفية الفاتحة */
+/* الوضع الفاتح: خلفية النقاط أخف حتى لا تختلط مع المحتوى */
 [data-theme="light"] .particles {
-  opacity: 0.9;
+  opacity: 0.2;
 }
 [data-theme="light"] .particle {
   background: #0d9488;
-  box-shadow: 0 0 10px rgba(13, 148, 136, 0.5), 0 0 4px rgba(13, 148, 136, 0.4);
-  width: 4px;
-  height: 4px;
+  box-shadow: 0 0 8px rgba(13, 148, 136, 0.35), 0 0 3px rgba(13, 148, 136, 0.25);
+  width: 3px;
+  height: 3px;
 }
 [data-theme="light"] .particle {
   animation: floatLight 20s infinite ease-in-out;
@@ -3337,14 +3395,126 @@ header img:hover {
   min-width: 0;
   overflow: hidden;
 }
+
+/* نافذة إدارة الخصومات — المحتوى لا يخرج عن الإطار، التمرير من داخل النافذة فقط */
+.discounts-modal-pane {
+  height: min(88vh, 720px) !important;
+  max-height: min(88vh, 720px) !important;
+  display: flex !important;
+  flex-direction: column !important;
+  overflow: hidden !important;
+  min-height: 0 !important;
+}
+.discounts-modal-header {
+  flex-shrink: 0;
+}
+.discounts-modal-scroll {
+  flex: 1 1 0 !important;
+  min-height: 0 !important;
+  overflow: hidden !important;
+  overflow-x: hidden !important;
+  display: flex !important;
+  flex-direction: column !important;
+  -webkit-overflow-scrolling: touch;
+}
+.discounts-form-body {
+  flex-shrink: 0;
+}
+
+/* توزيع منطقي لنموذج الخصم: سطر1 (من + ماذا + كم) سطر2 (متى + إضافة) */
+.discounts-form-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr minmax(72px, 0.5fr);
+  gap: 0.75rem;
+  align-items: stretch;
+}
+.discounts-form-grid .discounts-form-card {
+  display: flex;
+  flex-direction: column;
+  min-height: 5.25rem;
+  justify-content: flex-start;
+}
+.discounts-form-grid .discounts-date-cell {
+  grid-column: span 2;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+}
+.discounts-form-grid .discounts-add-cell {
+  grid-column: span 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.discounts-form-grid .discounts-add-cell .btn-modern {
+  width: 100%;
+  max-width: 100%;
+}
+@media (max-width: 640px) {
+  .discounts-form-grid {
+    grid-template-columns: 1fr;
+    gap: 0.5rem;
+  }
+  .discounts-form-grid .discounts-date-cell,
+  .discounts-form-grid .discounts-add-cell {
+    grid-column: span 1;
+  }
+}
+.discounts-list-section {
+  flex: 1 1 0 !important;
+  min-height: 0 !important;
+  display: flex !important;
+  flex-direction: column !important;
+  overflow: hidden !important;
+}
+.discounts-list-inner {
+  flex: 1 1 0 !important;
+  min-height: 0 !important;
+  max-height: none !important;
+  overflow-y: auto !important;
+  overflow-x: hidden !important;
+  padding-inline-end: 4px !important;
+  min-width: 0 !important;
+  -webkit-overflow-scrolling: touch;
+}
+
 #discountsList {
   min-width: 0;
   overflow-wrap: break-word;
   word-break: break-word;
 }
+/* شريط تمرير واضح لقائمة الخصومات المطبقة */
+.discounts-list-inner::-webkit-scrollbar {
+  width: 8px;
+}
+.discounts-list-inner::-webkit-scrollbar-track {
+  background: rgba(15, 23, 41, 0.5);
+  border-radius: 4px;
+}
+.discounts-list-inner::-webkit-scrollbar-thumb {
+  background: rgba(239, 68, 68, 0.5);
+  border-radius: 4px;
+}
+.discounts-list-inner::-webkit-scrollbar-thumb:hover {
+  background: rgba(239, 68, 68, 0.7);
+}
+.discounts-list-inner {
+  scrollbar-width: thin;
+  scrollbar-color: rgba(239, 68, 68, 0.5) rgba(15, 23, 41, 0.5);
+}
 #discountsList .glass {
   min-width: 0;
   overflow: hidden;
+}
+/* بطاقة خصم مضغوطة — تقليل الارتفاع دون حذف معلومات */
+.discount-card {
+  line-height: 1.35;
+}
+.discount-card h4 {
+  line-height: 1.3;
+}
+.discount-card .space-y-1 > * + * {
+  margin-top: 0.25rem;
 }
 #discountsList .break-words {
   overflow-wrap: break-word;
@@ -3401,11 +3571,11 @@ header img:hover {
   z-index: 35 !important;
 }
 
-/* تحسين حجم منسدلة نوع الخصم وزر الإعدادات */
+/* تحسين منسدلة نوع الخصم وزر الإعدادات — قائمة منسدلة عادية (سطر واحد) */
 #discountsModal #discountTypeSelect {
-  min-height: 44px !important;
+  min-height: 40px !important;
   padding: 0.5rem 0.75rem !important;
-  font-size: 0.875rem !important;
+  font-size: 0.8125rem !important;
 }
 #discountsModal button[onclick*="showManageDiscountTypesModal"] {
   min-height: 44px !important;
@@ -3423,6 +3593,13 @@ header img:hover {
   /* Add more spacing between grid items on mobile */
   #discountsModal .grid.gap-3.sm\\:gap-4 {
     gap: 1rem !important;
+  }
+}
+
+/* نافذة الخصومات — على الشاشات الضيقة: نفس الشبكة بمسافات متساوية */
+@media (max-width: 480px) {
+  .discounts-form-body {
+    gap: 0.5rem !important;
   }
 }
 
@@ -3514,6 +3691,165 @@ header img:hover {
 #manageDiscountTypesModal input[type="date"]:hover {
   background-color: rgba(15, 23, 41, 0.98) !important;
   border-color: rgba(255, 255, 255, 0.3) !important;
+}
+
+/* الوضع الفاتح: نافذة إدارة الخصومات ونافذة أنواع الخصومات */
+[data-theme="light"] #discountsModal,
+[data-theme="light"] #manageDiscountTypesModal,
+[data-theme="light"] #mostDiscountsDetailModal {
+  color-scheme: light;
+}
+[data-theme="light"] #discountsModal .glass.rounded-xl,
+[data-theme="light"] #discountsModal .glass.sm\:rounded-2xl,
+[data-theme="light"] #manageDiscountTypesModal .glass.rounded-xl,
+[data-theme="light"] #manageDiscountTypesModal .glass.sm\:rounded-2xl,
+[data-theme="light"] #mostDiscountsDetailModal .glass.rounded-xl,
+[data-theme="light"] #mostDiscountsDetailModal .glass.sm\:rounded-2xl {
+  background: linear-gradient(135deg, #f8fafc 0%, #f1f5f9 50%, #e2e8f0 100%) !important;
+  border-color: rgba(239, 68, 68, 0.5) !important;
+  box-shadow: 0 20px 60px rgba(0, 0, 0, 0.12) !important;
+}
+[data-theme="light"] #discountsModal .border-b.border-white\/10,
+[data-theme="light"] #discountsModal .border-t.border-white\/10,
+[data-theme="light"] #discountsModal .border.border-white\/10,
+[data-theme="light"] #manageDiscountTypesModal .border-b.border-white\/10,
+[data-theme="light"] #manageDiscountTypesModal .border-t.border-white\/10,
+[data-theme="light"] #manageDiscountTypesModal .border.border-white\/10,
+[data-theme="light"] #mostDiscountsDetailModal .border-b.border-white\/10 {
+  border-color: rgba(100, 116, 139, 0.25) !important;
+}
+[data-theme="light"] #discountsModal .text-red-400,
+[data-theme="light"] #manageDiscountTypesModal .text-red-400,
+[data-theme="light"] #mostDiscountsDetailModal .text-red-400 {
+  color: #b91c1c !important;
+}
+[data-theme="light"] #discountsModal .text-gray-200,
+[data-theme="light"] #discountsModal .text-gray-400,
+[data-theme="light"] #manageDiscountTypesModal .text-gray-200,
+[data-theme="light"] #manageDiscountTypesModal .text-gray-400,
+[data-theme="light"] #mostDiscountsDetailModal .text-gray-200 {
+  color: #334155 !important;
+}
+[data-theme="light"] #discountsModal .text-white,
+[data-theme="light"] #manageDiscountTypesModal .text-white,
+[data-theme="light"] #mostDiscountsDetailModal .text-white {
+  color: #0f172a !important;
+}
+[data-theme="light"] #discountsModal .text-turquoise,
+[data-theme="light"] #manageDiscountTypesModal .text-turquoise {
+  color: #0f766e !important;
+}
+[data-theme="light"] #discountsModal button.text-gray-400:hover,
+[data-theme="light"] #manageDiscountTypesModal button.text-gray-400:hover,
+[data-theme="light"] #mostDiscountsDetailModal button.text-gray-400:hover {
+  color: #0f172a !important;
+  background-color: rgba(100, 116, 139, 0.15) !important;
+}
+[data-theme="light"] #discountsModal .glass,
+[data-theme="light"] #manageDiscountTypesModal .glass {
+  background: rgba(255, 255, 255, 0.7) !important;
+  border-color: rgba(100, 116, 139, 0.2) !important;
+}
+[data-theme="light"] #discountsModal select,
+[data-theme="light"] #manageDiscountTypesModal select {
+  background-color: #f8fafc !important;
+  color: #0f172a !important;
+  border-color: rgba(100, 116, 139, 0.3) !important;
+}
+[data-theme="light"] #discountsModal select:focus,
+[data-theme="light"] #manageDiscountTypesModal select:focus {
+  background-color: #fff !important;
+  color: #0f172a !important;
+  border-color: rgba(15, 118, 110, 0.6) !important;
+}
+[data-theme="light"] #discountsModal select:hover,
+[data-theme="light"] #manageDiscountTypesModal select:hover {
+  background-color: #f1f5f9 !important;
+  border-color: rgba(100, 116, 139, 0.4) !important;
+}
+[data-theme="light"] #discountsModal select option,
+[data-theme="light"] #manageDiscountTypesModal select option {
+  background-color: #fff !important;
+  color: #0f172a !important;
+}
+[data-theme="light"] #discountsModal select::-webkit-scrollbar-track,
+[data-theme="light"] #manageDiscountTypesModal select::-webkit-scrollbar-track {
+  background: rgba(100, 116, 139, 0.1);
+}
+[data-theme="light"] #discountsModal select::-webkit-scrollbar-thumb,
+[data-theme="light"] #manageDiscountTypesModal select::-webkit-scrollbar-thumb {
+  background: rgba(100, 116, 139, 0.3);
+}
+[data-theme="light"] #discountsModal select::-webkit-scrollbar-thumb:hover,
+[data-theme="light"] #manageDiscountTypesModal select::-webkit-scrollbar-thumb:hover {
+  background: rgba(100, 116, 139, 0.45);
+}
+[data-theme="light"] #discountsModal input[type="date"],
+[data-theme="light"] #discountsModal input[type="number"],
+[data-theme="light"] #manageDiscountTypesModal input[type="date"],
+[data-theme="light"] #manageDiscountTypesModal input[type="text"] {
+  background-color: #f8fafc !important;
+  color: #0f172a !important;
+  border-color: rgba(100, 116, 139, 0.3) !important;
+}
+[data-theme="light"] #discountsModal input[type="date"]:focus,
+[data-theme="light"] #discountsModal input[type="number"]:focus,
+[data-theme="light"] #manageDiscountTypesModal input[type="date"]:focus,
+[data-theme="light"] #manageDiscountTypesModal input[type="text"]:focus {
+  background-color: #fff !important;
+  border-color: rgba(15, 118, 110, 0.6) !important;
+}
+[data-theme="light"] #discountsModal input[type="date"]:hover,
+[data-theme="light"] #discountsModal input[type="number"]:hover,
+[data-theme="light"] #manageDiscountTypesModal input[type="date"]:hover,
+[data-theme="light"] #manageDiscountTypesModal input[type="text"]:hover {
+  background-color: #f1f5f9 !important;
+  border-color: rgba(100, 116, 139, 0.4) !important;
+}
+[data-theme="light"] #discountsModal input[type="date"]::-webkit-calendar-picker-indicator,
+[data-theme="light"] #manageDiscountTypesModal input[type="date"]::-webkit-calendar-picker-indicator {
+  filter: none;
+  opacity: 0.7;
+}
+[data-theme="light"] #discountsModal input::placeholder,
+[data-theme="light"] #manageDiscountTypesModal input::placeholder {
+  color: #64748b !important;
+}
+[data-theme="light"] #discountsModal button[onclick*="showManageDiscountTypesModal"] {
+  background-color: rgba(255, 255, 255, 0.8) !important;
+  color: #334155 !important;
+  border-color: rgba(100, 116, 139, 0.3) !important;
+}
+[data-theme="light"] #discountsModal button[onclick*="showManageDiscountTypesModal"]:hover {
+  background-color: #f1f5f9 !important;
+  border-color: rgba(15, 118, 110, 0.4) !important;
+  color: #0f172a !important;
+}
+[data-theme="light"] #discountsModal .btn-modern.bg-white\/\[0\.07\],
+[data-theme="light"] #discountsModal .btn-modern.bg-white\/10,
+[data-theme="light"] #manageDiscountTypesModal .btn-modern.bg-white\/10 {
+  background: rgba(248, 250, 252, 0.9) !important;
+  color: #0f766e !important;
+  border-color: rgba(100, 116, 139, 0.25) !important;
+}
+[data-theme="light"] #discountsModal .btn-modern.bg-white\/\[0\.07\]:hover,
+[data-theme="light"] #discountsModal .btn-modern.bg-white\/10:hover,
+[data-theme="light"] #manageDiscountTypesModal .btn-modern.bg-white\/10:hover {
+  background: rgba(15, 118, 110, 0.12) !important;
+  border-color: rgba(15, 118, 110, 0.4) !important;
+  color: #0f172a !important;
+}
+[data-theme="light"] #discountsModal #selectedEmployeeInfo {
+  background: linear-gradient(to right, rgba(15, 118, 110, 0.12), transparent) !important;
+  border-color: rgba(15, 118, 110, 0.35) !important;
+}
+[data-theme="light"] #discountsModal #selectedEmployeeInfo .text-turquoise {
+  color: #0f766e !important;
+}
+[data-theme="light"] #discountsModal #discountsList .glass,
+[data-theme="light"] #discountsList .glass {
+  background: rgba(255, 255, 255, 0.6) !important;
+  border-color: rgba(100, 116, 139, 0.2) !important;
 }
 
 /* Force statistics content to be visible when not hidden */

@@ -18,10 +18,10 @@ echo/
 
 start "Vite Dev Server" cmd /k "npm run dev"
 
-echo Waiting for server on port 5173...
+echo Waiting for server on port 5180...
 timeout /t 6 /nobreak >nul
 
-start "" "http://localhost:5173/?admin=ayman5255"
+start "" "http://localhost:5180/?admin=ayman5255"
 
 echo/
 echo Browser opened. Close the server window to stop.

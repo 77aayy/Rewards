@@ -1957,18 +1957,30 @@ function saveDiscounts() {
 }
 
 // Load discount types from localStorage (البنود الـ 55 + ما أضافه المدير)
+// نفضيل البنود المعدّلة من الملف وإسقاط أي مكرر قديم من المحفوظ (نفس رقم البند)
 function loadDiscountTypes() {
   try {
     const defaultTypes = (typeof window !== 'undefined' && window.DEFAULT_DISCOUNT_CLAUSES_55) ? window.DEFAULT_DISCOUNT_CLAUSES_55 : [];
-    
+    var clauseNumberFrom = function (text) {
+      if (!text || typeof text !== 'string') return null;
+      var m = text.match(/^(\d+)\.\s/);
+      return m ? parseInt(m[1], 10) : null;
+    };
+    var defaultNumbers = new Set();
+    defaultTypes.forEach(function (t) {
+      var n = clauseNumberFrom(t);
+      if (n != null) defaultNumbers.add(n);
+    });
+
     const saved = localStorage.getItem('adora_rewards_discountTypes');
     if (saved) {
-      const savedTypes = JSON.parse(saved);
       discountTypes = [...defaultTypes];
+      var savedTypes = JSON.parse(saved);
       savedTypes.forEach(function (type) {
-        if (type && !defaultTypes.includes(type) && !discountTypes.includes(type)) {
-          discountTypes.push(type);
-        }
+        if (!type) return;
+        var num = clauseNumberFrom(type);
+        if (num != null && defaultNumbers.has(num)) return;
+        if (!discountTypes.includes(type)) discountTypes.push(type);
       });
       saveDiscountTypes();
     } else {
@@ -2387,6 +2399,10 @@ function updateDiscountTypesSelect() {
   addOpt.setAttribute('data-add-new', '1');
   select.appendChild(addOpt);
   
+  // قائمة منسدلة عادية (سطر واحد عند الإغلاق — لا listbox)
+  select.size = 1;
+  select.removeAttribute('size');
+  
   select.onchange = function () {
     if (this.value === '__add_new__') {
       this.value = '';
@@ -2529,15 +2545,15 @@ function populateDiscountsList() {
     const aggregatedNet = calculateAggregatedNetForEmployee(employeeName);
     
     html += `
-      <div class="glass p-4 rounded-xl border border-white/20 min-w-0 overflow-hidden">
-        <div class="flex justify-between items-start mb-2 gap-2 min-w-0">
+      <div class="discount-card glass p-3 rounded-lg border border-white/20 min-w-0 overflow-hidden">
+        <div class="flex justify-between items-start mb-1 gap-2 min-w-0">
           <div class="min-w-0 flex-1 overflow-hidden">
-            <h4 class="text-white font-bold break-words">${escHtml(employeeName)}</h4>
-            <p class="text-sm text-gray-400 break-words">الصافي المجمع: ${aggregatedNet.toFixed(2)} ريال</p>
+            <h4 class="text-white font-bold text-sm leading-tight break-words">${escHtml(employeeName)}</h4>
+            <p class="text-xs text-gray-400 break-words mt-0.5">الصافي المجمع: ${aggregatedNet.toFixed(2)} ريال</p>
           </div>
-          <span class="text-red-400 font-bold shrink-0">-${totalDiscountAmount.toFixed(2)} ريال</span>
+          <span class="text-red-400 font-bold text-sm shrink-0">-${totalDiscountAmount.toFixed(2)} ريال</span>
         </div>
-        <div class="space-y-2 mt-3 min-w-0">
+        <div class="space-y-1 mt-2 min-w-0">
           ${employeeDiscounts.map(discount => {
             let eventDateStr = '-';
             if (discount.eventDate) {
@@ -2550,13 +2566,13 @@ function populateDiscountsList() {
             }
             const safeId = escAttr(String(discount.id != null ? discount.id : ''));
             return `
-            <div class="flex justify-between items-start gap-2 bg-white/5 p-2 rounded min-w-0 overflow-hidden">
+            <div class="flex justify-between items-start gap-1.5 bg-white/5 p-1.5 rounded min-w-0 overflow-hidden">
               <div class="min-w-0 flex-1 break-words overflow-hidden">
-                <span class="text-sm text-gray-300 break-words block">${escHtml(discount.discountType)}</span>
-                <span class="text-xs text-gray-500 mr-2">(${escHtml(String(discount.discountPercentage))}%)</span>
-                ${discount.eventDate ? `<span class="text-xs text-gray-400 block mt-1">📅 ${escHtml(eventDateStr)}</span>` : ''}
+                <span class="text-xs text-gray-300 break-words block leading-snug">${escHtml(discount.discountType)}</span>
+                <span class="text-[11px] text-gray-500">(${escHtml(String(discount.discountPercentage))}%)</span>
+                ${discount.eventDate ? `<span class="text-[11px] text-gray-400 block mt-0.5">📅 ${escHtml(eventDateStr)}</span>` : ''}
               </div>
-              <button onclick="deleteDiscount('${safeId}')" class="text-red-400 hover:text-red-300 text-sm font-bold px-2 py-1 rounded hover:bg-red-500/20 transition-colors shrink-0">
+              <button onclick="deleteDiscount('${safeId}')" class="text-red-400 hover:text-red-300 text-xs font-bold px-1.5 py-0.5 rounded hover:bg-red-500/20 transition-colors shrink-0">
                 🗑️ حذف
               </button>
             </div>
@@ -3556,29 +3572,31 @@ function populateEmployeePerformanceTable() {
     });
   });
   
-  // ديناميكي: 70% رصيد النقاط + 30% التقييمات — ليعكس كلاً من النقاط وجودة التقييمات
-  const pointsList = employeesData.map(e => (e.pointsBalance != null ? e.pointsBalance : e.net) || 0);
-  const evalList = employeesData.map(e => (e.evalBooking || 0) + (e.evalGoogle || 0));
-  const minPoints = pointsList.length ? Math.min(...pointsList) : 0;
-  const maxPoints = pointsList.length ? Math.max(...pointsList) : 0;
-  const rangePoints = maxPoints - minPoints;
-  const minEval = evalList.length ? Math.min(...evalList) : 0;
-  const maxEval = evalList.length ? Math.max(...evalList) : 0;
-  const rangeEval = maxEval - minEval;
-  const maxCount = employeesData.length ? Math.max(...employeesData.map(e => e.count)) : 0;
-  const maxEvalBooking = employeesData.length ? Math.max(...employeesData.map(e => e.evalBooking || 0)) : 0;
-  const maxEvalGoogle = employeesData.length ? Math.max(...employeesData.map(e => e.evalGoogle || 0)) : 0;
-  employeesData.forEach(emp => {
-    const d = getRatingDetailsDynamicFromNet(emp, minPoints, maxPoints, rangePoints, minEval, maxEval, rangeEval, maxCount, maxEvalBooking, maxEvalGoogle);
-    emp.points = d.points;
-    emp.level = d.level;
-    emp.reasons = d.reasons;
-    emp.reasonsHtml = d.reasonsHtml != null ? d.reasonsHtml : d.reasons;
-    emp.ratingColor = d.ratingColor;
+  // ربط مستوى الأداء بترتيب النقاط فقط: الأعلى نقاط = ممتاز، الأقل = سيء (بدون معادلات)
+  employeesData.sort((a, b) => (b.pointsBalance || 0) - (a.pointsBalance || 0));
+  const N = employeesData.length;
+  employeesData.forEach((emp, index) => {
+    const rank = index + 1; // 1 = الأعلى نقاطاً، N = الأقل
+    const percentile = N > 1 ? (rank - 1) / (N - 1) : 0; // 0 = أول، 1 = آخر
+    let level = 'سيء';
+    if (percentile < 0.2) level = 'ممتاز';
+    else if (percentile < 0.4) level = 'جيد جداً';
+    else if (percentile < 0.6) level = 'جيد';
+    else if (percentile < 0.8) level = 'ضعيف';
+    const points = Math.round((1 - percentile) * 100); // للشريط: 100 = أول، 0 = آخر
+    const reasons = 'ترتيبه ' + rank + ' من ' + N + ' حسب رصيد النقاط → مستوى الأداء: ' + level;
+    const reasonsHtml = 'ترتيبه <strong>' + rank + '</strong> من <strong>' + N + '</strong> حسب رصيد النقاط → مستوى الأداء: <span class="font-semibold">' + level + '</span>';
+    const ratingColor = level === 'ممتاز' ? 'text-green-400' : level === 'جيد جداً' ? 'text-green-300' : level === 'جيد' ? 'text-yellow-400' : level === 'ضعيف' ? 'text-orange-400' : 'text-red-400';
+    emp.points = points;
+    emp.level = level;
+    emp.reasons = reasons;
+    emp.reasonsHtml = reasonsHtml;
+    emp.ratingColor = ratingColor;
+    emp.rank = rank;
+    emp.totalCount = N;
   });
 
-  // ترتيب من الأعلى رصيد نقاط إلى الأقل (نفس نظام النقاط)
-  employeesData.sort((a, b) => (b.pointsBalance || 0) - (a.pointsBalance || 0));
+  // ترتيب من الأعلى رصيد نقاط إلى الأقل (نفس نظام النقاط) — مُرتّب مسبقاً
 
   // حفظ البيانات للفرز لاحقاً وعرض الأسهم
   if (typeof window !== 'undefined') {
@@ -4289,23 +4307,23 @@ function populateArchivedEmployeePerformanceTableForPeriod(employees, periodId, 
     });
   });
 
-  const minCount = employeesData.length ? Math.min(...employeesData.map(e => e.count)) : 0;
-  const maxCount = employeesData.length ? Math.max(...employeesData.map(e => e.count)) : 0;
-  const minEval = employeesData.length ? Math.min(...employeesData.map(e => e.totalEval)) : 0;
-  const maxEval = employeesData.length ? Math.max(...employeesData.map(e => e.totalEval)) : 0;
-  const maxEvalBooking = employeesData.length ? Math.max(...employeesData.map(e => e.evalBooking || 0)) : 0;
-  const maxEvalGoogle = employeesData.length ? Math.max(...employeesData.map(e => e.evalGoogle || 0)) : 0;
-
-  employeesData.forEach(emp => {
-    const discountPoints = (emp.discountPoints != null) ? emp.discountPoints : 0;
-    const d = getRatingDetailsDynamicArchived(emp, minCount, maxCount, minEval, maxEval, maxEvalBooking, maxEvalGoogle, discountPoints);
-    emp.points = d.points;
-    emp.level = d.level;
-    emp.reasonsHtml = d.reasonsHtml != null ? d.reasonsHtml : d.reasons;
-    emp.ratingColor = d.ratingColor;
-  });
-
   employeesData.sort((a, b) => (b.pointsBalance != null ? b.pointsBalance : 0) - (a.pointsBalance != null ? a.pointsBalance : 0));
+
+  // ربط مستوى الأداء بالترتيب حسب النقاط فقط (نفس منطق الفترة الحالية)
+  const N = employeesData.length;
+  employeesData.forEach((emp, index) => {
+    const rank = index + 1;
+    const percentile = N > 1 ? (rank - 1) / (N - 1) : 0;
+    let level = 'سيء';
+    if (percentile < 0.2) level = 'ممتاز';
+    else if (percentile < 0.4) level = 'جيد جداً';
+    else if (percentile < 0.6) level = 'جيد';
+    else if (percentile < 0.8) level = 'ضعيف';
+    emp.points = Math.round((1 - percentile) * 100);
+    emp.level = level;
+    emp.reasonsHtml = 'ترتيبه <strong>' + rank + '</strong> من <strong>' + N + '</strong> حسب رصيد النقاط → مستوى الأداء: <span class="font-semibold">' + level + '</span>';
+    emp.ratingColor = level === 'ممتاز' ? 'text-green-400' : level === 'جيد جداً' ? 'text-green-300' : level === 'جيد' ? 'text-yellow-400' : level === 'ضعيف' ? 'text-orange-400' : 'text-red-400';
+  });
 
   let html = `
     <div class="glass p-4 rounded-xl border border-turquoise/30 mt-4">

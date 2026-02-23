@@ -21,11 +21,11 @@ function runPredeploy() {
   child.on('close', (code) => {
     if (code !== 0) return;
     console.log('[watch] public/ محدّث');
-    // مزامنة إلى app/public/rewards إن وُجد (منفذ واحد 5173)
+    // مزامنة إلى app/public/rewards إن وُجد (منفذ هذا المشروع 5180)
     const syncPath = path.join(appRoot, 'scripts', 'sync-rewards.js');
     if (fs.existsSync(syncPath)) {
       const sync = spawn(process.execPath, [syncPath], { cwd: appRoot, stdio: 'pipe', windowsHide: true });
-      sync.on('close', (c) => { if (c === 0) console.log('[watch] app/public/rewards محدّث — حدّث 5173/rewards/'); });
+      sync.on('close', (c) => { if (c === 0) console.log('[watch] app/public/rewards محدّث — حدّث 5180/rewards/'); });
     }
   });
 }
