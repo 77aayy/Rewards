@@ -69,7 +69,7 @@ import { AdminGate } from './AdminGate';
 import { AdminLoginForm } from './AdminLoginForm';
 import instructionsBodyHtml from '../shared/instructionsBody.html?raw';
 import headerButtonsConfig from '../shared/headerButtonsConfig.json';
-import conditionsContentSchema from '../shared/conditions-content.json';
+// conditions-content.json يُحمّل ديناميكياً من /shared/conditions-content.json ليتوحد مع صفحة المكافآت (لا استيراد ثابت)
 
 // مراجعة cleanup: كل useEffect يضيف listener أو subscription يعيد دالة cleanup (انظر addEventListener message و onAuthStateChanged).
 
@@ -1600,7 +1600,9 @@ export default function App() {
             const { saveConfigToFirebase } = await import('./firebase');
             await saveConfigToFirebase(c).catch(() => {});
           }}
-          onClose={() => setShowSettings(false)}
+          onClose={(draft) => {
+            handleSaveConfig(draft);
+          }}
         />
       )}
 
@@ -1628,7 +1630,8 @@ function SettingsPanel({ config, discoveredBranches, onSave, onSaveAsDefault, on
   discoveredBranches: string[];
   onSave: (c: AppConfig) => void;
   onSaveAsDefault?: (c: AppConfig) => void | Promise<void>;
-  onClose: () => void;
+  /** يُستدعى عند الإغلاق (X أو إلغاء أو النقر خارجاً). يُمرَّر الـ draft لفظه تلقائياً حتى لا تضيع التعديلات. */
+  onClose: (draft: AppConfig) => void;
 }) {
   const [draft, setDraft] = useState<AppConfig>(() => structuredClone(config));
   const [saving, setSaving] = useState(false);
@@ -1738,7 +1741,7 @@ function SettingsPanel({ config, discoveredBranches, onSave, onSaveAsDefault, on
 
   return (
     <div className="fixed inset-0 z-200 flex items-center justify-center bg-black/70 backdrop-blur-sm"
-      onClick={onClose}>
+      onClick={() => onClose(draft)}>
       <div className="bg-[var(--adora-modal-bg)] border border-[var(--adora-border)] rounded-2xl modal-no-side-shadow
                       max-w-3xl w-[95%] max-h-[90vh] flex flex-col overflow-hidden"
         onClick={(e) => e.stopPropagation()}>
@@ -1751,10 +1754,10 @@ function SettingsPanel({ config, discoveredBranches, onSave, onSaveAsDefault, on
             <div>
               <h3 className="text-base font-bold text-[var(--adora-text)]">إعدادات التحليل</h3>
               <p className="text-[15px] text-[var(--adora-text-secondary)]">الأسعار، الفروع، الحدود — محفوظة تلقائياً</p>
-              <p className="text-[14px] text-[var(--adora-accent)] mt-0.5 opacity-90">هذه الإعدادات عامة للمشروع ولا تتغير بتغيير الفترة أو إغلاقها أو رفع ملفات جديدة. الإعدادات الحالية يمكن حفظها كافتراضي بزر «حفظ كافتراضي» لتُستعاد لاحقاً بـ «استعادة الافتراضي».</p>
+              <p className="text-[14px] text-[var(--adora-accent)] mt-0.5 opacity-90">هذه الإعدادات عامة للمشروع ولا تتغير بتغيير الفترة أو إغلاقها أو رفع ملفات جديدة. الإعدادات الحالية يمكن حفظها كافتراضي بزر «حفظ كافتراضي» لتُستعاد لاحقاً بـ «استعادة الافتراضي». عند الإغلاق (× أو إلغاء) تُحفظ التعديلات تلقائياً.</p>
             </div>
           </div>
-          <button onClick={onClose} className="text-[var(--adora-text-secondary)] hover:text-[var(--adora-text)] transition-colors">
+          <button onClick={() => onClose(draft)} className="text-[var(--adora-text-secondary)] hover:text-[var(--adora-text)] transition-colors">
             <X className="w-5 h-5" />
           </button>
         </div>
@@ -2128,7 +2131,7 @@ function SettingsPanel({ config, discoveredBranches, onSave, onSaveAsDefault, on
             </button>
           </div>
           <div className="flex items-center gap-2">
-            <button onClick={onClose}
+            <button onClick={() => onClose(draft)}
               className="px-4 py-1.5 rounded-lg text-sm font-medium text-[var(--adora-text-secondary)] hover:text-[var(--adora-text)] transition-colors">
               إلغاء
             </button>
@@ -2422,7 +2425,7 @@ function RatingExplanationPopup({ onClose }: { onClose: () => void }) {
 }
 
 // ===================================================================
-// شروط المكافآت — مصدر واحد: shared/conditions-content.json + config.rewardPricing
+// شروط المكافآت — مصدر واحد: shared/conditions-content.json (fetch عند الفتح) + config.rewardPricing
 // ===================================================================
 
 interface ConditionsSectionItem {
@@ -2445,7 +2448,12 @@ interface ConditionsSchema {
   sections: ConditionsSection[];
 }
 
-const CONDITIONS_SCHEMA = conditionsContentSchema as ConditionsSchema;
+function getConditionsSchemaUrl(): string {
+  if (typeof window === 'undefined') return '/shared/conditions-content.json';
+  const pathname = window.location.pathname || '';
+  const base = pathname.indexOf('/rewards') >= 0 ? window.location.origin + '/rewards' : window.location.origin;
+  return base + '/shared/conditions-content.json';
+}
 
 const THEME_CLASSES: Record<string, { wrap: string; title: string; bullet: string }> = {
   turquoise: { wrap: 'bg-[var(--adora-hover-bg)] rounded-xl p-4 border border-[var(--adora-focus-border)]', title: 'text-[var(--adora-accent)]', bullet: 'text-[var(--adora-accent)]' },
@@ -2471,17 +2479,17 @@ function conditionsReplaceTemplate(tpl: string, rp: AppConfig['rewardPricing']):
     .replace(/\{\{minEvalGoogle\}\}/g, String(rp.minEvalGoogle ?? 4.3));
 }
 
-function buildConditionsPrintHtml(config: AppConfig): string {
+function buildConditionsPrintHtml(config: AppConfig, schema: ConditionsSchema): string {
   const rp = config.rewardPricing;
   const vipByBranch = rp.rateVipByBranch || {};
   const vipDefault = rp.rateVipDefault || { reception: 0, booking: 0 };
-  const title = CONDITIONS_SCHEMA.modalTitle;
+  const title = schema.modalTitle;
   const esc = (s: string) => s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
   let body = '<h1>' + esc(title) + '</h1>';
   const section = (cls: string, style: string, title: string, items: string) =>
     '<div class="' + cls + '"' + (style ? ' style="' + style + '"' : '') + '><h2>' + esc(title) + '</h2><ul>' + items + '</ul></div>';
 
-  CONDITIONS_SCHEMA.sections.forEach((sec) => {
+  schema.sections.forEach((sec) => {
     if (sec.id === 'vip') {
       const branchNames = Object.keys(vipByBranch);
       if (branchNames.length === 0 && !(vipDefault.reception > 0 || vipDefault.booking > 0)) return;
@@ -2522,20 +2530,65 @@ function buildConditionsPrintHtml(config: AppConfig): string {
 
 function ConditionsPopup({ config, onClose }: { config: AppConfig; onClose: () => void }) {
   const [showInstructions, setShowInstructions] = useState(false);
+  const [schema, setSchema] = useState<ConditionsSchema | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
   const rp = config.rewardPricing;
   const vipByBranch = rp.rateVipByBranch || {};
   const vipDefault = rp.rateVipDefault || { reception: 0, booking: 0 };
   const branchNames = Object.keys(vipByBranch);
 
+  useEffect(() => {
+    let cancelled = false;
+    setLoading(true);
+    setError(null);
+    fetch(getConditionsSchemaUrl())
+      .then((r) => (r.ok ? r.json() : Promise.reject(new Error('Not ok'))))
+      .then((data: ConditionsSchema) => {
+        if (!cancelled) {
+          setSchema(data);
+          setError(null);
+        }
+      })
+      .catch((e) => {
+        if (!cancelled) setError(e?.message || 'تعذر تحميل محتوى الشروط. تأكد من توفر shared/conditions-content.json.');
+      })
+      .finally(() => {
+        if (!cancelled) setLoading(false);
+      });
+    return () => { cancelled = true; };
+  }, []);
+
+  if (loading) {
+    return (
+      <div className="fixed inset-0 z-[200] flex items-center justify-center bg-black/70 backdrop-blur-sm p-2 sm:p-4" onClick={onClose}>
+        <div className="bg-[var(--adora-modal-bg)] border border-[var(--adora-focus-border)] rounded-2xl max-w-2xl w-full p-8 text-center" onClick={(e) => e.stopPropagation()}>
+          <p className="text-[var(--adora-text-secondary)]">جاري تحميل الشروط...</p>
+        </div>
+      </div>
+    );
+  }
+  if (error || !schema) {
+    return (
+      <div className="fixed inset-0 z-[200] flex items-center justify-center bg-black/70 backdrop-blur-sm p-2 sm:p-4" onClick={onClose}>
+        <div className="bg-[var(--adora-modal-bg)] border border-[var(--adora-focus-border)] rounded-2xl max-w-2xl w-full p-8 text-center" onClick={(e) => e.stopPropagation()}>
+          <p className="text-[var(--adora-error)] py-4">{error || 'تعذر تحميل محتوى الشروط.'}</p>
+          <button onClick={onClose} className="px-4 py-2 rounded-lg text-sm font-bold text-[var(--adora-text-secondary)] bg-[var(--adora-hover-bg)]">إغلاق</button>
+        </div>
+      </div>
+    );
+  }
+
   const handlePrint = useCallback(() => {
-    const doc = buildConditionsPrintHtml(config);
+    if (!schema) return;
+    const doc = buildConditionsPrintHtml(config, schema);
     const w = window.open('', '_blank');
     if (!w) return;
     w.document.write(doc);
     w.document.close();
     w.focus();
     setTimeout(() => w.print(), 300);
-  }, [config]);
+  }, [config, schema]);
 
   return (
     <>
@@ -2544,12 +2597,12 @@ function ConditionsPopup({ config, onClose }: { config: AppConfig; onClose: () =
         <div className="px-6 py-4 border-b border-[var(--adora-border)] shrink-0 flex items-center justify-between">
           <h3 className="text-lg font-black text-[var(--adora-accent)] flex items-center gap-2">
             <span>📋</span>
-            <span>{CONDITIONS_SCHEMA.modalTitle}</span>
+            <span>{schema.modalTitle}</span>
           </h3>
           <button onClick={onClose} className="text-[var(--adora-text-secondary)] hover:text-[var(--adora-text)] transition-colors text-2xl font-bold w-11 h-11 flex items-center justify-center rounded-lg hover:bg-[var(--adora-hover-bg)]">×</button>
         </div>
         <div className="px-6 py-5 space-y-4 text-sm text-[var(--adora-text-secondary)]">
-          {CONDITIONS_SCHEMA.sections.map((sec) => {
+          {schema.sections.map((sec) => {
             if (sec.id === 'vip') {
               if (branchNames.length === 0 && !(vipDefault.reception > 0 || vipDefault.booking > 0)) return null;
               const theme = THEME_CLASSES[sec.theme] || THEME_CLASSES.amber;

@@ -370,6 +370,53 @@ function syncLivePeriodToFirebase() {
   syncLivePeriodTimer = setTimeout(function () { doSyncLivePeriodToFirebase(); }, 150);
 }
 
+/**
+ * مسح حالة «تم الإرسال» لدور معيّن (المشرف أو HR) حتى يمكن إرسال الرابط مرة أخرى للإدخال من جديد.
+ * يُستدعى من زر «مسح الإرسال وإعادة الإدخال» في إدارة الإداريين.
+ * الرابط يبقى كما هو — لا يتم تغيير التوكن.
+ */
+function clearAdminSubmittedForRole(role) {
+  return new Promise(function (resolve, reject) {
+    (async function () {
+      try {
+        var st = typeof window !== 'undefined' ? window.storage : null;
+        if (!st || typeof st.ref !== 'function') {
+          if (typeof initializeFirebase === 'function') initializeFirebase();
+          var waitStart = Date.now();
+          while (!(typeof window !== 'undefined' && window.storage) && (Date.now() - waitStart) < 5000) {
+            await new Promise(function (r) { setTimeout(r, 150); });
+          }
+          st = typeof window !== 'undefined' ? window.storage : null;
+        }
+        if (!st || typeof st.ref !== 'function') { reject(new Error('Firebase غير جاهز')); return; }
+        var liveData = typeof fetchLivePeriodFromFirebase === 'function' ? await fetchLivePeriodFromFirebase() : null;
+        if (!liveData || !Array.isArray(liveData.db) || liveData.db.length === 0) { reject(new Error('لا توجد بيانات فترة حية')); return; }
+        var existingSubmitted = (liveData.adminSubmitted && typeof liveData.adminSubmitted === 'object') ? Object.assign({}, liveData.adminSubmitted) : {};
+        delete existingSubmitted[role];
+        var payload = Object.assign({}, liveData);
+        payload.lastModified = Date.now();
+        if (Object.keys(existingSubmitted).length > 0) payload.adminSubmitted = existingSubmitted;
+        else delete payload.adminSubmitted;
+        var blob = new Blob([JSON.stringify(payload)], { type: 'application/json' });
+        await st.ref(LIVE_PERIOD_PATH).put(blob);
+        var startDate = payload.reportStartDate || liveData.reportStartDate || '';
+        var periodId = (startDate && /^\d{4}-\d{2}/.test(String(startDate))) ? String(startDate).substring(0, 7).replace('-', '_') : '';
+        if (periodId) { try { await st.ref('periods/' + periodId + '.json').put(blob); } catch (_) {} }
+        if (typeof window !== 'undefined' && window.lastAppliedAdminSubmitted) {
+          delete window.lastAppliedAdminSubmitted[role];
+        }
+        if (lastAppliedAdminSubmitted && typeof lastAppliedAdminSubmitted === 'object') {
+          delete lastAppliedAdminSubmitted[role];
+        }
+        if (periodId && typeof localStorage !== 'undefined') localStorage.removeItem('adora_admin_submitted_' + periodId + '_' + role);
+        resolve();
+      } catch (e) {
+        reject(e);
+      }
+    })();
+  });
+}
+
 /** تجميع إدخالات المشرف/HR من DOM وكتابتها إلى window.db ثم localStorage.
  *  مسار الظهور في جدول «الكل»: بعد الإرسال يُستدعى doSyncLivePeriodNow فيرفع من localStorage إلى periods/live.json؛
  *  صفحة الأدمن عند التحميل أو الاستطلاع الدوري تجلب live وتطبّق applyLivePeriod ثم تعيد رسم الجدول من window.db.
@@ -838,6 +885,7 @@ if (typeof window !== 'undefined') {
   window.stopLivePeriodPolling = stopLivePeriodPolling;
   window.refreshLivePeriodFromFirebase = refreshLivePeriodFromFirebase;
   window.flushAdminInputsToStorage = flushAdminInputsToStorage;
+  window.clearAdminSubmittedForRole = clearAdminSubmittedForRole;
 }
 
 window.addEventListener('load', function () {

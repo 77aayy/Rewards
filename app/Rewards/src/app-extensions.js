@@ -438,9 +438,10 @@ function populateAdminManagementModal(hasData) {
           <span>إرسال عبر واتساب</span>
         </button>
         <div class="flex gap-2">
-          <button onclick="regenerateAdminToken('${role.key}')" 
-            class="flex-1 px-3 py-2 bg-yellow-500/20 text-yellow-400 rounded-lg hover:bg-yellow-500/30 transition-colors text-sm font-bold">
-            🔄 إعادة توليد
+          <button onclick="clearAdminSubmissionAndReopenEntry('${role.key}')" 
+            class="flex-1 px-3 py-2 bg-yellow-500/20 text-yellow-400 rounded-lg hover:bg-yellow-500/30 transition-colors text-sm font-bold"
+            title="مسح حالة «تم الإرسال» لهذا الدور — نفس الرابط يفتح واجهة الإدخال مرة أخرى">
+            🔄 مسح الإرسال وإعادة الإدخال
           </button>
           <button onclick="testAdminLink('${role.key}')" 
             class="flex-1 px-3 py-2 bg-green-500/20 text-green-400 rounded-lg hover:bg-green-500/30 transition-colors text-sm font-bold">
@@ -500,7 +501,26 @@ function copyAdminLink(role) {
   }
 }
 
-// Regenerate admin token
+// مسح إرسال المشرف/HR وإعادة فتح الإدخال — نفس الرابط يعيد واجهة الإدخال (لا تغيير توكن)
+function clearAdminSubmissionAndReopenEntry(role) {
+  var roleLabel = role === 'supervisor' ? 'المشرف' : (role === 'hr' ? 'HR' : role);
+  if (!confirm('مسح حالة «تم الإرسال» لـ ' + roleLabel + '؟ بعد المسح يمكنك إرسال نفس الرابط مرة أخرى وسيظهر له واجهة الإدخال من جديد.')) return;
+  var clearFn = typeof window.clearAdminSubmittedForRole === 'function' ? window.clearAdminSubmittedForRole : null;
+  if (!clearFn) {
+    if (typeof showToast === 'function') showToast('Firebase غير جاهز — تحقق من الاتصال', 'error');
+    return;
+  }
+  clearFn(role)
+    .then(function () {
+      if (typeof showToast === 'function') showToast('✅ تم مسح الإرسال. أرسل نفس الرابط لـ ' + roleLabel + ' للإدخال مرة أخرى.', 'success');
+      if (typeof refreshLivePeriodFromFirebase === 'function') refreshLivePeriodFromFirebase();
+    })
+    .catch(function (err) {
+      if (typeof showToast === 'function') showToast(err && err.message ? err.message : 'فشل مسح الإرسال. تحقق من Firebase.', 'error');
+    });
+}
+
+// Regenerate admin token (احتياطي — استبدل بالزر «مسح الإرسال وإعادة الإدخال» للمشرف/HR)
 function regenerateAdminToken(role) {
   if (!confirm(`هل أنت متأكد من إعادة توليد رابط ${role}؟ الرابط القديم لن يعمل بعد الآن.`)) return;
   

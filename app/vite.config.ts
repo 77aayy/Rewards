@@ -78,6 +78,21 @@ export default defineConfig({
   plugins: [
     react(),
     tailwindcss(),
+    // نسخ app/shared إلى dist/shared عند البناء حتى /shared/conditions-content.json يعمل في الإنتاج
+    {
+      name: 'copy-shared-to-dist',
+      closeBundle() {
+        const outDir = path.join(appRoot, 'dist')
+        const sharedDest = path.join(outDir, 'shared')
+        if (!fs.existsSync(appSharedRoot)) return
+        if (!fs.existsSync(sharedDest)) fs.mkdirSync(sharedDest, { recursive: true })
+        fs.readdirSync(appSharedRoot).forEach((name) => {
+          const src = path.join(appSharedRoot, name)
+          const dest = path.join(sharedDest, name)
+          if (fs.statSync(src).isFile()) fs.copyFileSync(src, dest)
+        })
+      },
+    },
     // خدمة /rewards و /rewards/ كصفحة المكافآت (من public/rewards)
     // + توجيه روابط الأدوار (supervisor/hr/accounting/manager/e) لصفحة المكافآت
     {
@@ -120,6 +135,28 @@ export default defineConfig({
         })
         // 2) تقديم ملفات /rewards من مجلد Rewards (المصدر) حتى يظهر التعديل فوراً بدون sync
         server.middlewares.use(serveRewardsFromSource)
+        // 3) تقديم /shared/* من app/shared (مصدر واحد لـ conditions-content.json وغيره) لصفحة التحليل والتطبيق الرئيسي
+        server.middlewares.use((req, res, next) => {
+          const url = req.url || ''
+          const pathname = url.split('?')[0]
+          if (!pathname.startsWith('/shared/')) return next()
+          const sub = pathname.slice('/shared/'.length)
+          const filePath = path.join(appSharedRoot, sub)
+          try {
+            const stat = fs.statSync(filePath)
+            if (!stat.isFile()) return next()
+            const ext = path.extname(filePath)
+            const types: Record<string, string> = {
+              '.json': 'application/json; charset=utf-8',
+              '.js': 'application/javascript; charset=utf-8',
+            }
+            res.setHeader('Content-Type', types[ext] || 'application/octet-stream')
+            res.setHeader('Cache-Control', 'no-store, no-cache, must-revalidate')
+            res.end(fs.readFileSync(filePath))
+          } catch {
+            next()
+          }
+        })
       },
     },
   ],
