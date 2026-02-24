@@ -4805,15 +4805,6 @@ ${window.adoraTransferMode ? (function() {
   var morning = isDup ? allBranches.reduce(function(s, e) { return s + (e._morning || 0); }, 0) : (bk._morning || 0);
   var evening = isDup ? allBranches.reduce(function(s, e) { return s + (e._evening || 0); }, 0) : (bk._evening || 0);
   var night = isDup ? allBranches.reduce(function(s, e) { return s + (e._night || 0); }, 0) : (bk._night || 0);
-  if (window.adoraRawBookings && window.adoraRawBookings.length > 0) {
-    var raw = window.adoraRawBookings;
-    var empData = isDup
-      ? raw.filter(function(d) { return d.employeeName === emp.name; })
-      : raw.filter(function(d) { return d.employeeName === emp.name && d.branch === emp.branch; });
-    morning = empData.filter(function(d) { return d.shift === 'صباح'; }).length;
-    evening = empData.filter(function(d) { return d.shift === 'مساء'; }).length;
-    night = empData.filter(function(d) { return d.shift === 'ليل'; }).length;
-  }
   var alertCount = isDup ? allBranches.reduce(function(s, e) { return s + (e._alertCount || 0); }, 0) : (bk._alertCount || 0);
   var alertTotal = isDup ? allBranches.reduce(function(s, e) { return s + (e._alertTotal || 0); }, 0) : (bk._alertTotal || 0);
   // VIP rooms

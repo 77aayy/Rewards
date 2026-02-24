@@ -2850,6 +2850,7 @@ function formatRegistrationTime(dateTimeStr: string): string {
 
 interface DrilldownInfo {
   title: string;
+  filterType?: string;
   bookings: DrilldownBooking[];
 }
 
@@ -2935,6 +2936,7 @@ function EmployeeBreakdown({ staffList, data, config, dateRange }: {
 
     setDrilldown({
       title,
+      filterType,
       bookings: filtered.map((d) => ({
         bookingNumber: d.bookingNumber,
         guestName: d.guestName,
@@ -3053,7 +3055,7 @@ function EmployeeBreakdown({ staffList, data, config, dateRange }: {
       if (d.isMerged) a.mergedCount++;
     }
 
-    // المرجع هو الأساس ويُوزَّع — عند نقص التقرير (counted < staffCount) نوزّع الفرق تناسبياً
+    // عندما المحلّل من التقرير أقل من المرجع: نوزّع تناسبياً حتى المجموع = المرجع (عشان الرسالة للموظف تكون منطقية: 111 عقد = X استقبال + Y بوكينج).
     for (const k of Object.keys(agg)) {
       const a = agg[k];
       const ref = a.staffCount;
@@ -3071,7 +3073,6 @@ function EmployeeBreakdown({ staffList, data, config, dateRange }: {
       a['مساء'] = Math.round(ref * (oldE / counted));
       a['ليل'] = ref - a['صباح'] - a['مساء'];
 
-      // توزيع تناسبي لـ receptionMorning/Evening/Night و bookingRegular
       const oldRm = a.receptionMorning;
       const oldRe = a.receptionEvening;
       const oldRn = a.receptionNight;
