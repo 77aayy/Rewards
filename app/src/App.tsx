@@ -1855,12 +1855,12 @@ function SettingsPanel({ config, discoveredBranches, onSave, onSaveAsDefault, on
             {/* صندوق الدعم — نسبة مخصومة من الإجمالي قبل الصافي */}
             <div className="space-y-1.5">
               <p className="text-sm font-medium text-cyan-400/90">صندوق الدعم</p>
-              <div className="flex items-center gap-3 flex-wrap">
-                <label className="text-sm text-[var(--adora-text-secondary)] shrink-0">نسبة من الإجمالي (%)</label>
+              <div className="max-w-[140px]">
+                <label className="text-sm text-[var(--adora-text-secondary)] block mb-1">نسبة من الإجمالي (%)</label>
                 <input type="number" min={0} max={100} step={1} value={draft.rewardPricing.supportFundPercent ?? 15}
                   onChange={(e) => setDraft(prev => ({ ...prev, rewardPricing: { ...prev.rewardPricing, supportFundPercent: Math.min(100, Math.max(0, parseInt(e.target.value, 10) || 0)) } }))}
-                  className="w-20 bg-[var(--adora-input-bg)] border border-[var(--adora-border)] text-[var(--adora-text)] text-sm rounded-lg px-3 py-2 outline-none focus:ring-2 focus:ring-emerald-500/50 font-mono" />
-                <span className="text-xs text-[var(--adora-text-secondary)]">الصافي = الإجمالي − (الإجمالي × هذه النسبة)</span>
+                  className="w-full bg-[var(--adora-input-bg)] border border-[var(--adora-border)] text-[var(--adora-text)] text-sm rounded-lg px-3 py-2 outline-none focus:ring-2 focus:ring-emerald-500/50 font-mono" />
+                <p className="text-xs text-[var(--adora-text-secondary)] mt-1">الصافي = الإجمالي − (الإجمالي × هذه النسبة)</p>
               </div>
             </div>
 
