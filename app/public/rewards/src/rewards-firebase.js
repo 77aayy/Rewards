@@ -6,6 +6,7 @@ var REWARDS_PRICING_STORAGE_KEY = 'adora_rewards_pricing';
 
 // === مزامنة الفترة الحية مع Firebase ===
 var LIVE_PERIOD_PATH = 'periods/live.json';
+var CONFIG_PATH = 'config/settings.json';
 var syncLivePeriodTimer = null;
 var lastAppliedLiveModified = 0;
 var lastAppliedAdminSubmitted = {};
@@ -70,6 +71,25 @@ function normalizePeriodPayload(raw) {
   if (raw.data && typeof raw.data === 'object' && Array.isArray(raw.data.db)) data = raw.data;
   if (!data || !Array.isArray(data.db)) return null;
   return data;
+}
+
+/**
+ * جلب إعدادات الأدمن من Firebase (نفس مصدر تطبيق التحليل — config/settings.json).
+ * يُستخدم لتطبيق «الحد الأدنى لحجوزات الموظف» في جدول المكافآت.
+ */
+async function fetchConfigFromFirebase() {
+  var st = typeof window !== 'undefined' ? window.storage : null;
+  if (!st || typeof st.ref !== 'function') return null;
+  try {
+    var parsed = await fetchStorageJson(st, CONFIG_PATH);
+    if (!parsed || typeof parsed !== 'object') return null;
+    var min = parsed.minBookingThreshold;
+    if (typeof min !== 'number' || min < 0) return null;
+    return { minBookingThreshold: min };
+  } catch (e) {
+    if (typeof console !== 'undefined' && console.warn) console.warn('fetchConfigFromFirebase:', e && e.message);
+    return null;
+  }
 }
 
 async function fetchStorageJson(st, path) {
@@ -521,6 +541,14 @@ function doSyncLivePeriodNow() {
           if (typeof window !== 'undefined') window.lastAppliedLiveModified = lastAppliedLiveModified;
         }
         if (payload.lastModified && typeof clearLocalRewardsDirty === 'function') clearLocalRewardsDirty(payload.lastModified);
+        if (currentRole && adminSubmitted[currentRole]) {
+          lastAppliedAdminSubmitted[currentRole] = adminSubmitted[currentRole];
+          if (typeof window !== 'undefined') window.lastAppliedAdminSubmitted = lastAppliedAdminSubmitted;
+          var periodKey = periodIdForMerge || (startDate && /^\d{4}-\d{2}/.test(String(startDate)) ? String(startDate).substring(0, 7).replace('-', '_') : '');
+          if (periodKey && typeof localStorage !== 'undefined') {
+            try { localStorage.setItem('adora_admin_submitted_' + periodKey + '_' + currentRole, String(adminSubmitted[currentRole])); } catch (_) {}
+          }
+        }
         var periodIdForWrite = (startDate && /^\d{4}-\d{2}-\d{2}/.test(String(startDate))) ? String(startDate).substring(0, 7).replace('-', '_') : (typeof window.getCurrentPeriodId === 'function' ? window.getCurrentPeriodId() : (new Date().getFullYear() + '_' + String(new Date().getMonth() + 1).padStart(2, '0')));
         if (periodIdForWrite) {
           try { await st.ref('periods/' + periodIdForWrite + '.json').put(blob); } catch (ePeriod) {
@@ -837,6 +865,12 @@ function _adoraBackgroundFirebaseSync(payload, options) {
 
     // إعادة رسم الجدول بعد انتهاء المزامنة لضبط الصافي والحضور والتقييمات (حتى عند عدم وجود بيانات من Firebase)
     var currentFilter = (typeof window !== 'undefined' && window.currentBranch) ? window.currentBranch : (typeof window !== 'undefined' && window.currentFilter) ? window.currentFilter : 'الكل';
+    if (typeof fetchConfigFromFirebase === 'function') {
+      try {
+        var cfg = await fetchConfigFromFirebase();
+        if (cfg && typeof cfg.minBookingThreshold === 'number') window.minBookingThreshold = cfg.minBookingThreshold;
+      } catch (_) {}
+    }
     if (typeof renderUI === 'function' && typeof window !== 'undefined' && window.db && window.db.length > 0) renderUI(currentFilter);
 
     var badge = document.getElementById('adoraFirebaseSyncBadge');
@@ -886,6 +920,7 @@ if (typeof window !== 'undefined') {
   window.refreshLivePeriodFromFirebase = refreshLivePeriodFromFirebase;
   window.flushAdminInputsToStorage = flushAdminInputsToStorage;
   window.clearAdminSubmittedForRole = clearAdminSubmittedForRole;
+  window.fetchConfigFromFirebase = fetchConfigFromFirebase;
 }
 
 window.addEventListener('load', function () {

@@ -66,6 +66,15 @@ var CUMULATIVE_FIREBASE_PATH = 'config/cumulativePoints.json';
 var CUMULATIVE_REWARD_THRESHOLD = 100000;   // عند الوصول لـ 100,000 نقطة (باكيج التميز)
 var CUMULATIVE_REWARD_AMOUNT = 1000;        // (للمنطق الداخلي؛ العرض: باكيج التميز)
 
+/** نسبة صندوق الدعم من الإجمالي (0–1). من إعدادات الأدمن؛ الافتراضي 0.15 */
+function getSupportFundRatio() {
+  try {
+    var p = typeof getPricingConfig === 'function' ? getPricingConfig() : {};
+    var percent = p.supportFundPercent != null ? p.supportFundPercent : 15;
+    return Math.min(1, Math.max(0, Number(percent) / 100));
+  } catch (_) { return 0.15; }
+}
+
 /** جلب الرصيد التراكمي من Firebase فقط — يُخزَّن في الذاكرة (window.__cumulativePointsFromFirebase) للعرض، لا تخزين محلي */
 async function loadCumulativePointsFromFirebase() {
   var st = (typeof window !== 'undefined' && window.storage) || (typeof storage !== 'undefined' ? storage : null);
@@ -412,20 +421,25 @@ function populateAdminManagementModal(hasData) {
             <p class="text-xs text-gray-400">${role.description}</p>
           </div>
         </div>
-        <div class="mb-3">
+        <div class="mb-3 min-w-0">
           <label class="block text-sm font-bold text-gray-300 mb-1">اسم الإداري (اختياري):</label>
           <input type="text" id="adminName_${role.key}" value="${(displayName || '').replace(/"/g, '&quot;')}" 
             placeholder="أدخل اسم الإداري..." 
-            class="w-full px-3 py-2 rounded-lg text-sm text-white bg-white/10 border border-white/20 focus:outline-none focus:border-purple-400"
-            onchange="updateAdminName('${role.key}', this.value)">
+            tabindex="0"
+            class="w-full min-w-0 px-3 py-2.5 rounded-lg text-sm text-white bg-white/10 border border-white/20 focus:outline-none focus:border-purple-400 focus:ring-1 focus:ring-purple-400/30 min-h-[44px]"
+            onchange="updateAdminName('${role.key}', this.value)"
+            aria-label="اسم الإداري ${role.label}">
         </div>
         <div class="mb-3 min-w-0">
           <label class="block text-sm font-bold text-gray-300 mb-1">الرابط:</label>
-          <div class="flex gap-2 items-stretch min-w-0">
+          <div class="flex gap-2 items-stretch min-w-0 flex-wrap sm:flex-nowrap">
             <input type="text" id="adminLink_${role.key}" value="${link.replace(/"/g, '&quot;')}" readonly
-              class="flex-1 min-w-0 px-3 py-2 rounded-lg text-xs text-gray-300 bg-white/5 border border-white/10 truncate">
-            <button onclick="copyAdminLink('${role.key}')" 
-              class="flex-shrink-0 px-3 py-2 bg-purple-500/20 text-purple-400 rounded-lg hover:bg-purple-500/30 transition-colors text-sm font-bold whitespace-nowrap">
+              tabindex="0"
+              class="flex-1 min-w-[200px] sm:min-w-[280px] px-3 py-2.5 rounded-lg text-sm text-gray-300 bg-white/5 border border-white/20 focus:outline-none focus:border-purple-400 focus:ring-1 focus:ring-purple-400/30"
+              title="انسخ الرابط من هنا أو زر نسخ"
+              aria-label="رابط ${role.label}">
+            <button type="button" onclick="copyAdminLink('${role.key}')" tabindex="0"
+              class="flex-shrink-0 px-4 py-2.5 bg-purple-500/20 text-purple-400 rounded-lg hover:bg-purple-500/30 transition-colors text-sm font-bold whitespace-nowrap min-h-[44px]">
               📋 نسخ
             </button>
           </div>
@@ -490,15 +504,40 @@ function getAdminNameForRole(role) {
 }
 
 // Copy admin link — نُفعّل Firebase ونرفع التوكنات عند النسخ ليعمل الرابط على جهاز الإداري
+// 1) نسخ من الحقل المعروض، 2) إن فشل: textarea مؤقت — ليعمل حتى مع فتح الـ Console
 function copyAdminLink(role) {
   if (typeof window.initializeFirebase === 'function') window.initializeFirebase();
   saveAdminTokens();
-  const input = document.getElementById(`adminLink_${role}`);
-  if (input) {
-    input.select();
-    document.execCommand('copy');
-    showToast('✅ تم نسخ الرابط', 'success');
+  var input = document.getElementById('adminLink_' + role);
+  var text = input ? (input.value || '').trim() : '';
+  if (!text) {
+    if (typeof showToast === 'function') showToast('لا يوجد رابط للنسخ', 'error');
+    return;
   }
+  var copied = false;
+  if (input) {
+    try {
+      input.focus();
+      input.select();
+      input.setSelectionRange(0, text.length);
+      copied = document.execCommand('copy');
+    } catch (e) {}
+  }
+  if (!copied) {
+    var ta = document.createElement('textarea');
+    ta.value = text;
+    ta.setAttribute('readonly', '');
+    ta.style.cssText = 'position:fixed;top:0;left:0;width:2em;height:2em;padding:0;border:0;outline:none;boxShadow:none;background:transparent;opacity:0.01;';
+    document.body.appendChild(ta);
+    ta.focus();
+    ta.setSelectionRange(0, text.length);
+    try {
+      copied = document.execCommand('copy');
+    } catch (e) {}
+    document.body.removeChild(ta);
+  }
+  if (copied && typeof showToast === 'function') showToast('✅ تم نسخ الرابط', 'success');
+  else if (typeof showToast === 'function') showToast('النسخ فشل — حدّد الرابط في الحقل ثم Ctrl+C', 'error');
 }
 
 // مسح إرسال المشرف/HR وإعادة فتح الإدخال — نفس الرابط يعيد واجهة الإدخال (لا تغيير توكن)
@@ -918,19 +957,21 @@ function copyAdminLinkFromCodes(role) {
   if (!admin) return;
   const baseUrl = window.location.origin;
   const link = baseUrl + '/' + role + '/' + admin.token + '/' + periodId;
-  
-  navigator.clipboard.writeText(link).then(() => {
-    showToast('✅ تم نسخ الرابط', 'success');
-  }).catch(() => {
-    // Fallback
-    const input = document.createElement('input');
-    input.value = link;
-    document.body.appendChild(input);
-    input.select();
-    document.execCommand('copy');
-    document.body.removeChild(input);
-    showToast('✅ تم نسخ الرابط', 'success');
-  });
+
+  var ta = document.createElement('textarea');
+  ta.value = link;
+  ta.setAttribute('readonly', '');
+  ta.style.cssText = 'position:fixed;top:0;left:0;width:2em;height:2em;padding:0;border:0;outline:none;boxShadow:none;background:transparent;opacity:0.01;';
+  document.body.appendChild(ta);
+  ta.focus();
+  ta.setSelectionRange(0, link.length);
+  var copied = false;
+  try {
+    copied = document.execCommand('copy');
+  } catch (e) {}
+  document.body.removeChild(ta);
+  if (copied && typeof showToast === 'function') showToast('✅ تم نسخ الرابط', 'success');
+  else if (typeof showToast === 'function') showToast('النسخ فشل — حدّد الرابط ثم Ctrl+C', 'error');
 }
 
 function closeEmployeeCodesModal(event) {
@@ -1643,7 +1684,7 @@ function populateArchivedReportsGrid() {
       const evBooking = emp.evaluationsBooking || 0;
       const evGoogle = emp.evaluationsGoogle || 0;
       const gross = (emp.count * rate) + (evBooking * 20) + (evGoogle * 10);
-      const fund = gross * 0.15;
+      const fund = gross * getSupportFundRatio();
       let net = gross - fund;
       const attendanceBonus = emp.attendance26Days === true ? net * 0.25 : 0;
       net = net + attendanceBonus;
@@ -2078,7 +2119,7 @@ function getBranchWithMaxNegativeRatingsForEmployee(employeeName) {
     const evBooking = emp.evaluationsBooking || 0;
     const evGoogle = emp.evaluationsGoogle || 0;
     const gross = (emp.count * rate) + (evBooking * 20) + (evGoogle * 10);
-    const fund = gross * 0.15;
+    const fund = gross * getSupportFundRatio();
     let branchNet = gross - fund;
     const attendance26Days = emp.attendance26Days === true;
     const attendanceBonus = attendance26Days ? branchNet * 0.25 : 0;
@@ -2107,7 +2148,7 @@ function getTotalDiscountForEmployee(employeeName, netBeforeDiscounts = null) {
           const evBooking = emp.evaluationsBooking || 0;
           const evGoogle = emp.evaluationsGoogle || 0;
           const gross = (emp.count * rate) + (evBooking * 20) + (evGoogle * 10);
-          const fund = gross * 0.15;
+          const fund = gross * getSupportFundRatio();
           let branchNet = gross - fund;
           const attendance26Days = emp.attendance26Days === true;
           const attendanceBonus = attendance26Days ? branchNet * 0.25 : 0;
@@ -2144,7 +2185,7 @@ function getDiscountDetailsForEmployee(employeeName, forBranch) {
   if (hotelAmount > 0 && showHotelInThisBranch) {
     const count = Math.round(hotelAmount / 10) || 1;
     list.push({
-      discountType: 'خصم تقييم الفندق: خصم بسبب ' + count + ' تقييمات سلبية (أقل من المستهدف)، كل تقييم 10 ريال = ' + hotelAmount + ' ريال (فقدان فرص حجز نتيجة المكالمات التي لم يتم الرد عليها)',
+      discountType: 'خصم تقييم الفندق — إجمالي مكالمات لم يُرد عليها أدت إلى فقدان فرص حجز:',
       discountPercentage: null,
       amount: hotelAmount,
       isHotelRating: true
@@ -2215,7 +2256,7 @@ function calculateAggregatedNetForEmployee(employeeName) {
   // Calculate aggregated gross
   const aggregatedRate = aggregatedCount > 100 ? 3 : (aggregatedCount > 50 ? 2 : 1);
   const aggregatedGross = (aggregatedCount * aggregatedRate) + (aggregatedEvalBooking * 20) + (aggregatedEvalGoogle * 10);
-  const aggregatedFund = aggregatedGross * 0.15;
+  const aggregatedFund = aggregatedGross * getSupportFundRatio();
   let baseNet = aggregatedGross - aggregatedFund;
   
   // Calculate aggregated attendance bonus
@@ -2241,7 +2282,7 @@ function calculateAggregatedNetForEmployee(employeeName) {
     const evBooking = emp.evaluationsBooking || 0;
     const evGoogle = emp.evaluationsGoogle || 0;
     const gross = (emp.count * rate) + (evBooking * 20) + (evGoogle * 10);
-    const fund = gross * 0.15;
+    const fund = gross * getSupportFundRatio();
     let net = gross - fund;
     const attendance26Days = emp.attendance26Days === true;
     const attendanceBonus = attendance26Days ? net * 0.25 : 0;
@@ -2916,7 +2957,7 @@ function loadCurrentPeriodStats() {
     const evBooking = emp.evaluationsBooking || 0;
     const evGoogle = emp.evaluationsGoogle || 0;
     const gross = (emp.count * rate) + (evBooking * 20) + (evGoogle * 10);
-    const fund = gross * 0.15;
+    const fund = gross * getSupportFundRatio();
     const net = gross - fund;
     const bw = branchWinners[emp.branch];
     if (!bw) return;
@@ -3222,7 +3263,7 @@ function getEmployeePointsBalanceForPeriodDb(db) {
     db.forEach(function (emp) {
       const gross = typeof computeGrossFromBreakdown === 'function' ? computeGrossFromBreakdown(emp) : ((emp.count > 100 ? 3 : (emp.count > 50 ? 2 : 1)) * emp.count + (emp.evaluationsBooking || 0) * 20 + (emp.evaluationsGoogle || 0) * 10);
       const evBooking = emp.evaluationsBooking || 0;
-      const fund = gross * 0.15;
+      const fund = gross * getSupportFundRatio();
       const net = gross - fund;
       const bw = branchWinners[emp.branch];
       if (!bw) return;
@@ -3267,7 +3308,7 @@ function getEmployeePointsBalanceForPeriodDb(db) {
       var maxChTot = -1;
       employees.forEach(function (e) {
         var eGross = typeof computeGrossFromBreakdown === 'function' ? computeGrossFromBreakdown(e) : ((e.count > 100 ? 3 : (e.count > 50 ? 2 : 1)) * e.count + (e.evaluationsBooking || 0) * 20 + (e.evaluationsGoogle || 0) * 10);
-        var eFund = eGross * 0.15;
+        var eFund = eGross * getSupportFundRatio();
         var eNet = eGross - eFund;
         var eAtt = e.attendance26Days === true;
         var eBonus = eAtt ? eNet * 0.25 : 0;
@@ -3278,7 +3319,7 @@ function getEmployeePointsBalanceForPeriodDb(db) {
     employees.forEach(function (emp) {
       const gross = typeof computeGrossFromBreakdown === 'function' ? computeGrossFromBreakdown(emp) : ((emp.count > 100 ? 3 : (emp.count > 50 ? 2 : 1)) * emp.count + (emp.evaluationsBooking || 0) * 20 + (emp.evaluationsGoogle || 0) * 10);
       totalGross += gross;
-      const fund = gross * 0.15;
+      const fund = gross * getSupportFundRatio();
       var branchNet = gross - fund;
       const attendance26Days = emp.attendance26Days === true;
       var applyChallenge = isDuplicatePb ? (challengeRowIdPb === emp.id && attendance26Days) : attendance26Days;
@@ -3296,7 +3337,7 @@ function getEmployeePointsBalanceForPeriodDb(db) {
     if (typeof getTotalDiscountForEmployee === 'function') {
       totalNet = Math.max(0, totalNet - getTotalDiscountForEmployee(name));
     }
-    var totalFund = isDuplicatePb ? (grossOfBranchWithMaxNetPb * 0.15) : (totalGross * 0.15);
+    var totalFund = isDuplicatePb ? (grossOfBranchWithMaxNetPb * getSupportFundRatio()) : (totalGross * getSupportFundRatio());
     out[name] = totalNet + totalFund;
   });
   return out;
@@ -3313,12 +3354,13 @@ function showPointsBreakdownPopup(empName, reportEmpId, isDuplicate) {
   var net = report.finalNet != null ? report.finalNet : 0;
   var points = net + fund;
   var unit = (report.pointsMode || (typeof window !== 'undefined' && window.adoraRewardsPointsMode)) ? 'نقطة' : 'ريال';
+  var pct = (typeof getPricingConfig === 'function') ? ((getPricingConfig().supportFundPercent != null) ? getPricingConfig().supportFundPercent : 15) : 15;
   var html = '<div class="p-4 text-right space-y-2 text-sm">' +
     '<div class="font-bold text-turquoise border-b border-turquoise/30 pb-2 mb-2">أسباب تجميع الرقم — ' + (empName || '').replace(/</g, '&lt;') + '</div>' +
     '<div class="flex justify-between text-gray-300"><span>إجمالي المكافآت (حجوزات + تقييمات):</span><span class="font-bold text-white">' + gross.toFixed(2) + ' ' + unit + '</span></div>' +
-    '<div class="flex justify-between text-gray-300"><span>− مساهمة شركاء النجاح (15%):</span><span class="font-bold text-orange-400">−' + fund.toFixed(2) + ' ' + unit + '</span></div>' +
+    '<div class="flex justify-between text-gray-300"><span>− مساهمة شركاء النجاح (' + pct + '%):</span><span class="font-bold text-orange-400">−' + fund.toFixed(2) + ' ' + unit + '</span></div>' +
     '<div class="flex justify-between text-gray-300 border-t border-white/10 pt-2"><span>= الصافي المستحق:</span><span class="font-bold text-green-400">' + net.toFixed(2) + ' ' + unit + '</span></div>' +
-    '<div class="flex justify-between text-gray-300"><span>+ مساهمة 15% (نقاط):</span><span class="font-bold text-turquoise">+' + fund.toFixed(2) + ' نقطة</span></div>' +
+    '<div class="flex justify-between text-gray-300"><span>+ مساهمة ' + pct + '% (نقاط):</span><span class="font-bold text-turquoise">+' + fund.toFixed(2) + ' نقطة</span></div>' +
     '<div class="flex justify-between text-turquoise font-bold border-t border-turquoise/30 pt-2 mt-2"><span>= رصيد النقاط من الفترة:</span><span>' + points.toFixed(2) + ' نقطة</span></div>' +
     '</div>';
   var overlay = document.createElement('div');
@@ -3368,6 +3410,7 @@ function populateEmployeePerformanceTable() {
   // Calculate stats for each employee
   const employeesData = [];
   const nameCounts = {};
+  const supportFundPct = (typeof getPricingConfig === 'function') ? ((getPricingConfig().supportFundPercent != null) ? getPricingConfig().supportFundPercent : 15) : 15;
   
   // Count duplicates
   currentDb.forEach(emp => {
@@ -3397,7 +3440,7 @@ function populateEmployeePerformanceTable() {
     currentDb.forEach(emp => {
       const gross = typeof computeGrossFromBreakdown === 'function' ? computeGrossFromBreakdown(emp) : ((emp.count > 100 ? 3 : (emp.count > 50 ? 2 : 1)) * emp.count + (emp.evaluationsBooking || 0) * 20 + (emp.evaluationsGoogle || 0) * 10);
       const evBooking = emp.evaluationsBooking || 0;
-      const fund = gross * 0.15;
+      const fund = gross * getSupportFundRatio();
       const net = gross - fund;
       const bw = branchWinners[emp.branch];
       if (!bw) return;
@@ -3673,7 +3716,7 @@ function buildEmployeePerformanceTableRows(employeesData) {
         <td class="p-3 text-center font-bold text-green-400">${emp.net.toFixed(2)} ريال</td>
         <td class="p-3 text-center">
           <div class="flex flex-col items-center gap-0.5">
-            <span class="font-bold text-turquoise tabular-nums cursor-pointer hover:text-turquoise/80 transition-colors" title="رصيد النقاط من الفترة (صافي + مساهمة 15%). اضغط لرؤية أسباب تجميع الرقم." onclick="typeof showPointsBreakdownPopup === 'function' && showPointsBreakdownPopup('${nameEsc}','${idEsc}',${!!emp.isDuplicate})">${(emp.pointsBalance != null ? emp.pointsBalance : emp.net).toFixed(2)} نقطة</span>
+            <span class="font-bold text-turquoise tabular-nums cursor-pointer hover:text-turquoise/80 transition-colors" title="رصيد النقاط من الفترة (صافي + مساهمة ${supportFundPct}%). اضغط لرؤية أسباب تجميع الرقم." onclick="typeof showPointsBreakdownPopup === 'function' && showPointsBreakdownPopup('${nameEsc}','${idEsc}',${!!emp.isDuplicate})">${(emp.pointsBalance != null ? emp.pointsBalance : emp.net).toFixed(2)} نقطة</span>
             <div class="text-xs text-gray-400">مستوى الأداء: ${emp.level}</div>
           </div>
         </td>
@@ -4226,7 +4269,7 @@ function populateArchivedEmployeePerformanceTableForPeriod(employees, periodId, 
     const evBooking = emp.evaluationsBooking || 0;
     const evGoogle = emp.evaluationsGoogle || 0;
     const gross = (emp.count * rate) + (evBooking * 20) + (evGoogle * 10);
-    const fund = gross * 0.15;
+    const fund = gross * getSupportFundRatio();
     let net = gross - fund;
     const attendance26Days = emp.attendance26Days === true;
     net = net + (attendance26Days ? net * 0.25 : 0);
@@ -4287,7 +4330,7 @@ function populateArchivedEmployeePerformanceTableForPeriod(employees, periodId, 
       const evGoogle = emp.evaluationsGoogle || 0;
       const gross = (emp.count * rate) + (evBooking * 20) + (evGoogle * 10);
       totalGross += gross;
-      const fund = gross * 0.15;
+      const fund = gross * getSupportFundRatio();
       let branchNet = gross - fund;
       const attendance26Days = emp.attendance26Days === true;
       branchNet = branchNet + (attendance26Days ? branchNet * 0.25 : 0);
@@ -4305,7 +4348,7 @@ function populateArchivedEmployeePerformanceTableForPeriod(employees, periodId, 
     let totalNet = totalNetFromBranches + (hasExcellence ? 50 : 0) + (hasCommitment ? 50 : 0);
     const hotelDeductionRiyal = getHotelRatingDeductionForArchived(name, employees, counts);
     totalNet = Math.max(0, totalNet - hotelDeductionRiyal);
-    const totalFund = isDuplicateArchived ? (grossOfBranchWithMaxNetArchived * 0.15) : (totalGross * 0.15);
+    const totalFund = isDuplicateArchived ? (grossOfBranchWithMaxNetArchived * getSupportFundRatio()) : (totalGross * getSupportFundRatio());
     const pointsBalance = totalNet + totalFund;
     const totalEval = totalEvalBooking + totalEvalGoogle;
     employeesData.push({
@@ -4514,7 +4557,7 @@ function calculatePeriodStats(employees) {
     // Calculate net (simplified)
     const rate = emp.count > 100 ? 3 : (emp.count > 50 ? 2 : 1);
     const gross = (emp.count * rate) + ((emp.evaluationsBooking || 0) * 20) + ((emp.evaluationsGoogle || 0) * 10);
-    const fund = gross * 0.15;
+    const fund = gross * getSupportFundRatio();
     let net = gross - fund;
     
     // Add attendance bonus
@@ -4578,7 +4621,7 @@ function populateArchivedEmployeePerformanceTable(employees) {
       
       const rate = emp.count > 100 ? 3 : (emp.count > 50 ? 2 : 1);
       const gross = (emp.count * rate) + ((emp.evaluationsBooking || 0) * 20) + ((emp.evaluationsGoogle || 0) * 10);
-      const fund = gross * 0.15;
+      const fund = gross * getSupportFundRatio();
       let net = gross - fund;
       
       if (emp.attendance26Days === true) {

@@ -266,14 +266,16 @@ function hideElementsForAccounting() {
     actionBtns.querySelectorAll('button').forEach(function (b) {
       var onclick = b.getAttribute('onclick') || '';
       var isConditions = onclick.indexOf('showConditionsModal') >= 0;
-      var isPrint = onclick.indexOf('smartPrint') >= 0 || (b.id === 'printAllBtn' || b.id === 'printSelectedBtn');
+      var isPrint = onclick.indexOf('smartPrint') >= 0 || (b.id === 'printAllBtn' || b.id === 'printSelectedBtn' || b.id === 'exportPdfTableAllBtn');
       b.style.display = (isConditions || isPrint) ? '' : 'none';
     });
   }
   var printAllBtn = document.getElementById('printAllBtn');
   var printSelectedBtn = document.getElementById('printSelectedBtn');
+  var exportPdfBtn = document.getElementById('exportPdfTableAllBtn');
   if (printAllBtn) printAllBtn.style.display = '';
   if (printSelectedBtn) printSelectedBtn.style.display = '';
+  if (exportPdfBtn) exportPdfBtn.style.display = '';
 
   document.querySelectorAll('input[type="text"], input[type="checkbox"]').forEach(function(input) {
     input.disabled = true;

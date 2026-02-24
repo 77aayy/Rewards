@@ -168,7 +168,8 @@ function updateEvalBooking(id, val, inputEl, shouldRender) {
   try {
     localStorage.setItem('adora_rewards_db', JSON.stringify(db));
     if (typeof window !== 'undefined') window.db = db;
-    if (typeof syncLivePeriodToFirebase === 'function') syncLivePeriodToFirebase();
+    var shouldSync = (currentRole !== 'supervisor' && currentRole !== 'hr') || (typeof isAdminLinkSubmitted === 'function' && isAdminLinkSubmitted());
+    if (shouldSync && typeof syncLivePeriodToFirebase === 'function') syncLivePeriodToFirebase();
   } catch (error) {
     console.error('❌ Error saving to localStorage:', error);
   }
@@ -183,7 +184,11 @@ function updateEvalBooking(id, val, inputEl, shouldRender) {
       if (typeof _markPendingTableRefreshAfterEdit === 'function') _markPendingTableRefreshAfterEdit();
     } else {
       if (typeof updateBadges === 'function') updateBadges();
-      if (typeof renderUI === 'function' && typeof window !== 'undefined' && window.currentFilter !== undefined) renderUI(window.currentFilter);
+      if (typeof _scheduleDeferredEvalRefresh === 'function') {
+        _scheduleDeferredEvalRefresh();
+      } else if (typeof renderUI === 'function' && typeof window !== 'undefined' && window.currentFilter !== undefined) {
+        renderUI(window.currentFilter);
+      }
     }
   }
 }
@@ -216,7 +221,8 @@ function updateEvalGoogle(id, val, inputEl, shouldRender) {
   try {
     localStorage.setItem('adora_rewards_db', JSON.stringify(db));
     if (typeof window !== 'undefined') window.db = db;
-    if (typeof syncLivePeriodToFirebase === 'function') syncLivePeriodToFirebase();
+    var shouldSync = (currentRole !== 'supervisor' && currentRole !== 'hr') || (typeof isAdminLinkSubmitted === 'function' && isAdminLinkSubmitted());
+    if (shouldSync && typeof syncLivePeriodToFirebase === 'function') syncLivePeriodToFirebase();
   } catch (error) {
     console.error('❌ Error saving to localStorage:', error);
   }
@@ -231,7 +237,11 @@ function updateEvalGoogle(id, val, inputEl, shouldRender) {
       if (typeof _markPendingTableRefreshAfterEdit === 'function') _markPendingTableRefreshAfterEdit();
     } else {
       if (typeof updateBadges === 'function') updateBadges();
-      if (typeof renderUI === 'function' && typeof window !== 'undefined' && window.currentFilter !== undefined) renderUI(window.currentFilter);
+      if (typeof _scheduleDeferredEvalRefresh === 'function') {
+        _scheduleDeferredEvalRefresh();
+      } else if (typeof renderUI === 'function' && typeof window !== 'undefined' && window.currentFilter !== undefined) {
+        renderUI(window.currentFilter);
+      }
     }
   }
 }
@@ -273,7 +283,8 @@ function updateAttendanceDaysForBranch(empName, branchName, days, shouldRender) 
   try {
     localStorage.setItem('adora_rewards_db', JSON.stringify(db));
     if (typeof window !== 'undefined') window.db = db;
-    if (typeof syncLivePeriodToFirebase === 'function') syncLivePeriodToFirebase();
+    var shouldSync = (currentRole !== 'hr' && currentRole !== 'supervisor') || (typeof isAdminLinkSubmitted === 'function' && isAdminLinkSubmitted());
+    if (shouldSync && typeof syncLivePeriodToFirebase === 'function') syncLivePeriodToFirebase();
   } catch (error) {
     console.error('❌ Error saving to localStorage:', error);
   }

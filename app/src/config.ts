@@ -78,6 +78,8 @@ export interface RewardPricing {
   minEvalAndalus: number;
   /** حد التقييم الأدنى — خرائط جوجل */
   minEvalGoogle: number;
+  /** نسبة صندوق الدعم من الإجمالي (0–100). الصافي = الإجمالي − (الإجمالي × supportFundPercent / 100) */
+  supportFundPercent: number;
 }
 
 /** Full application config */
@@ -159,6 +161,7 @@ export const DEFAULT_REWARD_PRICING: RewardPricing = {
   minEvalCorniche: 8.7,
   minEvalAndalus: 8.2,
   minEvalGoogle: 4.3,
+  supportFundPercent: 15,
 };
 
 /** الافتراضي المعتمد: الحدود العامة + أسعار المكافآت. تُستعمل عند فتح الإعدادات أول مرة وعند «استعادة الافتراضي». */
@@ -237,6 +240,7 @@ function mergeRewardPricing(base: RewardPricing, overlay: Partial<RewardPricing>
     minEvalCorniche: typeof overlay.minEvalCorniche === 'number' ? overlay.minEvalCorniche : (base as RewardPricing).minEvalCorniche ?? 8.7,
     minEvalAndalus: typeof overlay.minEvalAndalus === 'number' ? overlay.minEvalAndalus : (base as RewardPricing).minEvalAndalus ?? 8.2,
     minEvalGoogle: typeof overlay.minEvalGoogle === 'number' ? overlay.minEvalGoogle : (base as RewardPricing).minEvalGoogle ?? 4.3,
+    supportFundPercent: typeof overlay.supportFundPercent === 'number' ? overlay.supportFundPercent : (base as RewardPricing).supportFundPercent ?? 15,
   };
 }
 
@@ -340,10 +344,11 @@ export function loadConfig(): AppConfig {
       vipDescription: savedPricing?.vipDescription ?? DEFAULT_REWARD_PRICING.vipDescription,
       rateEvalBooking: savedPricing?.rateEvalBooking ?? DEFAULT_REWARD_PRICING.rateEvalBooking,
       rateEvalGoogle: savedPricing?.rateEvalGoogle ?? DEFAULT_REWARD_PRICING.rateEvalGoogle,
-      minEvalCorniche: savedPricing?.minEvalCorniche ?? DEFAULT_REWARD_PRICING.minEvalCorniche,
-      minEvalAndalus: savedPricing?.minEvalAndalus ?? DEFAULT_REWARD_PRICING.minEvalAndalus,
-      minEvalGoogle: savedPricing?.minEvalGoogle ?? DEFAULT_REWARD_PRICING.minEvalGoogle,
-    };
+    minEvalCorniche: savedPricing?.minEvalCorniche ?? DEFAULT_REWARD_PRICING.minEvalCorniche,
+    minEvalAndalus: savedPricing?.minEvalAndalus ?? DEFAULT_REWARD_PRICING.minEvalAndalus,
+    minEvalGoogle: savedPricing?.minEvalGoogle ?? DEFAULT_REWARD_PRICING.minEvalGoogle,
+    supportFundPercent: typeof savedPricing?.supportFundPercent === 'number' ? savedPricing.supportFundPercent : DEFAULT_REWARD_PRICING.supportFundPercent,
+  };
     return {
       minBookingThreshold: parsed.minBookingThreshold ?? DEFAULT_CONFIG.minBookingThreshold,
       monthlyNightsThreshold: parsed.monthlyNightsThreshold ?? DEFAULT_CONFIG.monthlyNightsThreshold,

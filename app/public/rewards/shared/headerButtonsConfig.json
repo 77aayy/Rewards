@@ -7,6 +7,7 @@
     { "id": "reports", "label": "التقارير", "labelShort": "تقارير", "variant": "default", "context": "rewards", "onclick": "showReportsPage()", "iconId": "bar-chart2" },
     { "id": "conditions", "label": "شروط المكافآت", "labelShort": "شروط", "variant": "default", "context": "both", "onclick": "showConditionsModal()", "actionType": "conditions", "iconId": "file-text" },
     { "id": "printAll", "label": "طباعة الكل", "labelShort": "الكل", "variant": "primary", "context": "rewards", "onclick": "smartPrint(false)", "iconId": "printer" },
+    { "id": "exportPdfTableAll", "label": "تصدير PDF", "labelShort": "PDF", "variant": "default", "context": "rewards", "onclick": "exportPdfTableAll()", "iconId": "file-down", "title": "تصدير جدول الكل PDF (صفوف، صافي، تقييمات، حضور)" },
     { "id": "printSelected", "label": "طباعة المحدد", "labelShort": "محدد", "variant": "amber", "context": "rewards", "onclick": "smartPrint(true)", "iconId": "target", "hidden": true },
     { "id": "refreshLive", "label": "تحميل التحديثات", "labelShort": "تحديث", "variant": "default", "context": "rewards", "onclick": "refreshLivePeriodFromFirebase()", "iconId": "refresh", "title": "جلب آخر التقييمات والحضور من المشرف/HR" },
     { "id": "adminManage", "label": "إدارة الإداريين", "labelShort": "إداريين", "variant": "violet", "context": "rewards", "onclick": "showAdminManagementModal()", "iconId": "users" },

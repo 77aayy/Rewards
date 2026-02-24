@@ -136,17 +136,36 @@ export default defineConfig({
         // 2) تقديم ملفات /rewards من مجلد Rewards (المصدر) حتى يظهر التعديل فوراً بدون sync
         server.middlewares.use(serveRewardsFromSource)
         // 3) تقديم /shared/* من app/shared (مصدر واحد لـ conditions-content.json وغيره) لصفحة التحليل والتطبيق الرئيسي
+        // طلبات الـ import من تطبيق React (مع ?import أو ?raw أو ?t=) يجب أن تُرد كـ JS module وليس JSON/octet-stream
         server.middlewares.use((req, res, next) => {
           const url = req.url || ''
           const pathname = url.split('?')[0]
           if (!pathname.startsWith('/shared/')) return next()
+          const q = url.indexOf('?') >= 0 ? url.slice(url.indexOf('?')) : ''
+          const isViteModuleRequest = /[?&](import|raw|t=)/.test(q)
           const sub = pathname.slice('/shared/'.length)
           const filePath = path.join(appSharedRoot, sub)
           try {
             const stat = fs.statSync(filePath)
             if (!stat.isFile()) return next()
             const ext = path.extname(filePath)
+            if (isViteModuleRequest) {
+              const content = fs.readFileSync(filePath, 'utf-8')
+              let js: string
+              if (ext === '.json') {
+                js = `export default ${content}`
+              } else if (ext === '.html' && /[?&]raw/.test(q)) {
+                js = `export default ${JSON.stringify(content)}`
+              } else {
+                return next()
+              }
+              res.setHeader('Content-Type', 'application/javascript; charset=utf-8')
+              res.setHeader('Cache-Control', 'no-store, no-cache, must-revalidate')
+              res.end(js)
+              return
+            }
             const types: Record<string, string> = {
+              '.html': 'text/html; charset=utf-8',
               '.json': 'application/json; charset=utf-8',
               '.js': 'application/javascript; charset=utf-8',
             }

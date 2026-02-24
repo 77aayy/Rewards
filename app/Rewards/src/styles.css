@@ -2182,17 +2182,19 @@ text-align: center;
 padding: 0.15rem 0.1rem !important;
 font-size: 0.65rem;
 }
-/* Compact eval inputs — override Tailwind w-16 */
+/* Eval inputs — عرض مريح للإدخال (المشرف/الأدمن)، لمس سهل، جدول مستقر */
 .col-eval-booking input.eval-input,
 .col-eval-google input.eval-input {
-width: 2.5rem !important;
-max-width: 40px !important;
-padding: 2px 2px !important;
-font-size: 0.75rem !important;
-text-align: center;
-height: 22px !important;
-min-height: 0 !important;
-border-width: 1px !important;
+  min-width: 3.25rem !important;
+  width: 4rem !important;
+  max-width: 5rem !important;
+  padding: 6px 8px !important;
+  font-size: 0.9rem !important;
+  text-align: center;
+  height: 36px !important;
+  min-height: 36px !important;
+  border-width: 1px !important;
+  box-sizing: border-box;
 }
 /* Compact eval helper text */
 .col-eval-booking .text-xs,
@@ -2299,7 +2301,8 @@ body.role-supervisor #actionBtns button[onclick*="smartPrint"],
 body.role-supervisor #actionBtns button[onclick*="printConditions"],
 body.role-supervisor #actionBtns button[onclick*="showClosePeriodModal"],
 body.role-supervisor #actionBtns #printAllBtn,
-body.role-supervisor #actionBtns #printSelectedBtn {
+body.role-supervisor #actionBtns #printSelectedBtn,
+body.role-supervisor #actionBtns #exportPdfTableAllBtn {
   display: none !important;
 }
 
@@ -2313,7 +2316,8 @@ body.role-hr #actionBtns button[onclick*="smartPrint"],
 body.role-hr #actionBtns button[onclick*="printConditions"],
 body.role-hr #actionBtns button[onclick*="showClosePeriodModal"],
 body.role-hr #actionBtns #printAllBtn,
-body.role-hr #actionBtns #printSelectedBtn {
+body.role-hr #actionBtns #printSelectedBtn,
+body.role-hr #actionBtns #exportPdfTableAllBtn {
   display: none !important;
 }
 

@@ -48,6 +48,13 @@ if (typeof window !== 'undefined') {
 }
 const LOCAL_REWARDS_EDIT_TS_KEY = 'adora_rewards_last_local_edit_ts';
 const LOCAL_REWARDS_DIRTY_KEY = 'adora_rewards_local_dirty';
+/** مساهمة شركاء النجاح: نسبة تُخصم من الإجمالي للصافي. تُقرأ ديناميكياً من إعدادات الأدمن (صندوق الدعم). */
+function getSupportFundRate() {
+  var p = typeof getPricingConfig === 'function' ? getPricingConfig() : {};
+  var percent = (p && p.supportFundPercent != null) ? p.supportFundPercent : 15;
+  return (percent / 100);
+}
+if (typeof window !== 'undefined') window.getSupportFundRate = getSupportFundRate;
 function hideTransferLoadingOverlay() {
   var el = document.getElementById('transferLoadingOverlay');
   if (!el) return;
@@ -123,9 +130,10 @@ var REWARDS_HEADER_ICONS = {
   'printer': '<svg class="w-4 h-4 shrink-0" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 6 2 18 2 18 9"/><path d="M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2"/><rect x="6" y="14" width="12" height="8"/></svg>',
   'target': '<svg class="w-4 h-4 shrink-0" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><circle cx="12" cy="12" r="6"/><circle cx="12" cy="12" r="2"/></svg>',
   'refresh': '<svg class="w-4 h-4 shrink-0" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12a9 9 0 0 0-9-9 9.75 9.75 0 0 0-6.74 2.74L3 8"/><path d="M3 3v5h5"/><path d="M3 12a9 9 0 0 0 9 9 9.75 9.75 0 0 0 6.74-2.74L21 16"/><path d="M16 21h5v-5"/></svg>',
-  'users': '<svg class="w-4 h-4 shrink-0" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M22 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>'
+  'users': '<svg class="w-4 h-4 shrink-0" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M22 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>',
+  'file-down': '<svg class="w-4 h-4 shrink-0" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="12" y1="18" x2="12" y2="12"/><line x1="9" y1="15" x2="15" y2="15"/></svg>'
 };
-var REWARDS_HEADER_BUTTON_IDS = { returnToAnalysis: 'btnReturnToAnalysis', returnToUpload: 'btnReturnToUpload', printAll: 'printAllBtn', printSelected: 'printSelectedBtn', refreshLive: 'refreshLiveBtn', adminManage: 'adminManageBtn' };
+var REWARDS_HEADER_BUTTON_IDS = { returnToAnalysis: 'btnReturnToAnalysis', returnToUpload: 'btnReturnToUpload', printAll: 'printAllBtn', printSelected: 'printSelectedBtn', exportPdfTableAll: 'exportPdfTableAllBtn', refreshLive: 'refreshLiveBtn', adminManage: 'adminManageBtn' };
 
 function buildActionButtonsFromConfig() {
   var container = typeof document !== 'undefined' ? document.getElementById('actionBtns') : null;
@@ -189,7 +197,8 @@ var DEFAULT_REWARD_PRICING = {
   rateEvalGoogle: 10,
   minEvalCorniche: 8.7,
   minEvalAndalus: 8.2,
-  minEvalGoogle: 4.3
+  minEvalGoogle: 4.3,
+  supportFundPercent: 15
 };
 
 /**
@@ -244,7 +253,8 @@ function getPricingConfig() {
       rateEvalGoogle: p.rateEvalGoogle != null ? p.rateEvalGoogle : DEFAULT_REWARD_PRICING.rateEvalGoogle,
       minEvalCorniche: p.minEvalCorniche != null ? p.minEvalCorniche : DEFAULT_REWARD_PRICING.minEvalCorniche,
       minEvalAndalus: p.minEvalAndalus != null ? p.minEvalAndalus : DEFAULT_REWARD_PRICING.minEvalAndalus,
-      minEvalGoogle: p.minEvalGoogle != null ? p.minEvalGoogle : DEFAULT_REWARD_PRICING.minEvalGoogle
+      minEvalGoogle: p.minEvalGoogle != null ? p.minEvalGoogle : DEFAULT_REWARD_PRICING.minEvalGoogle,
+      supportFundPercent: p.supportFundPercent != null ? p.supportFundPercent : DEFAULT_REWARD_PRICING.supportFundPercent
     };
   }
   // 2. From localStorage
@@ -265,7 +275,8 @@ function getPricingConfig() {
         rateEvalGoogle: p2.rateEvalGoogle != null ? p2.rateEvalGoogle : DEFAULT_REWARD_PRICING.rateEvalGoogle,
         minEvalCorniche: p2.minEvalCorniche != null ? p2.minEvalCorniche : DEFAULT_REWARD_PRICING.minEvalCorniche,
         minEvalAndalus: p2.minEvalAndalus != null ? p2.minEvalAndalus : DEFAULT_REWARD_PRICING.minEvalAndalus,
-        minEvalGoogle: p2.minEvalGoogle != null ? p2.minEvalGoogle : DEFAULT_REWARD_PRICING.minEvalGoogle
+        minEvalGoogle: p2.minEvalGoogle != null ? p2.minEvalGoogle : DEFAULT_REWARD_PRICING.minEvalGoogle,
+        supportFundPercent: p2.supportFundPercent != null ? p2.supportFundPercent : DEFAULT_REWARD_PRICING.supportFundPercent
       };
     }
   } catch (_) {}
@@ -930,6 +941,22 @@ if (typeof window !== 'undefined') {
 
 // isEmployeeMode و isAdminMode معرّفتان في rewards-rbac.js
 
+/** بعد applyLivePeriod: مزامنة المتغيرات المحلية (db, branches, reportStartDate) من الـ payload لتجنّب خلط عند فتح رابط الإداريين — حتى لا يُرسم الجدول قبل جاهزية البيانات. */
+function applyLiveToAppState(live) {
+  if (!live || !Array.isArray(live.db)) return;
+  db = live.db;
+  var br = live.branches;
+  branches = new Set(Array.isArray(br) ? br : (br && typeof br.forEach === 'function' ? [...br] : []));
+  if (branches.size === 0 && db.length > 0) {
+    db.forEach(function (e) { if (e.branch) branches.add(e.branch); });
+  }
+  if (typeof normalizeDuplicateAttendance === 'function') normalizeDuplicateAttendance(db);
+  if (live.reportStartDate != null) reportStartDate = String(live.reportStartDate);
+  if (typeof window !== 'undefined') {
+    window.db = db;
+  }
+}
+
 // Load data from localStorage on page load
 function loadDataFromStorage() {
 try {
@@ -1296,6 +1323,13 @@ async function doAppInit() {
         }
         if (!isEmployeeMode() && live && Array.isArray(live.db) && live.db.length > 0 && typeof applyLivePeriod === 'function') {
           applyLivePeriod(live);
+          if (typeof applyLiveToAppState === 'function') applyLiveToAppState(live);
+          if (typeof fetchConfigFromFirebase === 'function') {
+            try {
+              var cfg = await fetchConfigFromFirebase();
+              if (cfg && typeof cfg.minBookingThreshold === 'number') window.minBookingThreshold = cfg.minBookingThreshold;
+            } catch (_) {}
+          }
           if (typeof loadCumulativePointsFromFirebase === 'function') await loadCumulativePointsFromFirebase();
           loadDataFromStorage();
           if (el && el.parentNode) el.parentNode.removeChild(el);
@@ -1393,6 +1427,13 @@ async function doAppInit() {
     // إذا جلبنا بيانات من Firebase: نطبقها ونعرض اللوحة (الرصيد التراكمي من Firebase أيضاً — مصدر واحد من أي جهاز)
     if (!isEmployeeMode() && live && Array.isArray(live.db) && live.db.length > 0 && typeof applyLivePeriod === 'function') {
       applyLivePeriod(live);
+      if (typeof applyLiveToAppState === 'function') applyLiveToAppState(live);
+      if (typeof fetchConfigFromFirebase === 'function') {
+        try {
+          var cfg = await fetchConfigFromFirebase();
+          if (cfg && typeof cfg.minBookingThreshold === 'number') window.minBookingThreshold = cfg.minBookingThreshold;
+        } catch (_) {}
+      }
       // نفس آلية جلب db: التقييمات السلبية من نفس الـ payload (live) حتى لا تبقى أصفار
       if (live.negativeRatingsCount && typeof live.negativeRatingsCount === 'object') {
         branchNegativeRatingsCount = live.negativeRatingsCount;
@@ -1589,6 +1630,15 @@ function doRbacThenInit() {
         if (typeof toggleBreakdownColumns === 'function') toggleBreakdownColumns(true);
         if (typeof updateFilters === 'function') updateFilters();
         if (typeof renderUI === 'function') renderUI('الكل');
+        // جلب الحد الأدنى لحجوزات الموظف من إعدادات الأدمن وإعادة الرسم عند الوصول (لا نعطّل أول رسم)
+        if (typeof fetchConfigFromFirebase === 'function') {
+          fetchConfigFromFirebase().then(function(c) {
+            if (c && typeof c.minBookingThreshold === 'number') {
+              window.minBookingThreshold = c.minBookingThreshold;
+              if (typeof renderUI === 'function') renderUI('الكل');
+            }
+          }).catch(function() {});
+        }
         if (typeof updateBreakdownFooterTotals === 'function') updateBreakdownFooterTotals();
         // Refresh fast-path guard: ensure footer totals are recalculated after async row rendering.
         // In breakdown mode, initial paint can happen before all computed fields settle.
@@ -2584,7 +2634,7 @@ function computeBranchWinnersAndLosers(dataDb, branchesSet) {
     const evGoogle = emp.evaluationsGoogle || 0;
     const totalEval = evBooking + evGoogle;
     const gross = computeGrossFromBreakdown(emp, _pricing);
-    const fund = gross * 0.15;
+    const fund = gross * getSupportFundRate();
     let net = gross - fund;
     const attendance26Days = emp.attendance26Days === true;
     net = net + (attendance26Days ? net * 0.25 : 0);
@@ -2656,7 +2706,7 @@ function getFooterTotals() {
         let maxChallengeTotalAmount = -1;
         allEmpBranches.forEach(e => {
           const eGross = computeGrossFromBreakdown(e, _pricing);
-          const eFund = eGross * 0.15;
+          const eFund = eGross * getSupportFundRate();
           let eNet = eGross - eFund;
           const eAtt = e.attendance26Days === true;
           const eBonus = eAtt ? eNet * 0.25 : 0;
@@ -2669,7 +2719,7 @@ function getFooterTotals() {
       }
       allEmpBranches.forEach(branchEmp => {
         const gross = computeGrossFromBreakdown(branchEmp, _pricing);
-        const fund = gross * 0.15;
+        const fund = gross * getSupportFundRate();
         let branchNet = gross - fund;
         const attendance26Days = branchEmp.attendance26Days === true;
         // For duplicates: only apply 25% to the selected branch; for singles: apply normally
@@ -2700,7 +2750,7 @@ function getFooterTotals() {
       const evGoogle = emp.evaluationsGoogle || 0;
       const empTotalEval = evBooking + evGoogle;
       const gross = computeGrossFromBreakdown(emp, _pricingStats);
-      const fund = gross * 0.15;
+      const fund = gross * getSupportFundRate();
       let net = gross - fund;
       const attendance26Days = emp.attendance26Days === true;
       net = net + (attendance26Days ? net * 0.25 : 0);
@@ -2940,12 +2990,13 @@ function _scheduleDeferredEvalRefresh() {
       return;
     }
     updateBadges();
-    if (typeof renderUI === 'function' && typeof currentFilter !== 'undefined') renderUI(currentFilter);
+    var filter = (typeof window !== 'undefined' && window.currentFilter !== undefined) ? window.currentFilter : currentFilter;
+    if (typeof renderUI === 'function' && filter !== undefined) renderUI(filter);
     // Restore focus after DOM rebuild
     if (restoreTarget) {
       requestAnimationFrame(function() { _focusEvalByData(restoreTarget.empId, restoreTarget.evalType); });
     }
-  }, 800);
+  }, 500);
 }
 
 /** Lightweight live refresh while typing evals: keep bonus/winner badges in sync without full table rebuild. */
@@ -3040,7 +3091,7 @@ const isMostBook = branchWinners[item.branch]?.book.ids.includes(item.id) && bra
 const hasCommitmentBonus = checked && (isMostEval || isMostBook);
 const commitmentBonus = hasCommitmentBonus ? 50 : 0;
 const gross = computeGrossFromBreakdown(item);
-const fund = gross * 0.15;
+const fund = gross * getSupportFundRate();
 let net = gross - fund;
 // Apply 25% bonus if employee completed 26 days, or 25% discount if not
 const attendanceBonus = checked ? net * 0.25 : 0; // 25% bonus only if user activated "تم"
@@ -3204,7 +3255,7 @@ const evBooking = emp.evaluationsBooking || 0;
 const evGoogle = emp.evaluationsGoogle || 0;
 const totalEval = evBooking + evGoogle; // For financial calculations only
 const gross = computeGrossFromBreakdown(emp, _pFooter);
-const fund = gross * 0.15;
+const fund = gross * getSupportFundRate();
 let net = gross - fund;
 // Apply attendance bonus/discount for accurate net calculation
 const attendance26Days = emp.attendance26Days === true; // Only true if user manually activated
@@ -3556,7 +3607,7 @@ const evBooking = emp.evaluationsBooking || 0;
 const evGoogle = emp.evaluationsGoogle || 0;
 const totalEval = evBooking + evGoogle;
 const gross = computeGrossFromBreakdown(emp, _pricingRenderUI);
-const fund = gross * 0.15;
+const fund = gross * getSupportFundRate();
 let net = gross - fund;
 // CRITICAL: Apply attendance bonus/discount to match renderUI calculation
 const attendance26Days = emp.attendance26Days === true; // Only true if user manually activated
@@ -3575,6 +3626,17 @@ const { branchWinners } = computeBranchWinnersAndLosers(db, branches);
 let filtered = [...db];
 if (currentFilter !== 'الكل') {
 filtered = filtered.filter(d => d.branch === currentFilter);
+}
+// تطبيق الحد الأدنى لحجوزات الموظف من إعدادات الأدمن (config/settings.json في Firebase)
+var minThreshold = (typeof window !== 'undefined' && window.minBookingThreshold != null) ? window.minBookingThreshold : 0;
+if (minThreshold > 0) {
+  if (currentFilter === 'الكل') {
+    var nameToAggCount = {};
+    filtered.forEach(function(e) { nameToAggCount[e.name] = (nameToAggCount[e.name] || 0) + (e.count || 0); });
+    filtered = filtered.filter(function(e) { return (nameToAggCount[e.name] || 0) >= minThreshold; });
+  } else {
+    filtered = filtered.filter(function(e) { return (e.count || 0) >= minThreshold; });
+  }
 }
 let viewWinners = { net: {val: -1, ids: []}, eval: {val: -1, ids: []}, book: {val: -1, ids: []} };
 let totalNet = 0, totalBookings = 0, totalFund = 0;
@@ -3620,7 +3682,7 @@ db.forEach(emp => {
     aggEval += evBooking;
     aggCount += branchEmp.count || 0;
     const gross = computeGrossFromBreakdown(branchEmp, _pricingRenderUI);
-    const fund = gross * 0.15;
+    const fund = gross * getSupportFundRate();
     let branchNet = gross - fund;
     const attendance26Days = branchEmp.attendance26Days === true;
     branchNet = branchNet + (attendance26Days ? branchNet * 0.25 : 0);
@@ -4079,7 +4141,7 @@ const commitmentBonus = hasCommitmentBonus ? 50 : 0;
 // Calculate net (for this specific branch row)
 // evBooking and evGoogle are already defined at the start of calcStats function
 const gross = computeGrossFromBreakdown(emp, _pricingRenderUI);
-const fund = gross * 0.15;
+const fund = gross * getSupportFundRate();
 let net = gross - fund;
 // Apply 25% bonus only if user manually activated "تم" (no discount)
 const attendanceBonus = attendance26Days ? net * 0.25 : 0; // 25% bonus only if user activated "تم"
@@ -4164,7 +4226,7 @@ if (filter === 'الكل') {
     let hasCommitment = false;
     allEmpBranches.forEach(branchEmp => {
       const gross = computeGrossFromBreakdown(branchEmp, _pricingRenderUI);
-      const fund = gross * 0.15;
+      const fund = gross * getSupportFundRate();
       let branchNet = gross - fund;
       const attendance26Days = branchEmp.attendance26Days === true;
       branchNet = branchNet + (attendance26Days ? branchNet * 0.25 : 0);
@@ -4434,7 +4496,7 @@ allEmpBranches.forEach(branchEmp => {
   const branchEvBooking = branchEmp.evaluationsBooking || 0;
   const branchEvGoogle = branchEmp.evaluationsGoogle || 0;
   const branchGross = computeGrossFromBreakdown(branchEmp);
-  const branchFund = branchGross * 0.15;
+  const branchFund = branchGross * getSupportFundRate();
   let eNet = branchGross - branchFund;
   const eAttendance26Days = branchEmp.attendance26Days === true;
   const eAttendanceBonus = eAttendance26Days ? eNet * 0.25 : 0;
@@ -4454,7 +4516,7 @@ const branchRate = branchEmp.count > 100 ? 3 : (branchEmp.count > 50 ? 2 : 1);
 const branchEvBooking = branchEmp.evaluationsBooking || 0;
 const branchEvGoogle = branchEmp.evaluationsGoogle || 0;
 const branchGross = computeGrossFromBreakdown(branchEmp);
-const branchFund = branchGross * 0.15;
+const branchFund = branchGross * getSupportFundRate();
 let branchNet = branchGross - branchFund;
 const branchAttendance26Days = branchEmp.attendance26Days === true;
 const branchAttendanceBonus = (branchAttendance26Days && challengeRowId === branchEmp.id) ? branchNet * 0.25 : 0;
@@ -4944,7 +5006,7 @@ value="${emp.evaluationsBooking || ''}" placeholder="0"
 oninput="this.value = this.value.replace(/[^0-9]/g, ''); updateEvalBooking('${(typeof escAttr === 'function' ? escAttr(emp.id) : String(emp.id || '').replace(/'/g, "\\'"))}', this.value, this, false)"
 onblur="updateEvalBooking('${(typeof escAttr === 'function' ? escAttr(emp.id) : String(emp.id || '').replace(/'/g, "\\'"))}', this.value, this, true)"
 onkeydown="handleEvalKey(event, this)"
-class="eval-input text-blue-400 w-16 bg-white/5 border border-blue-400/50 rounded px-2 py-1 text-center focus:outline-none focus:border-blue-400 transition-colors number-display font-sans">`;
+class="eval-input text-blue-400 min-w-[3.25rem] w-20 bg-white/5 border border-blue-400/50 rounded px-2 py-1.5 text-center text-base focus:outline-none focus:border-blue-400 transition-colors number-display font-sans">`;
 })()}
 </td>
 <td class="col-eval-google p-2 text-center${(() => { try { var r = localStorage.getItem('adora_current_role'); var submitted = typeof isAdminLinkSubmitted === 'function' && isAdminLinkSubmitted(); return (r === 'supervisor' && filter !== 'الكل' && !submitted) ? ' admin-entry-zone admin-entry-supervisor' : ''; } catch(e) { return ''; } })()}">
@@ -4963,7 +5025,7 @@ value="${emp.evaluationsGoogle || ''}" placeholder="0"
 oninput="this.value = this.value.replace(/[^0-9]/g, ''); updateEvalGoogle('${emp.id}', this.value, this, false)"
 onblur="updateEvalGoogle('${emp.id}', this.value, this, true)"
 onkeydown="handleEvalKey(event, this)"
-class="eval-input text-green-400 w-16 bg-white/5 border border-green-400/50 rounded px-2 py-1 text-center focus:outline-none focus:border-green-400 transition-colors number-display font-sans">`;
+class="eval-input text-green-400 min-w-[3.25rem] w-20 bg-white/5 border border-green-400/50 rounded px-2 py-1.5 text-center text-base focus:outline-none focus:border-green-400 transition-colors number-display font-sans">`;
 })()}
 </td>
 <td class="col-net p-2 text-left font-mono text-sm font-semibold px-2 print:text-black number-display text-white bg-white/[0.04]">
@@ -5256,7 +5318,8 @@ function applyNegativeRatingStep(branch, delta) {
   branchNegativeRatingsCount[branch] = Math.max(0, n);
   try { localStorage.setItem('adora_rewards_negativeRatingsCount', JSON.stringify(branchNegativeRatingsCount)); } catch (e) {}
   if (typeof window !== 'undefined') window.branchNegativeRatingsCount = branchNegativeRatingsCount;
-  if (typeof syncLivePeriodToFirebase === 'function') syncLivePeriodToFirebase();
+  var shouldSync = (_roleNeg !== 'supervisor' && _roleNeg !== 'hr') || (typeof isAdminLinkSubmitted === 'function' && isAdminLinkSubmitted());
+  if (shouldSync && typeof syncLivePeriodToFirebase === 'function') syncLivePeriodToFirebase();
   if (typeof renderUI === 'function') renderUI(typeof currentFilter !== 'undefined' ? currentFilter : 'الكل');
 }
 if (typeof window !== 'undefined') window.applyNegativeRatingStep = applyNegativeRatingStep;
@@ -5549,6 +5612,153 @@ console.error('Error in smartPrint:', error);
 alert('حدث خطأ أثناء الطباعة: ' + error.message);
 }
 }
+
+/** تصدير جدول الكل كـ PDF احترافي: نفس رؤوس وأعمدة جدول الكل، خلفية بيضاء وألوان أبيض/أسود/رمادي، ترويسة تقرير مكافآت فنادق إليت. */
+function exportPdfTableAll() {
+  if (typeof db === 'undefined' || !Array.isArray(db) || db.length === 0) {
+    if (typeof showToast === 'function') showToast('لا توجد بيانات لتصدير جدول الكل.', 'error');
+    else alert('لا توجد بيانات لتصدير جدول الكل.');
+    return;
+  }
+  var uniqueNames = [];
+  db.forEach(function (e) {
+    if (uniqueNames.indexOf(e.name) === -1) uniqueNames.push(e.name);
+  });
+  uniqueNames.sort(function (a, b) { return String(a).localeCompare(String(b), 'ar'); });
+  var periodText = (document.getElementById('headerPeriodRange') && document.getElementById('headerPeriodRange').innerText) ? document.getElementById('headerPeriodRange').innerText : '-';
+  var reportDate = typeof getReportDateGregorian === 'function' ? getReportDateGregorian() : new Date().toLocaleDateString('en-GB', { day: '2-digit', month: '2-digit', year: 'numeric' });
+  function esc(s) { return String(s == null ? '' : s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;'); }
+  function td(v, align) { align = align || 'center'; return '<td style="padding:5px 6px;border:1px solid #b0b0b0;text-align:' + align + ';font-size:10px;color:#1a1a1a;">' + esc(String(v)) + '</td>'; }
+  var hasBreakdown = window.adoraTransferMode && db.some(function (e) { return e._reception != null || e._booking != null || e._morning != null; });
+  var vipRooms = (window.adoraActiveVipRooms && window.adoraActiveVipRooms.length > 0) ? window.adoraActiveVipRooms : [];
+  var nVip = vipRooms.length;
+
+  var groupRow = '';
+  var subRow = '';
+  if (hasBreakdown && nVip > 0) {
+    groupRow = '<tr style="background:#e8e8e8;">' +
+      '<th colspan="2" style="padding:6px 8px;border:1px solid #999;font-size:10px;font-weight:700;color:#1a1a1a;">بيانات الموظف</th>' +
+      '<th colspan="6" style="padding:6px 8px;border:1px solid #999;font-size:10px;font-weight:700;color:#1a1a1a;">الحجوزات</th>' +
+      '<th colspan="3" style="padding:6px 8px;border:1px solid #999;font-size:10px;font-weight:700;color:#1a1a1a;">الشفتات</th>' +
+      '<th colspan="' + nVip + '" style="padding:6px 8px;border:1px solid #999;font-size:10px;font-weight:700;color:#1a1a1a;">VIP</th>' +
+      '<th colspan="2" style="padding:6px 8px;border:1px solid #999;font-size:10px;font-weight:700;color:#1a1a1a;">تنبيهات</th>' +
+      '<th style="padding:6px 8px;border:1px solid #999;font-size:10px;font-weight:700;color:#1a1a1a;">الحضور</th>' +
+      '<th colspan="2" style="padding:6px 8px;border:1px solid #999;font-size:10px;font-weight:700;color:#1a1a1a;">التقييمات</th>' +
+      '<th style="padding:6px 8px;border:1px solid #999;font-size:10px;font-weight:700;color:#1a1a1a;">المكافأة</th></tr>';
+    subRow = '<tr style="background:#f0f0f0;">' +
+      '<th style="padding:5px 6px;border:1px solid #999;font-size:9px;font-weight:600;color:#333;">م</th><th style="padding:5px 6px;border:1px solid #999;font-size:9px;font-weight:600;color:#333;">الموظف</th>' +
+      '<th style="padding:5px 6px;border:1px solid #999;font-size:9px;font-weight:600;color:#333;">العقود</th><th style="padding:5px 6px;border:1px solid #999;font-size:9px;font-weight:600;color:#333;">استقبال</th><th style="padding:5px 6px;border:1px solid #999;font-size:9px;font-weight:600;color:#333;">بوكينج</th>' +
+      '<th style="padding:5px 6px;border:1px solid #999;font-size:9px;font-weight:600;color:#333;">صباح</th><th style="padding:5px 6px;border:1px solid #999;font-size:9px;font-weight:600;color:#333;">مساء</th><th style="padding:5px 6px;border:1px solid #999;font-size:9px;font-weight:600;color:#333;">ليل</th>' +
+      '<th style="padding:5px 6px;border:1px solid #999;font-size:9px;font-weight:600;color:#333;">صباح</th><th style="padding:5px 6px;border:1px solid #999;font-size:9px;font-weight:600;color:#333;">مساء</th><th style="padding:5px 6px;border:1px solid #999;font-size:9px;font-weight:600;color:#333;">ليل</th>';
+    vipRooms.forEach(function (num) { subRow += '<th style="padding:5px 6px;border:1px solid #999;font-size:9px;font-weight:600;color:#333;">' + num + '</th>'; });
+    subRow += '<th style="padding:5px 6px;border:1px solid #999;font-size:9px;font-weight:600;color:#333;">تنبيه</th><th style="padding:5px 6px;border:1px solid #999;font-size:9px;font-weight:600;color:#333;">نقص SAR</th>' +
+      '<th style="padding:5px 6px;border:1px solid #999;font-size:9px;font-weight:600;color:#333;">بطل تحدي الظروف</th>' +
+      '<th style="padding:5px 6px;border:1px solid #999;font-size:9px;font-weight:600;color:#333;">GOOGLE</th><th style="padding:5px 6px;border:1px solid #999;font-size:9px;font-weight:600;color:#333;">BOOKING</th>' +
+      '<th style="padding:5px 6px;border:1px solid #999;font-size:9px;font-weight:600;color:#333;">الصافي</th></tr>';
+  } else {
+    groupRow = '<tr style="background:#e8e8e8;">' +
+      '<th colspan="2" style="padding:6px 8px;border:1px solid #999;font-size:10px;font-weight:700;color:#1a1a1a;">بيانات الموظف</th>' +
+      '<th style="padding:6px 8px;border:1px solid #999;font-size:10px;font-weight:700;color:#1a1a1a;">الحجوزات</th>' +
+      '<th style="padding:6px 8px;border:1px solid #999;font-size:10px;font-weight:700;color:#1a1a1a;">الحضور</th>' +
+      '<th colspan="2" style="padding:6px 8px;border:1px solid #999;font-size:10px;font-weight:700;color:#1a1a1a;">التقييمات</th>' +
+      '<th style="padding:6px 8px;border:1px solid #999;font-size:10px;font-weight:700;color:#1a1a1a;">المكافأة</th></tr>';
+    subRow = '<tr style="background:#f0f0f0;">' +
+      '<th style="padding:5px 6px;border:1px solid #999;font-size:9px;font-weight:600;color:#333;">م</th><th style="padding:5px 6px;border:1px solid #999;font-size:9px;font-weight:600;color:#333;">الموظف</th>' +
+      '<th style="padding:5px 6px;border:1px solid #999;font-size:9px;font-weight:600;color:#333;">عدد الحجوزات</th>' +
+      '<th style="padding:5px 6px;border:1px solid #999;font-size:9px;font-weight:600;color:#333;">الحضور</th>' +
+      '<th style="padding:5px 6px;border:1px solid #999;font-size:9px;font-weight:600;color:#333;">GOOGLE</th><th style="padding:5px 6px;border:1px solid #999;font-size:9px;font-weight:600;color:#333;">BOOKING</th>' +
+      '<th style="padding:5px 6px;border:1px solid #999;font-size:9px;font-weight:600;color:#333;">الصافي</th></tr>';
+  }
+
+  var rowsHtml = '';
+  uniqueNames.forEach(function (name, idx) {
+    var allEmpBranches = db.filter(function (e) { return e.name === name; });
+    var agg = {
+      count: 0, reception: 0, booking: 0, morning: 0, evening: 0, night: 0,
+      alertCount: 0, alertTotal: 0, evalBooking: 0, evalGoogle: 0,
+      attendanceDone: false, vipRooms: {}
+    };
+    allEmpBranches.forEach(function (e) {
+      agg.count += e.count || 0;
+      agg.reception += e._reception || 0;
+      agg.booking += e._booking || 0;
+      agg.morning += e._morning || 0;
+      agg.evening += e._evening || 0;
+      agg.night += e._night || 0;
+      agg.alertCount += e._alertCount || 0;
+      agg.alertTotal += e._alertTotal || 0;
+      agg.evalBooking += e.evaluationsBooking || 0;
+      agg.evalGoogle += e.evaluationsGoogle || 0;
+      if (e.attendance26Days === true) agg.attendanceDone = true;
+      if (e._vipRooms && typeof e._vipRooms === 'object') {
+        Object.keys(e._vipRooms).forEach(function (k) { agg.vipRooms[k] = (agg.vipRooms[k] || 0) + (e._vipRooms[k] || 0); });
+      }
+    });
+    var net = typeof getDisplayNetForEmployee === 'function' ? getDisplayNetForEmployee(name, { aggregated: true }) : 0;
+    var netStr = (typeof net === 'number' && !isNaN(net)) ? Number(net).toFixed(2) : '0.00';
+    var attendanceStr = agg.attendanceDone ? 'تم' : 'لم يتم';
+
+    if (hasBreakdown && nVip > 0) {
+      var contracts = allEmpBranches.reduce(function (s, e) { return s + (e._bookingRegular || 0); }, 0);
+      rowsHtml += '<tr>' + td(idx + 1) + td(name, 'right');
+      rowsHtml += td(contracts) + td(agg.reception) + td(agg.booking) + td(agg.morning) + td(agg.evening) + td(agg.night);
+      rowsHtml += td(agg.morning) + td(agg.evening) + td(agg.night);
+      vipRooms.forEach(function (num) { rowsHtml += td(agg.vipRooms[num] || 0); });
+      rowsHtml += td(agg.alertCount) + td(agg.alertTotal > 0 ? Math.round(agg.alertTotal).toLocaleString('en-SA') : '—') + td(attendanceStr) + td(agg.evalGoogle) + td(agg.evalBooking) + td(netStr, 'left') + '</tr>';
+    } else {
+      rowsHtml += '<tr>' + td(idx + 1) + td(name, 'right') + td(agg.count) + td(attendanceStr) + td(agg.evalGoogle) + td(agg.evalBooking) + td(netStr, 'left') + '</tr>';
+    }
+  });
+
+  var tableHtml = '<table dir="rtl" style="width:100%;border-collapse:collapse;font-family:\'IBM Plex Sans Arabic\',Arial,sans-serif;background:#fff;">' +
+    '<thead>' + groupRow + subRow + '</thead><tbody>' + rowsHtml + '</tbody></table>';
+  var titleHtml = '<div style="margin-bottom:14px;padding-bottom:10px;border-bottom:2px solid #333;">' +
+    '<h1 style="margin:0 0 6px 0;font-size:18px;font-weight:700;color:#1a1a1a;">تقرير مكافآت فنادق إليت</h1>' +
+    '<p style="margin:0;font-size:12px;color:#444;">الفترة من ' + esc(periodText) + ' إلى تاريخ التصدير: ' + esc(reportDate) + '</p></div>';
+  var fullHtml = '<div dir="rtl" lang="ar" style="padding:14px;background:#fff;color:#1a1a1a;font-family:\'IBM Plex Sans Arabic\',Arial,sans-serif;">' + titleHtml + tableHtml + '</div>';
+  var fileName = 'تقرير-مكافآت-الكل-' + (periodText.replace(/\s/g, '-').replace(/[^\w\u0600-\u06FF\-]/g, '').substring(0, 25)) + '.pdf';
+  if (fileName.length > 55) fileName = fileName.substring(0, 55); else if (fileName.indexOf('.pdf') !== fileName.length - 4) fileName = fileName + '.pdf';
+  var btn = document.getElementById('exportPdfTableAllBtn');
+  if (btn) btn.disabled = true;
+  loadScript('https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.1/html2pdf.bundle.min.js').then(function () {
+    var html2pdfFn = typeof window.html2pdf !== 'undefined' ? window.html2pdf : null;
+    if (!html2pdfFn) { if (btn) btn.disabled = false; return Promise.reject(new Error('html2pdf not available')); }
+    var wrapper = document.createElement('div');
+    wrapper.setAttribute('dir', 'rtl');
+    wrapper.setAttribute('lang', 'ar');
+    wrapper.style.cssText = 'width:270mm;max-width:100%;margin:0 auto;padding:0;background:#fff;color:#1a1a1a;font-family:\'IBM Plex Sans Arabic\',Arial,sans-serif;';
+    wrapper.innerHTML = fullHtml;
+    document.body.appendChild(wrapper);
+    var opt = {
+      margin: [8, 8, 8, 8],
+      filename: fileName,
+      image: { type: 'jpeg', quality: 0.95 },
+      html2canvas: { scale: 1.5, useCORS: true, logging: false },
+      jsPDF: { unit: 'mm', format: 'a4', orientation: 'landscape' },
+      pagebreak: { mode: ['avoid-all', 'css', 'legacy'] }
+    };
+    return html2pdfFn().set(opt).from(wrapper).outputPdf('blob').then(function (blob) {
+      if (document.body.contains(wrapper)) document.body.removeChild(wrapper);
+      var url = URL.createObjectURL(blob);
+      var a = document.createElement('a');
+      a.href = url;
+      a.download = fileName;
+      a.click();
+      setTimeout(function () { URL.revokeObjectURL(url); }, 2000);
+      if (typeof showToast === 'function') showToast('تم تحميل PDF تقرير جدول الكل');
+      return { blob: blob, fileName: fileName };
+    }).catch(function (err) {
+      if (document.body.contains(wrapper)) document.body.removeChild(wrapper);
+      throw err;
+    });
+  }).then(function () { if (btn) btn.disabled = false; }).catch(function (err) {
+    if (btn) btn.disabled = false;
+    console.error('exportPdfTableAll', err);
+    if (typeof showToast === 'function') showToast('فشل تصدير PDF. جرّب مرة أخرى.', 'error');
+    else alert('فشل تصدير PDF: ' + (err && err.message ? err.message : err));
+  });
+}
+
 function generateProfessionalPrintReport(onlySelected) {
 // Get data
 const filter = currentFilter;
@@ -5692,7 +5902,7 @@ const hasCommitmentBonus = attendance26Days && (isMostEval || isMostBook);
 isMostCommitted = hasCommitmentBonus;
 const commitmentBonus = hasCommitmentBonus ? 50 : 0;
 const gross = computeGrossFromBreakdown(emp, _pricingRenderUI);
-const fund = gross * 0.15;
+const fund = gross * getSupportFundRate();
 let net = gross - fund;
 const attendanceBonus = attendance26Days ? net * 0.25 : 0;
 net = net + attendanceBonus;
@@ -5777,7 +5987,7 @@ if (filter === 'الكل' && !onlySelected) {
       const branchEvBooking = branchEmp.evaluationsBooking || 0;
       const branchEvGoogle = branchEmp.evaluationsGoogle || 0;
       const branchGross = computeGrossFromBreakdown(branchEmp);
-      const branchFund = branchGross * 0.15;
+      const branchFund = branchGross * getSupportFundRate();
       let eNet = branchGross - branchFund;
       const eAttendance26Days = branchEmp.attendance26Days === true;
       const eAttendanceBonus = eAttendance26Days ? eNet * 0.25 : 0;
@@ -5796,7 +6006,7 @@ if (filter === 'الكل' && !onlySelected) {
       const branchEvBooking = branchEmp.evaluationsBooking || 0;
       const branchEvGoogle = branchEmp.evaluationsGoogle || 0;
       const branchGross = computeGrossFromBreakdown(branchEmp);
-      const branchFund = branchGross * 0.15;
+      const branchFund = branchGross * getSupportFundRate();
       let branchNet = branchGross - branchFund;
       const branchAttendance26Days = branchEmp.attendance26Days === true;
       const branchAttendanceBonus = (branchAttendance26Days && challengeRowId === branchEmp.id) ? branchNet * 0.25 : 0;
@@ -6551,7 +6761,8 @@ function conditionsReplaceTemplates(str, pricing) {
     .replace(/\{\{rateEvalGoogle\}\}/g, pricing.rateEvalGoogle)
     .replace(/\{\{minEvalCorniche\}\}/g, pricing.minEvalCorniche != null ? pricing.minEvalCorniche : 8.7)
     .replace(/\{\{minEvalAndalus\}\}/g, pricing.minEvalAndalus != null ? pricing.minEvalAndalus : 8.2)
-    .replace(/\{\{minEvalGoogle\}\}/g, pricing.minEvalGoogle != null ? pricing.minEvalGoogle : 4.3);
+    .replace(/\{\{minEvalGoogle\}\}/g, pricing.minEvalGoogle != null ? pricing.minEvalGoogle : 4.3)
+    .replace(/\{\{supportFundPercent\}\}/g, pricing.supportFundPercent != null ? pricing.supportFundPercent : 15);
 }
 
 // مطابق لـ THEME_CLASSES في React (App.tsx ConditionsPopup) — لون التوركواز الموحد #14b8a6
@@ -6577,7 +6788,7 @@ function buildConditionsModalHtml(pricing, schema) {
     if (sec.id === 'vip') {
       var branchNames = Object.keys(vipByBranch);
       if (branchNames.length === 0 && !(vipDefault.reception > 0 || vipDefault.booking > 0)) return;
-      html += '<div class="' + theme.wrap + '"><h4 class="text-base font-bold ' + theme.title + ' mb-3 flex items-center gap-2"><span>' + (sec.icon || '') + '</span><span>' + escHtml(sec.title) + '</span></h4><ul class="space-y-2 list-none text-sm text-gray-300">';
+      html += '<div class="' + theme.wrap + '"><h4 class="text-base font-bold ' + theme.title + ' mb-3 flex items-center gap-2"><span>' + (sec.icon || '') + '</span><span>' + escHtml(conditionsReplaceTemplates(sec.title || '', _rp)) + '</span></h4><ul class="space-y-2 list-none text-sm text-gray-300">';
       branchNames.forEach(function(branch) {
         var rooms = vipByBranch[branch];
         var roomNums = Object.keys(rooms);
@@ -6598,7 +6809,7 @@ function buildConditionsModalHtml(pricing, schema) {
 
     var isPointsSection = sec.id === 'points';
     var ulClass = 'space-y-2 list-none text-sm text-gray-300' + (isPointsSection ? ' grid grid-cols-1 sm:grid-cols-2 gap-x-6 gap-y-2' : '');
-    html += '<div class="' + theme.wrap + '"><h4 class="text-base font-bold ' + theme.title + ' mb-3 flex items-center gap-2"><span>' + (sec.icon || '') + '</span><span>' + escHtml(sec.title) + '</span></h4><ul class="' + ulClass + '">';
+    html += '<div class="' + theme.wrap + '"><h4 class="text-base font-bold ' + theme.title + ' mb-3 flex items-center gap-2"><span>' + (sec.icon || '') + '</span><span>' + escHtml(conditionsReplaceTemplates(sec.title || '', _rp)) + '</span></h4><ul class="' + ulClass + '">';
     (sec.items || []).forEach(function(item) {
       if (item.placeholder === 'instructionsButton') {
         html += '<li class="flex items-start gap-2 flex-wrap items-center"><span class="' + theme.bullet + ' font-bold">•</span><span class="text-gray-400">' + escHtml(item.staticBefore || '') + '</span>';
@@ -6641,7 +6852,7 @@ function buildConditionsPrintDocument(pricing, schema) {
     if (sec.id === 'vip') {
       var branchNames = Object.keys(vipByBranch);
       if (branchNames.length === 0 && !(vipDefault.reception > 0 || vipDefault.booking > 0)) return;
-      body += '<div class="section" style="background-color: rgba(245, 158, 11, 0.08); border-color: rgba(245, 158, 11, 0.4); border-right: 5px solid rgba(245, 158, 11, 0.6);"><h2>' + (sec.icon || '') + ' ' + escHtml(sec.title) + '</h2><ul>';
+      body += '<div class="section" style="background-color: rgba(245, 158, 11, 0.08); border-color: rgba(245, 158, 11, 0.4); border-right: 5px solid rgba(245, 158, 11, 0.6);"><h2>' + (sec.icon || '') + ' ' + escHtml(conditionsReplaceTemplates(sec.title || '', _rp)) + '</h2><ul>';
       branchNames.forEach(function(branch) {
         var rooms = vipByBranch[branch];
         var roomNums = Object.keys(rooms);
@@ -6662,7 +6873,7 @@ function buildConditionsPrintDocument(pricing, schema) {
 
     var cls = sectionClass[sec.theme] || 'section';
     var style = sectionStyle[sec.theme] ? ' style="' + sectionStyle[sec.theme] + '"' : '';
-    body += '<div class="' + cls + '"' + style + '><h2>' + (sec.icon || '') + ' ' + escHtml(sec.title) + '</h2><ul>';
+    body += '<div class="' + cls + '"' + style + '><h2>' + (sec.icon || '') + ' ' + escHtml(conditionsReplaceTemplates(sec.title || '', _rp)) + '</h2><ul>';
     (sec.items || []).forEach(function(item) {
       if (item.placeholder === 'instructionsButton') {
         body += '<li>' + escHtml(item.staticBefore || '') + '.</li>';
@@ -6961,7 +7172,6 @@ function showAdminSubmittedScreen() {
         if (typeof reportStartDate !== 'undefined') localStorage.setItem('adora_rewards_startDate', reportStartDate || '');
         if (typeof currentEvalRate !== 'undefined') localStorage.setItem('adora_rewards_evalRate', String(currentEvalRate || 20));
         if (typeof employeeCodesMap !== 'undefined') localStorage.setItem('adora_rewards_employeeCodes', JSON.stringify(employeeCodesMap || {}));
-        if (typeof syncLivePeriodToFirebase === 'function') syncLivePeriodToFirebase();
       } catch (e) {}
     }
     const periodId = typeof getCurrentPeriodId === 'function' ? getCurrentPeriodId() : '';
@@ -7235,7 +7445,7 @@ const rate = getDisplayRate(emp.count);
 const evBooking = emp.evaluationsBooking || 0;
 const evGoogle = emp.evaluationsGoogle || 0;
 const gross = computeGrossFromBreakdown(emp, _p);
-const fund = gross * 0.15;
+const fund = gross * getSupportFundRate();
 let net = gross - fund;
 const netBeforeAttendanceBonus = net; // Save net before attendance bonus
 const attendance26Days = emp.attendance26Days === true;
@@ -7258,7 +7468,7 @@ const eRate = e.count > 100 ? 3 : (e.count > 50 ? 2 : 1);
 const eEvBooking = e.evaluationsBooking || 0;
 const eEvGoogle = e.evaluationsGoogle || 0;
 const eGross = computeGrossFromBreakdown(e);
-const eFund = eGross * 0.15;
+const eFund = eGross * getSupportFundRate();
 let eNet = eGross - eFund;
 const eAttendance26Days = e.attendance26Days === true;
 const eAttendanceBonus = eAttendance26Days ? eNet * 0.25 : 0;
@@ -7398,7 +7608,7 @@ function calculateAggregatedEmployeeReport(empName) {
     let maxChallengeTotalAgg = -1;
     allEmpBranches.forEach(function (e) {
       const eGross = computeGrossFromBreakdown(e);
-      const eFund = eGross * 0.15;
+      const eFund = eGross * getSupportFundRate();
       let eNet = eGross - eFund;
       const eAtt = e.attendance26Days === true;
       const eBonus = eAtt ? eNet * 0.25 : 0;
@@ -7411,7 +7621,7 @@ function calculateAggregatedEmployeeReport(empName) {
   }
   allEmpBranches.forEach(function (branchEmp) {
     const branchGross = computeGrossFromBreakdown(branchEmp);
-    const branchFund = branchGross * 0.15;
+    const branchFund = branchGross * getSupportFundRate();
     let branchNet = branchGross - branchFund;
     const branchAttendance26Days = branchEmp.attendance26Days === true;
     // Only apply 25% to the selected branch (challengeRowId)
@@ -7443,7 +7653,7 @@ function calculateAggregatedEmployeeReport(empName) {
     const challBranch = allEmpBranches.find(function (e) { return e.id === challengeRowIdAgg; });
     if (challBranch) {
       const challGross = computeGrossFromBreakdown(challBranch);
-      const challNet = challGross - challGross * 0.15;
+      const challNet = challGross - challGross * getSupportFundRate();
       attendanceBonus = challNet * 0.25;
     }
   }
@@ -7510,7 +7720,7 @@ function showEmployeeReportAggregated(empName, options) {
   var title = document.getElementById('reportEmployeeName');
   if (!modal || !content || !title) return;
   var emp = report.emp;
-  var fund = report.fund != null ? report.fund : (report.gross != null ? report.gross * 0.15 : 0);
+  var fund = report.fund != null ? report.fund : (report.gross != null ? report.gross * getSupportFundRate() : 0);
   var unit = pointsMode ? 'نقطة' : 'ريال';
   var mainTotal = pointsMode ? (report.finalNet + fund) : report.finalNet;
   var periodText = document.getElementById('headerPeriodRange') ? document.getElementById('headerPeriodRange').innerText : '-';
@@ -7551,14 +7761,14 @@ function buildEmployeeReportModalHTML(report, opts) {
   var evBooking = report.evBooking || 0;
   var evGoogle = report.evGoogle || 0;
   var gross = report.gross || 0;
-  var fund = report.fund != null ? report.fund : gross * 0.15;
+  var fund = report.fund != null ? report.fund : gross * getSupportFundRate();
   var finalNet = report.finalNet != null ? report.finalNet : 0;
   var mainTotal = pointsMode ? (finalNet + fund) : finalNet;
   var totalDiscountAmount = report.totalDiscountAmount || 0;
   var discountDetails = report.discountDetails || [];
   var unit = pointsMode ? 'نقطة' : 'ريال';
   var fundSign = pointsMode ? '+' : '-';
-  var fundLabel = pointsMode ? 'مساهمة شركاء النجاح في نقاطك (15%)' : 'مساهمة شركاء النجاح (15%)';
+  var fundLabel = pointsMode ? 'مساهمة شركاء النجاح في نقاطك (' + (_rp.supportFundPercent != null ? _rp.supportFundPercent : 15) + '%)' : 'مساهمة شركاء النجاح (' + (_rp.supportFundPercent != null ? _rp.supportFundPercent : 15) + '%)';
   var summaryTitle = (pointsMode ? 'رصيد النقاط من الفترة' : 'المبلغ الصافي المستحق');
   var attendanceBonus = report.attendanceBonus || 0;
   var actualAttendanceDays = report.actualAttendanceDays != null ? report.actualAttendanceDays : 0;
@@ -7687,9 +7897,9 @@ function buildEmployeeReportModalHTMLMultiBranch(report, opts) {
   var branchReports = report.branchReports || [];
   var unit = pointsMode ? 'نقطة' : 'ريال';
   var fundSign = pointsMode ? '+' : '-';
-  var fundLabel = pointsMode ? 'مساهمة شركاء النجاح في نقاطك (15%)' : 'مساهمة شركاء النجاح (15%)';
+  var fundLabel = pointsMode ? 'مساهمة شركاء النجاح في نقاطك (' + (_rp.supportFundPercent != null ? _rp.supportFundPercent : 15) + '%)' : 'مساهمة شركاء النجاح (' + (_rp.supportFundPercent != null ? _rp.supportFundPercent : 15) + '%)';
   var gross = report.gross || 0;
-  var fund = report.fund != null ? report.fund : (gross * 0.15);
+  var fund = report.fund != null ? report.fund : (gross * getSupportFundRate());
   var mainTotal = pointsMode ? (report.finalNet + fund) : report.finalNet;
   var totalDiscountAmount = report.totalDiscountAmount || 0;
   var discountDetails = report.discountDetails || [];
@@ -7816,7 +8026,7 @@ function buildEmployeeReportModalHTMLMultiBranch(report, opts) {
     evalsSection += '<div class="p-3 rounded-lg border border-yellow-500/20 bg-yellow-500/5"><p class="font-bold text-yellow-300 mb-2">' + esc(be.branch) + '</p><div class="space-y-2 text-sm text-gray-300"><div class="flex justify-between items-center"><span>تقييمات Booking: ' + eb + ' × ' + _rp.rateEvalBooking + ' ' + unit + '/تقييم</span><span class="font-bold text-yellow-400">' + (eb * _rp.rateEvalBooking).toFixed(2) + ' ' + unit + '</span></div><div class="flex justify-between items-center"><span>تقييمات Google Maps: ' + eg + ' × ' + _rp.rateEvalGoogle + ' ' + unit + '/تقييم</span><span class="font-bold text-yellow-400">' + (eg * _rp.rateEvalGoogle).toFixed(2) + ' ' + unit + '</span></div><div class="flex justify-between items-center pt-2 border-t border-white/10"><span class="font-bold text-green-400">إجمالي التقييمات (الفرع):</span><span class="font-bold text-yellow-400">' + tot.toFixed(2) + ' ' + unit + '</span></div></div></div>';
   });
   evalsSection += '<div class="p-3 rounded-lg border-2 border-yellow-400/40 bg-yellow-500/10 mt-2"><p class="font-bold text-yellow-200 mb-2">الإجمالي (كل الفروع)</p><div class="space-y-2 text-sm text-gray-300"><div class="flex justify-between items-center"><span>تقييمات Booking: ' + (report.evBooking || 0) + ' × ' + _rp.rateEvalBooking + ' ' + unit + '/تقييم</span><span class="font-bold text-yellow-400">' + ((report.evBooking || 0) * _rp.rateEvalBooking).toFixed(2) + ' ' + unit + '</span></div><div class="flex justify-between items-center"><span>تقييمات Google Maps: ' + (report.evGoogle || 0) + ' × ' + _rp.rateEvalGoogle + ' ' + unit + '/تقييم</span><span class="font-bold text-yellow-400">' + ((report.evGoogle || 0) * _rp.rateEvalGoogle).toFixed(2) + ' ' + unit + '</span></div><div class="flex justify-between items-center pt-2 border-t-2 border-yellow-500/30"><span class="font-bold text-green-400">إجمالي مكافآت التقييمات:</span><span class="font-bold text-yellow-400 text-lg">' + (((report.evBooking || 0) * _rp.rateEvalBooking) + ((report.evGoogle || 0) * _rp.rateEvalGoogle)).toFixed(2) + ' ' + unit + '</span></div></div></div></div></div>';
-  var rest = '<div class="bg-purple-500/10 p-3 rounded-lg border border-purple-500/30"><h5 class="text-sm font-bold text-purple-400 mb-1">الإجمالي قبل مساهمة شركاء النجاح</h5><div class="flex justify-between items-center text-xs"><span class="text-gray-300">إجمالي المكافآت (حجوزات + تقييمات):</span><span class="font-bold text-white text-sm">' + gross.toFixed(2) + ' ' + unit + '</span></div></div><div class="bg-orange-500/10 p-3 rounded-lg border border-orange-500/30 space-y-2 shadow-sm"><h5 class="text-sm font-bold text-orange-400">' + (pointsMode ? 'مساهمة شركاء النجاح في نقاطك' : 'مساهمة شركاء النجاح') + '</h5><div class="flex justify-between items-baseline gap-4 text-xs"><span class="text-gray-300">' + (pointsMode ? 'النسبة (15%)' : '15%') + '</span><span class="font-bold text-orange-400 shrink-0">' + fundSign + fund.toFixed(2) + ' ' + unit + '</span></div><p class="text-[10px] text-orange-300/60 leading-snug">⚠️ تُخصم من المبلغ المالي فقط ولا تؤثر على تقييم الأداء أو رصيد النقاط التراكمي.</p></div><div class="bg-turquoise/10 p-3 rounded-lg border border-turquoise/30 border-t-2 border-teal-400/60 mt-4"><h5 class="text-sm font-bold text-turquoise mb-1">الحوافز الإضافية</h5><div class="space-y-2 text-xs">' + (attendance26Days ? '<div class="bg-green-500/10 p-3 rounded-lg border border-green-500/30"><div class="flex justify-between items-center mb-1"><span class="text-gray-300">✓ حافز تحدي الظروف (25%):</span><span class="font-bold text-green-400">+' + attendanceBonus.toFixed(2) + ' ' + unit + '</span></div><p class="text-xs text-gray-400 mt-1">تم إتمام ' + actualAttendanceDays + ' يوماً وأكثر من العطاء</p></div>' : '') + (hasExcellenceBonus ? '<div class="bg-turquoise/20 p-3 rounded-lg border border-turquoise/50"><div class="flex justify-between items-center mb-1"><span class="text-gray-300">✨ حافز الأفضل تقييماً + الأكثر حجوزات</span><span class="font-bold text-turquoise">+' + excellenceBonus.toFixed(2) + ' ' + unit + '</span></div></div>' : '') + (hasCommitmentBonus ? '<div class="bg-purple-500/20 p-3 rounded-lg border border-purple-500/50"><div class="flex justify-between items-center mb-1"><span class="text-gray-300">✓ حافز الجمع بين الحضور والأكثر تميز</span><span class="font-bold text-purple-400">+' + commitmentBonus.toFixed(2) + ' ' + unit + '</span></div>' + (commitmentExplainMulti ? '<p class="text-xs text-gray-400 mt-1">' + commitmentExplainMulti + '</p>' : '') + '</div>' : '') + (!attendance26Days && !hasExcellenceBonus && !hasCommitmentBonus ? '<p class="text-gray-400 text-center py-2">لا توجد حوافز إضافية</p>' : '') + '</div></div>' + (function(){var nbf=gross-fund;var totalDisc=report.totalDiscountAmount||0;var lines='<div class="bg-gradient-to-r from-slate-800/50 to-slate-900/50 p-3 rounded-lg border border-white/10"><h5 class="text-sm font-bold text-white mb-1">ملخص الحساب</h5><div class="space-y-1 text-xs"><div class="flex justify-between items-center text-gray-300"><span>إجمالي المكافآت:</span><span class="font-bold text-white">'+gross.toFixed(2)+' '+unit+'</span></div><div class="flex justify-between items-center text-gray-300"><span>'+fundLabel+'</span><span class="font-bold text-orange-400">'+fundSign+fund.toFixed(2)+' '+unit+'</span></div><div class="flex justify-between items-center text-gray-300"><span>الصافي قبل الحوافز:</span><span class="font-bold text-white">'+nbf.toFixed(2)+' '+unit+'</span></div>';if(attendanceBonus>0)lines+='<div class="flex justify-between items-center text-green-400"><span>+ حافز تحدي الظروف (25%):</span><span class="font-bold">+'+attendanceBonus.toFixed(2)+' '+unit+'</span></div>';if(excellenceBonus>0)lines+='<div class="flex justify-between items-center text-turquoise"><span>+ حافز التفوق:</span><span class="font-bold">+'+excellenceBonus.toFixed(2)+' '+unit+'</span></div>';if(commitmentBonus>0)lines+='<div class="flex justify-between items-center text-purple-400"><span>+ حافز الالتزام:</span><span class="font-bold">+'+commitmentBonus.toFixed(2)+' '+unit+'</span></div>';if(totalDisc>0)lines+='<div class="flex justify-between items-center text-red-400"><span>− الخصومات:</span><span class="font-bold">-'+totalDisc.toFixed(2)+' '+unit+'</span></div>';lines+='<div class="flex justify-between items-center pt-1 border-t border-white/10"><span class="font-bold text-turquoise text-sm">'+summaryTitle+':</span><span class="font-bold text-white text-base">'+mainTotal.toFixed(2)+' '+unit+'</span></div></div></div>';return lines;})();
+  var rest = '<div class="bg-purple-500/10 p-3 rounded-lg border border-purple-500/30"><h5 class="text-sm font-bold text-purple-400 mb-1">الإجمالي قبل مساهمة شركاء النجاح</h5><div class="flex justify-between items-center text-xs"><span class="text-gray-300">إجمالي المكافآت (حجوزات + تقييمات):</span><span class="font-bold text-white text-sm">' + gross.toFixed(2) + ' ' + unit + '</span></div></div><div class="bg-orange-500/10 p-3 rounded-lg border border-orange-500/30 space-y-2 shadow-sm"><h5 class="text-sm font-bold text-orange-400">' + (pointsMode ? 'مساهمة شركاء النجاح في نقاطك' : 'مساهمة شركاء النجاح') + '</h5><div class="flex justify-between items-baseline gap-4 text-xs"><span class="text-gray-300">' + (pointsMode ? 'النسبة (' + (_rp.supportFundPercent != null ? _rp.supportFundPercent : 15) + '%)' : (_rp.supportFundPercent != null ? _rp.supportFundPercent : 15) + '%') + '</span><span class="font-bold text-orange-400 shrink-0">' + fundSign + fund.toFixed(2) + ' ' + unit + '</span></div><p class="text-[10px] text-orange-300/60 leading-snug">⚠️ تُخصم من المبلغ المالي فقط ولا تؤثر على تقييم الأداء أو رصيد النقاط التراكمي.</p></div><div class="bg-turquoise/10 p-3 rounded-lg border border-turquoise/30 border-t-2 border-teal-400/60 mt-4"><h5 class="text-sm font-bold text-turquoise mb-1">الحوافز الإضافية</h5><div class="space-y-2 text-xs">' + (attendance26Days ? '<div class="bg-green-500/10 p-3 rounded-lg border border-green-500/30"><div class="flex justify-between items-center mb-1"><span class="text-gray-300">✓ حافز تحدي الظروف (25%):</span><span class="font-bold text-green-400">+' + attendanceBonus.toFixed(2) + ' ' + unit + '</span></div><p class="text-xs text-gray-400 mt-1">تم إتمام ' + actualAttendanceDays + ' يوماً وأكثر من العطاء</p></div>' : '') + (hasExcellenceBonus ? '<div class="bg-turquoise/20 p-3 rounded-lg border border-turquoise/50"><div class="flex justify-between items-center mb-1"><span class="text-gray-300">✨ حافز الأفضل تقييماً + الأكثر حجوزات</span><span class="font-bold text-turquoise">+' + excellenceBonus.toFixed(2) + ' ' + unit + '</span></div></div>' : '') + (hasCommitmentBonus ? '<div class="bg-purple-500/20 p-3 rounded-lg border border-purple-500/50"><div class="flex justify-between items-center mb-1"><span class="text-gray-300">✓ حافز الجمع بين الحضور والأكثر تميز</span><span class="font-bold text-purple-400">+' + commitmentBonus.toFixed(2) + ' ' + unit + '</span></div>' + (commitmentExplainMulti ? '<p class="text-xs text-gray-400 mt-1">' + commitmentExplainMulti + '</p>' : '') + '</div>' : '') + (!attendance26Days && !hasExcellenceBonus && !hasCommitmentBonus ? '<p class="text-gray-400 text-center py-2">لا توجد حوافز إضافية</p>' : '') + '</div></div>' + (function(){var nbf=gross-fund;var totalDisc=report.totalDiscountAmount||0;var lines='<div class="bg-gradient-to-r from-slate-800/50 to-slate-900/50 p-3 rounded-lg border border-white/10"><h5 class="text-sm font-bold text-white mb-1">ملخص الحساب</h5><div class="space-y-1 text-xs"><div class="flex justify-between items-center text-gray-300"><span>إجمالي المكافآت:</span><span class="font-bold text-white">'+gross.toFixed(2)+' '+unit+'</span></div><div class="flex justify-between items-center text-gray-300"><span>'+fundLabel+'</span><span class="font-bold text-orange-400">'+fundSign+fund.toFixed(2)+' '+unit+'</span></div><div class="flex justify-between items-center text-gray-300"><span>الصافي قبل الحوافز:</span><span class="font-bold text-white">'+nbf.toFixed(2)+' '+unit+'</span></div>';if(attendanceBonus>0)lines+='<div class="flex justify-between items-center text-green-400"><span>+ حافز تحدي الظروف (25%):</span><span class="font-bold">+'+attendanceBonus.toFixed(2)+' '+unit+'</span></div>';if(excellenceBonus>0)lines+='<div class="flex justify-between items-center text-turquoise"><span>+ حافز التفوق:</span><span class="font-bold">+'+excellenceBonus.toFixed(2)+' '+unit+'</span></div>';if(commitmentBonus>0)lines+='<div class="flex justify-between items-center text-purple-400"><span>+ حافز الالتزام:</span><span class="font-bold">+'+commitmentBonus.toFixed(2)+' '+unit+'</span></div>';if(totalDisc>0)lines+='<div class="flex justify-between items-center text-red-400"><span>− الخصومات:</span><span class="font-bold">-'+totalDisc.toFixed(2)+' '+unit+'</span></div>';lines+='<div class="flex justify-between items-center pt-1 border-t border-white/10"><span class="font-bold text-turquoise text-sm">'+summaryTitle+':</span><span class="font-bold text-white text-base">'+mainTotal.toFixed(2)+' '+unit+'</span></div></div></div>';return lines;})();
   return normalizeBonusNamingText('<div class="space-y-3 employee-report-content">' + header + summary + breakdownBlock + discountBlock + '<div class="space-y-2">' + bookingsSection + evalsSection + rest + '</div></div>');
 }
 function showEmployeeReport(empId, options) {
@@ -8180,7 +8390,7 @@ return '<div class="detail-section section-bookings"><h3>📊 مكافآت ال�
 <span><strong>${gross.toFixed(2)} ${unit}</strong></span>
 </div>
 <div class="row">
-<span>${pointsMode ? 'مساهمة شركاء النجاح في نقاطك (15%)' : 'مساهمة شركاء النجاح (15%)'}:</span>
+<span>${pointsMode ? 'مساهمة شركاء النجاح في نقاطك (' + (_p.supportFundPercent != null ? _p.supportFundPercent : 15) + '%)' : 'مساهمة شركاء النجاح (' + (_p.supportFundPercent != null ? _p.supportFundPercent : 15) + '%)'}:</span>
 <span><strong style="color: #ef4444;">${fundSign}${fund.toFixed(2)} ${unit}</strong></span>
 </div>
 <p class="fund-note">⚠️ النسبة تُخصم من المبلغ المالي فقط ولا تؤثر على تقييم الأداء أو رصيد النقاط التراكمي.</p>
@@ -8324,9 +8534,9 @@ function buildEmployeeReportBodyContentMultiBranch(report, periodText, reportDat
   var _rp = getPricingConfig();
   var unit = pointsMode ? 'نقطة' : 'ريال';
   var fundSign = pointsMode ? '+' : '-';
-  var fundLabel = pointsMode ? 'مساهمة شركاء النجاح في نقاطك (15%)' : 'مساهمة شركاء النجاح (15%)';
+  var fundLabel = pointsMode ? 'مساهمة شركاء النجاح في نقاطك (' + (_rp.supportFundPercent != null ? _rp.supportFundPercent : 15) + '%)' : 'مساهمة شركاء النجاح (' + (_rp.supportFundPercent != null ? _rp.supportFundPercent : 15) + '%)';
   var gross = report.gross || 0;
-  var fund = report.fund != null ? report.fund : (gross * 0.15);
+  var fund = report.fund != null ? report.fund : (gross * getSupportFundRate());
   var mainTotal = pointsMode ? (report.finalNet + fund) : report.finalNet;
   var totalDiscountAmount = report.totalDiscountAmount || 0;
   var discountDetails = report.discountDetails || [];

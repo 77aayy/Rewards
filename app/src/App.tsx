@@ -754,6 +754,7 @@ export default function App() {
     }
 
     // Preserve user's "اخفاء الفرع" (excluded) from saved config so upload doesn't overwrite it
+    // Also keep branches that exist only in savedConfig (e.g. "الحفر" مستبعد) so the option stays visible in Settings
     const savedConfig = loadConfig();
     let mergedConfig = updatedConfig;
     for (const key of Object.keys(updatedConfig.branches)) {
@@ -763,6 +764,17 @@ export default function App() {
           branches: {
             ...mergedConfig.branches,
             [key]: { ...mergedConfig.branches[key], excluded: true },
+          },
+        };
+      }
+    }
+    for (const key of Object.keys(savedConfig.branches)) {
+      if (!mergedConfig.branches[key]) {
+        mergedConfig = {
+          ...mergedConfig,
+          branches: {
+            ...mergedConfig.branches,
+            [key]: { ...savedConfig.branches[key] },
           },
         };
       }
@@ -1611,7 +1623,7 @@ export default function App() {
         <MethodologyPopup config={config} onClose={() => setShowMethodology(false)} />
       )}
       {showRatingExplanation && (
-        <RatingExplanationPopup onClose={() => setShowRatingExplanation(false)} />
+        <RatingExplanationPopup config={config} onClose={() => setShowRatingExplanation(false)} />
       )}
       {showConditions && (
         <ConditionsPopup config={config} onClose={() => setShowConditions(false)} />
@@ -1773,7 +1785,7 @@ function SettingsPanel({ config, discoveredBranches, onSave, onSaveAsDefault, on
                 <input type="number" min={0} value={draft.minBookingThreshold}
                   onChange={(e) => updateThreshold('minBookingThreshold', parseInt(e.target.value) || 0)}
                   className="w-full bg-[var(--adora-input-bg)] border border-[var(--adora-border)] text-[var(--adora-text)] text-sm rounded-lg px-3 py-2 outline-none focus:ring-2 focus:ring-cyan-500/50" />
-                <p className="text-sm text-[var(--adora-text-secondary)] mt-1">موظفين بأقل من هذا العدد يُستبعدون</p>
+                <p className="text-sm text-[var(--adora-text-secondary)] mt-1">الموظفون الذين تقل حجوزاتهم عن هذا العدد يُستبعدون من التقرير</p>
               </div>
               <div>
                 <label className="text-sm text-[var(--adora-text-secondary)] block mb-1">عتبة الحجز الشهري (ليالي)</label>
@@ -1788,7 +1800,7 @@ function SettingsPanel({ config, discoveredBranches, onSave, onSaveAsDefault, on
           {/* Reward Pricing — أسعار المكافآت */}
           <section className="border border-emerald-500/30 rounded-xl p-4 space-y-4 bg-emerald-900/10">
             <h4 className="text-emerald-400 font-bold text-base">أسعار المكافآت (تؤثر على صافي الموظف)</h4>
-            <p className="text-sm text-[var(--adora-text-secondary)]">كل وحدة × السعر المحدد = جزء من الإجمالي. الصافي = الإجمالي − صندوق الدعم (15%)</p>
+            <p className="text-sm text-[var(--adora-text-secondary)]">كل وحدة × السعر المحدد = جزء من الإجمالي. الصافي = الإجمالي − صندوق الدعم ({draft.rewardPricing.supportFundPercent ?? 15}%)</p>
             <p className="text-sm text-[var(--adora-text-secondary)]">الحساب يُقسّم حسب المصدر: <strong className="text-emerald-400/90">استقبال</strong> (حسب الشفت صباح/مساء/ليل)، <strong className="text-orange-400/90">بوكينج عادي</strong> (سعر ثابت لكل حجز)، <strong className="text-violet-400/90">VIP</strong> (من الخانات أدناه لكل غرفة).</p>
 
             {/* استقبال — حسب الشفت */}
@@ -1837,6 +1849,18 @@ function SettingsPanel({ config, discoveredBranches, onSave, onSaveAsDefault, on
                 <input type="number" min={0} step={1} value={draft.rewardPricing.rateContract ?? 200}
                   onChange={(e) => setDraft(prev => ({ ...prev, rewardPricing: { ...prev.rewardPricing, rateContract: parseFloat(e.target.value) || 0 } }))}
                   className="w-full bg-[var(--adora-input-bg)] border border-[var(--adora-border)] text-[var(--adora-text)] text-sm rounded-lg px-3 py-2 outline-none focus:ring-2 focus:ring-emerald-500/50 font-mono" />
+              </div>
+            </div>
+
+            {/* صندوق الدعم — نسبة مخصومة من الإجمالي قبل الصافي */}
+            <div className="space-y-1.5">
+              <p className="text-sm font-medium text-cyan-400/90">صندوق الدعم</p>
+              <div className="flex items-center gap-3 flex-wrap">
+                <label className="text-sm text-[var(--adora-text-secondary)] shrink-0">نسبة من الإجمالي (%)</label>
+                <input type="number" min={0} max={100} step={1} value={draft.rewardPricing.supportFundPercent ?? 15}
+                  onChange={(e) => setDraft(prev => ({ ...prev, rewardPricing: { ...prev.rewardPricing, supportFundPercent: Math.min(100, Math.max(0, parseInt(e.target.value, 10) || 0)) } }))}
+                  className="w-20 bg-[var(--adora-input-bg)] border border-[var(--adora-border)] text-[var(--adora-text)] text-sm rounded-lg px-3 py-2 outline-none focus:ring-2 focus:ring-emerald-500/50 font-mono" />
+                <span className="text-xs text-[var(--adora-text-secondary)]">الصافي = الإجمالي − (الإجمالي × هذه النسبة)</span>
               </div>
             </div>
 
@@ -2242,7 +2266,7 @@ function MethodologyPopup({ config, onClose }: { config: AppConfig; onClose: () 
               <p><span className="text-orange-400 font-bold">🚫 بدون صلاحية:</span> الموظف غير موجود في تقرير الإحصائيات أصلاً.</p>
               <p><span className="text-sky-400 font-bold">🏨 لم يخرج:</span> النزيل لم يسجل خروج ضمن فترة التقرير — لذلك الإحصائيات لا تحسبه.</p>
               <p className="text-slate-500 text-sm mt-1">
-                موظفين بأقل من <span className="text-cyan-400 font-bold">{config.minBookingThreshold}</span> حجوزات مجمعة يُستبعدون.
+                الموظفون بأقل من <span className="text-cyan-400 font-bold">{config.minBookingThreshold}</span> حجوزات مجمعة يُستبعدون.
                 {Object.entries(config.branches).filter(([, bc]) => bc.excluded).map(([n]) => n).length > 0 && (
                   <> فروع مستبعدة: {Object.entries(config.branches).filter(([, bc]) => bc.excluded).map(([n]) => n).join('، ')}.</>
                 )}
@@ -2367,7 +2391,7 @@ function MethodologyPopup({ config, onClose }: { config: AppConfig; onClose: () 
 // كيفية حساب التقييم — نفس المحتوى المعروض في صفحة المكافآت/الإحصائيات (لا نوافذ جديدة، تحديث المكافآت يبقى المصدر)
 // ===================================================================
 
-function RatingExplanationPopup({ onClose }: { onClose: () => void }) {
+function RatingExplanationPopup({ config, onClose }: { config: AppConfig; onClose: () => void }) {
   return (
     <div className="fixed inset-0 z-200 flex items-center justify-center bg-black/70 backdrop-blur-sm p-2 sm:p-4"
       onClick={onClose}>
@@ -2384,7 +2408,7 @@ function RatingExplanationPopup({ onClose }: { onClose: () => void }) {
         </div>
         <div className="px-6 py-5 space-y-4 text-sm text-[var(--adora-text)] leading-relaxed">
           <p className="text-[var(--adora-text)] font-medium">
-            عمود <strong className="text-[var(--adora-accent)]">«النقاط»</strong> في الجدول = <strong className="text-[var(--adora-text)]">رصيد النقاط من الفترة</strong> (صافي المستحق + مساهمة 15% معروض كنقاط) — نفس المفهوم في التقرير عند الضغط على الاسم. <strong className="text-[var(--adora-text)]">مستوى الأداء</strong> (ممتاز/جيد/سيء) يُحسب من أدائك مقارنةً بباقي الموظفين ويُعرض تحت النقاط للتوضيح. فيما يلي شرح كيفية حساب مستوى الأداء:
+            عمود <strong className="text-[var(--adora-accent)]">«النقاط»</strong> في الجدول = <strong className="text-[var(--adora-text)]">رصيد النقاط من الفترة</strong> (صافي المستحق + مساهمة {config.rewardPricing.supportFundPercent ?? 15}% معروض كنقاط) — نفس المفهوم في التقرير عند الضغط على الاسم. <strong className="text-[var(--adora-text)]">مستوى الأداء</strong> (ممتاز/جيد/سيء) يُحسب من أدائك مقارنةً بباقي الموظفين ويُعرض تحت النقاط للتوضيح. فيما يلي شرح كيفية حساب مستوى الأداء:
           </p>
           <div className="bg-[var(--adora-hover-bg)] rounded-xl p-4 border border-[var(--adora-focus-border)]">
             <h4 className="text-base font-bold text-[var(--adora-accent)] mb-3">1. ما الذي يُؤخذ في الاعتبار؟</h4>
@@ -2410,7 +2434,7 @@ function RatingExplanationPopup({ onClose }: { onClose: () => void }) {
           <div className="bg-[var(--adora-accent)]/5 rounded-xl p-4 border border-[var(--adora-border)]">
             <h4 className="text-base font-bold text-[var(--adora-accent)] mb-2">3. ملخص سريع</h4>
             <p className="text-[var(--adora-text)]">
-              <strong className="text-[var(--adora-text)]">النقاط</strong> في الجدول = رصيد النقاط من الفترة (صافي + 15%). <strong className="text-[var(--adora-text)]">مستوى الأداء</strong> (ممتاز → سيء) يُبنى على أداء الحجوزات والتقييمات بالنسبة لباقي الموظفين، مع <strong className="text-[var(--adora-success)]">مكافأة للحضور 26 يوم وأكثر</strong>، و<strong className="text-[var(--adora-error)]">تخفيض عند وجود خصم إداري أو خصم تقييم الفندق</strong>. كلما كنت أقرب للأعلى وملتزماً بالحضور (وبلا خصم)، ارتفع مستوى أدائك إلى «ممتاز».
+              <strong className="text-[var(--adora-text)]">النقاط</strong> في الجدول = رصيد النقاط من الفترة (صافي + {config.rewardPricing.supportFundPercent ?? 15}%). <strong className="text-[var(--adora-text)]">مستوى الأداء</strong> (ممتاز → سيء) يُبنى على أداء الحجوزات والتقييمات بالنسبة لباقي الموظفين، مع <strong className="text-[var(--adora-success)]">مكافأة للحضور 26 يوم وأكثر</strong>، و<strong className="text-[var(--adora-error)]">تخفيض عند وجود خصم إداري أو خصم تقييم الفندق</strong>. كلما كنت أقرب للأعلى وملتزماً بالحضور (وبلا خصم)، ارتفع مستوى أدائك إلى «ممتاز».
             </p>
           </div>
         </div>
@@ -2476,7 +2500,8 @@ function conditionsReplaceTemplate(tpl: string, rp: AppConfig['rewardPricing']):
     .replace(/\{\{rateEvalGoogle\}\}/g, String(rp.rateEvalGoogle))
     .replace(/\{\{minEvalCorniche\}\}/g, String(rp.minEvalCorniche ?? 8.7))
     .replace(/\{\{minEvalAndalus\}\}/g, String(rp.minEvalAndalus ?? 8.2))
-    .replace(/\{\{minEvalGoogle\}\}/g, String(rp.minEvalGoogle ?? 4.3));
+    .replace(/\{\{minEvalGoogle\}\}/g, String(rp.minEvalGoogle ?? 4.3))
+    .replace(/\{\{supportFundPercent\}\}/g, String(rp.supportFundPercent ?? 15));
 }
 
 function buildConditionsPrintHtml(config: AppConfig, schema: ConditionsSchema): string {
@@ -2505,7 +2530,7 @@ function buildConditionsPrintHtml(config: AppConfig, schema: ConditionsSchema): 
         items += '<li><strong>' + esc(branch) + ':</strong> ' + roomParts.join(' — ') + '</li>';
       });
       if (vipDefault.reception > 0 || vipDefault.booking > 0) items += '<li><strong>VIP افتراضي:</strong> استقبال: ' + vipDefault.reception + ' ريال، بوكينج: ' + vipDefault.booking + ' ريال لكل حجز</li>';
-      body += section('section', 'background-color: rgba(245, 158, 11, 0.08); border-color: rgba(245, 158, 11, 0.4); border-right: 5px solid rgba(245, 158, 11, 0.6);', (sec.icon || '') + ' ' + sec.title, items);
+      body += section('section', 'background-color: rgba(245, 158, 11, 0.08); border-color: rgba(245, 158, 11, 0.4); border-right: 5px solid rgba(245, 158, 11, 0.6);', (sec.icon || '') + ' ' + conditionsReplaceTemplate(sec.title || '', rp), items);
       return;
     }
     let items = '';
@@ -2519,7 +2544,7 @@ function buildConditionsPrintHtml(config: AppConfig, schema: ConditionsSchema): 
     });
     const cls = sec.theme === 'orange' ? 'section' : 'section ' + (sec.theme === 'turquoise' ? 'contracts' : sec.theme === 'yellow' ? 'evaluations' : sec.theme === 'green' ? 'attendance' : sec.theme === 'red' ? 'discounts' : '');
     const style = sec.theme === 'orange' ? 'background-color: rgba(245, 158, 11, 0.08); border-color: rgba(245, 158, 11, 0.4); border-right: 5px solid rgba(245, 158, 11, 0.6);' : sec.theme === 'amber' ? 'background-color: rgba(245, 158, 11, 0.06); border-color: rgba(245, 158, 11, 0.35); border-right: 5px solid rgba(245, 158, 11, 0.5);' : '';
-    body += section(cls, style, (sec.icon || '') + ' ' + sec.title, items);
+    body += section(cls, style, (sec.icon || '') + ' ' + conditionsReplaceTemplate(sec.title || '', rp), items);
   });
 
   return '<!DOCTYPE html><html dir="rtl" lang="ar"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0">' +
@@ -2559,6 +2584,17 @@ function ConditionsPopup({ config, onClose }: { config: AppConfig; onClose: () =
     return () => { cancelled = true; };
   }, []);
 
+  const handlePrint = useCallback(() => {
+    if (!schema) return;
+    const doc = buildConditionsPrintHtml(config, schema);
+    const w = window.open('', '_blank');
+    if (!w) return;
+    w.document.write(doc);
+    w.document.close();
+    w.focus();
+    setTimeout(() => w.print(), 300);
+  }, [config, schema]);
+
   if (loading) {
     return (
       <div className="fixed inset-0 z-[200] flex items-center justify-center bg-black/70 backdrop-blur-sm p-2 sm:p-4" onClick={onClose}>
@@ -2579,17 +2615,6 @@ function ConditionsPopup({ config, onClose }: { config: AppConfig; onClose: () =
     );
   }
 
-  const handlePrint = useCallback(() => {
-    if (!schema) return;
-    const doc = buildConditionsPrintHtml(config, schema);
-    const w = window.open('', '_blank');
-    if (!w) return;
-    w.document.write(doc);
-    w.document.close();
-    w.focus();
-    setTimeout(() => w.print(), 300);
-  }, [config, schema]);
-
   return (
     <>
     <div className="fixed inset-0 z-[200] flex items-center justify-center bg-black/70 backdrop-blur-sm p-2 sm:p-4" onClick={onClose}>
@@ -2608,7 +2633,7 @@ function ConditionsPopup({ config, onClose }: { config: AppConfig; onClose: () =
               const theme = THEME_CLASSES[sec.theme] || THEME_CLASSES.amber;
               return (
                 <div key={sec.id} className={theme.wrap}>
-                  <h4 className={'text-base font-bold mb-3 flex items-center gap-2 ' + theme.title}><span>{sec.icon || ''}</span><span>{sec.title}</span></h4>
+                  <h4 className={'text-base font-bold mb-3 flex items-center gap-2 ' + theme.title}><span>{sec.icon || ''}</span><span>{conditionsReplaceTemplate(sec.title || '', rp)}</span></h4>
                   <ul className="space-y-2 list-none">
                     {branchNames.map((branch) => {
                       const rooms = vipByBranch[branch] || {};
@@ -2638,7 +2663,7 @@ function ConditionsPopup({ config, onClose }: { config: AppConfig; onClose: () =
             const isPointsSection = sec.id === 'points';
             return (
               <div key={sec.id} className={theme.wrap}>
-                <h4 className={'text-base font-bold mb-3 flex items-center gap-2 ' + theme.title}><span>{sec.icon || ''}</span><span>{sec.title}</span></h4>
+                <h4 className={'text-base font-bold mb-3 flex items-center gap-2 ' + theme.title}><span>{sec.icon || ''}</span><span>{conditionsReplaceTemplate(sec.title || '', rp)}</span></h4>
                 <ul className={'space-y-2 list-none ' + (isPointsSection ? 'grid grid-cols-1 sm:grid-cols-2 gap-x-6 gap-y-2' : '')}>
                   {(sec.items || []).map((item, idx) => {
                     if (item.placeholder === 'instructionsButton') {
