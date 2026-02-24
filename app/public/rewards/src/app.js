@@ -4805,6 +4805,15 @@ ${window.adoraTransferMode ? (function() {
   var morning = isDup ? allBranches.reduce(function(s, e) { return s + (e._morning || 0); }, 0) : (bk._morning || 0);
   var evening = isDup ? allBranches.reduce(function(s, e) { return s + (e._evening || 0); }, 0) : (bk._evening || 0);
   var night = isDup ? allBranches.reduce(function(s, e) { return s + (e._night || 0); }, 0) : (bk._night || 0);
+  if (window.adoraRawBookings && window.adoraRawBookings.length > 0) {
+    var raw = window.adoraRawBookings;
+    var empData = isDup
+      ? raw.filter(function(d) { return d.employeeName === emp.name; })
+      : raw.filter(function(d) { return d.employeeName === emp.name && d.branch === emp.branch; });
+    morning = empData.filter(function(d) { return d.shift === 'صباح'; }).length;
+    evening = empData.filter(function(d) { return d.shift === 'مساء'; }).length;
+    night = empData.filter(function(d) { return d.shift === 'ليل'; }).length;
+  }
   var alertCount = isDup ? allBranches.reduce(function(s, e) { return s + (e._alertCount || 0); }, 0) : (bk._alertCount || 0);
   var alertTotal = isDup ? allBranches.reduce(function(s, e) { return s + (e._alertTotal || 0); }, 0) : (bk._alertTotal || 0);
   // VIP rooms
@@ -5624,52 +5633,64 @@ function exportPdfTableAll() {
   db.forEach(function (e) {
     if (uniqueNames.indexOf(e.name) === -1) uniqueNames.push(e.name);
   });
-  uniqueNames.sort(function (a, b) { return String(a).localeCompare(String(b), 'ar'); });
+  // ترتيب حسب الأعلى صافي في الأعلى
+  uniqueNames.sort(function (a, b) {
+    var netA = typeof getDisplayNetForEmployee === 'function' ? getDisplayNetForEmployee(a, { aggregated: true }) : 0;
+    var netB = typeof getDisplayNetForEmployee === 'function' ? getDisplayNetForEmployee(b, { aggregated: true }) : 0;
+    return (Number(netB) || 0) - (Number(netA) || 0);
+  });
   var periodText = (document.getElementById('headerPeriodRange') && document.getElementById('headerPeriodRange').innerText) ? document.getElementById('headerPeriodRange').innerText : '-';
   var reportDate = typeof getReportDateGregorian === 'function' ? getReportDateGregorian() : new Date().toLocaleDateString('en-GB', { day: '2-digit', month: '2-digit', year: 'numeric' });
   function esc(s) { return String(s == null ? '' : s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;'); }
   function td(v, align) { align = align || 'center'; return '<td style="padding:5px 6px;border:1px solid #b0b0b0;text-align:' + align + ';font-size:10px;color:#1a1a1a;">' + esc(String(v)) + '</td>'; }
+  function tdTotal(v, align) { align = align || 'center'; return '<td style="padding:6px 8px;border:1px solid #333;text-align:' + align + ';font-size:10px;font-weight:700;color:#1a1a1a;background:#f5f5f5;">' + esc(String(v)) + '</td>'; }
   var hasBreakdown = window.adoraTransferMode && db.some(function (e) { return e._reception != null || e._booking != null || e._morning != null; });
   var vipRooms = (window.adoraActiveVipRooms && window.adoraActiveVipRooms.length > 0) ? window.adoraActiveVipRooms : [];
   var nVip = vipRooms.length;
 
+  var thStyle = 'padding:5px 6px;border:1px solid #0d9488;font-size:9px;font-weight:600;background:#0d9488;color:#fff;';
+  var thGroupStyle = 'padding:6px 8px;border:1px solid #0d9488;font-size:10px;font-weight:700;background:#0d9488;color:#fff;';
   var groupRow = '';
   var subRow = '';
   if (hasBreakdown && nVip > 0) {
-    groupRow = '<tr style="background:#e8e8e8;">' +
-      '<th colspan="2" style="padding:6px 8px;border:1px solid #999;font-size:10px;font-weight:700;color:#1a1a1a;">بيانات الموظف</th>' +
-      '<th colspan="6" style="padding:6px 8px;border:1px solid #999;font-size:10px;font-weight:700;color:#1a1a1a;">الحجوزات</th>' +
-      '<th colspan="3" style="padding:6px 8px;border:1px solid #999;font-size:10px;font-weight:700;color:#1a1a1a;">الشفتات</th>' +
-      '<th colspan="' + nVip + '" style="padding:6px 8px;border:1px solid #999;font-size:10px;font-weight:700;color:#1a1a1a;">VIP</th>' +
-      '<th colspan="2" style="padding:6px 8px;border:1px solid #999;font-size:10px;font-weight:700;color:#1a1a1a;">تنبيهات</th>' +
-      '<th style="padding:6px 8px;border:1px solid #999;font-size:10px;font-weight:700;color:#1a1a1a;">الحضور</th>' +
-      '<th colspan="2" style="padding:6px 8px;border:1px solid #999;font-size:10px;font-weight:700;color:#1a1a1a;">التقييمات</th>' +
-      '<th style="padding:6px 8px;border:1px solid #999;font-size:10px;font-weight:700;color:#1a1a1a;">المكافأة</th></tr>';
-    subRow = '<tr style="background:#f0f0f0;">' +
-      '<th style="padding:5px 6px;border:1px solid #999;font-size:9px;font-weight:600;color:#333;">م</th><th style="padding:5px 6px;border:1px solid #999;font-size:9px;font-weight:600;color:#333;">الموظف</th>' +
-      '<th style="padding:5px 6px;border:1px solid #999;font-size:9px;font-weight:600;color:#333;">العقود</th><th style="padding:5px 6px;border:1px solid #999;font-size:9px;font-weight:600;color:#333;">استقبال</th><th style="padding:5px 6px;border:1px solid #999;font-size:9px;font-weight:600;color:#333;">بوكينج</th>' +
-      '<th style="padding:5px 6px;border:1px solid #999;font-size:9px;font-weight:600;color:#333;">صباح</th><th style="padding:5px 6px;border:1px solid #999;font-size:9px;font-weight:600;color:#333;">مساء</th><th style="padding:5px 6px;border:1px solid #999;font-size:9px;font-weight:600;color:#333;">ليل</th>' +
-      '<th style="padding:5px 6px;border:1px solid #999;font-size:9px;font-weight:600;color:#333;">صباح</th><th style="padding:5px 6px;border:1px solid #999;font-size:9px;font-weight:600;color:#333;">مساء</th><th style="padding:5px 6px;border:1px solid #999;font-size:9px;font-weight:600;color:#333;">ليل</th>';
-    vipRooms.forEach(function (num) { subRow += '<th style="padding:5px 6px;border:1px solid #999;font-size:9px;font-weight:600;color:#333;">' + num + '</th>'; });
-    subRow += '<th style="padding:5px 6px;border:1px solid #999;font-size:9px;font-weight:600;color:#333;">تنبيه</th><th style="padding:5px 6px;border:1px solid #999;font-size:9px;font-weight:600;color:#333;">نقص SAR</th>' +
-      '<th style="padding:5px 6px;border:1px solid #999;font-size:9px;font-weight:600;color:#333;">بطل تحدي الظروف</th>' +
-      '<th style="padding:5px 6px;border:1px solid #999;font-size:9px;font-weight:600;color:#333;">GOOGLE</th><th style="padding:5px 6px;border:1px solid #999;font-size:9px;font-weight:600;color:#333;">BOOKING</th>' +
-      '<th style="padding:5px 6px;border:1px solid #999;font-size:9px;font-weight:600;color:#333;">الصافي</th></tr>';
+    groupRow = '<tr>' +
+      '<th colspan="2" style="' + thGroupStyle + '">بيانات الموظف</th>' +
+      '<th colspan="6" style="' + thGroupStyle + '">الحجوزات</th>' +
+      '<th colspan="3" style="' + thGroupStyle + '">الشفتات</th>' +
+      '<th colspan="' + nVip + '" style="' + thGroupStyle + '">VIP</th>' +
+      '<th colspan="2" style="' + thGroupStyle + '">تنبيهات</th>' +
+      '<th style="' + thGroupStyle + '">الحضور</th>' +
+      '<th colspan="2" style="' + thGroupStyle + '">التقييمات</th>' +
+      '<th style="' + thGroupStyle + '">المكافأة</th></tr>';
+    subRow = '<tr>' +
+      '<th style="' + thStyle + '">م</th><th style="' + thStyle + '">الموظف</th>' +
+      '<th style="' + thStyle + '">العقود</th><th style="' + thStyle + '">استقبال</th><th style="' + thStyle + '">بوكينج</th>' +
+      '<th style="' + thStyle + '">صباح</th><th style="' + thStyle + '">مساء</th><th style="' + thStyle + '">ليل</th>' +
+      '<th style="' + thStyle + '">صباح</th><th style="' + thStyle + '">مساء</th><th style="' + thStyle + '">ليل</th>';
+    vipRooms.forEach(function (num) { subRow += '<th style="' + thStyle + '">' + num + '</th>'; });
+    subRow += '<th style="' + thStyle + '">تنبيه</th><th style="' + thStyle + '">نقص SAR</th>' +
+      '<th style="' + thStyle + '">بطل تحدي الظروف</th>' +
+      '<th style="' + thStyle + '">GOOGLE</th><th style="' + thStyle + '">BOOKING</th>' +
+      '<th style="' + thStyle + '">الصافي</th></tr>';
   } else {
-    groupRow = '<tr style="background:#e8e8e8;">' +
-      '<th colspan="2" style="padding:6px 8px;border:1px solid #999;font-size:10px;font-weight:700;color:#1a1a1a;">بيانات الموظف</th>' +
-      '<th style="padding:6px 8px;border:1px solid #999;font-size:10px;font-weight:700;color:#1a1a1a;">الحجوزات</th>' +
-      '<th style="padding:6px 8px;border:1px solid #999;font-size:10px;font-weight:700;color:#1a1a1a;">الحضور</th>' +
-      '<th colspan="2" style="padding:6px 8px;border:1px solid #999;font-size:10px;font-weight:700;color:#1a1a1a;">التقييمات</th>' +
-      '<th style="padding:6px 8px;border:1px solid #999;font-size:10px;font-weight:700;color:#1a1a1a;">المكافأة</th></tr>';
-    subRow = '<tr style="background:#f0f0f0;">' +
-      '<th style="padding:5px 6px;border:1px solid #999;font-size:9px;font-weight:600;color:#333;">م</th><th style="padding:5px 6px;border:1px solid #999;font-size:9px;font-weight:600;color:#333;">الموظف</th>' +
-      '<th style="padding:5px 6px;border:1px solid #999;font-size:9px;font-weight:600;color:#333;">عدد الحجوزات</th>' +
-      '<th style="padding:5px 6px;border:1px solid #999;font-size:9px;font-weight:600;color:#333;">الحضور</th>' +
-      '<th style="padding:5px 6px;border:1px solid #999;font-size:9px;font-weight:600;color:#333;">GOOGLE</th><th style="padding:5px 6px;border:1px solid #999;font-size:9px;font-weight:600;color:#333;">BOOKING</th>' +
-      '<th style="padding:5px 6px;border:1px solid #999;font-size:9px;font-weight:600;color:#333;">الصافي</th></tr>';
+    groupRow = '<tr>' +
+      '<th colspan="2" style="' + thGroupStyle + '">بيانات الموظف</th>' +
+      '<th style="' + thGroupStyle + '">الحجوزات</th>' +
+      '<th style="' + thGroupStyle + '">الحضور</th>' +
+      '<th colspan="2" style="' + thGroupStyle + '">التقييمات</th>' +
+      '<th style="' + thGroupStyle + '">المكافأة</th></tr>';
+    subRow = '<tr>' +
+      '<th style="' + thStyle + '">م</th><th style="' + thStyle + '">الموظف</th>' +
+      '<th style="' + thStyle + '">عدد الحجوزات</th>' +
+      '<th style="' + thStyle + '">الحضور</th>' +
+      '<th style="' + thStyle + '">GOOGLE</th><th style="' + thStyle + '">BOOKING</th>' +
+      '<th style="' + thStyle + '">الصافي</th></tr>';
   }
 
+  var totals = {
+    contracts: 0, reception: 0, booking: 0, morning: 0, evening: 0, night: 0,
+    alertCount: 0, alertTotal: 0, evalBooking: 0, evalGoogle: 0, count: 0, net: 0
+  };
   var rowsHtml = '';
   uniqueNames.forEach(function (name, idx) {
     var allEmpBranches = db.filter(function (e) { return e.name === name; });
@@ -5700,22 +5721,59 @@ function exportPdfTableAll() {
 
     if (hasBreakdown && nVip > 0) {
       var contracts = allEmpBranches.reduce(function (s, e) { return s + (e._bookingRegular || 0); }, 0);
+      totals.contracts += contracts;
+      totals.reception += agg.reception;
+      totals.booking += agg.booking;
+      totals.morning += agg.morning;
+      totals.evening += agg.evening;
+      totals.night += agg.night;
+      totals.alertCount += agg.alertCount;
+      totals.alertTotal += agg.alertTotal;
+      totals.evalGoogle += agg.evalGoogle;
+      totals.evalBooking += agg.evalBooking;
+      totals.net += typeof net === 'number' && !isNaN(net) ? net : 0;
       rowsHtml += '<tr>' + td(idx + 1) + td(name, 'right');
       rowsHtml += td(contracts) + td(agg.reception) + td(agg.booking) + td(agg.morning) + td(agg.evening) + td(agg.night);
       rowsHtml += td(agg.morning) + td(agg.evening) + td(agg.night);
       vipRooms.forEach(function (num) { rowsHtml += td(agg.vipRooms[num] || 0); });
       rowsHtml += td(agg.alertCount) + td(agg.alertTotal > 0 ? Math.round(agg.alertTotal).toLocaleString('en-SA') : '—') + td(attendanceStr) + td(agg.evalGoogle) + td(agg.evalBooking) + td(netStr, 'left') + '</tr>';
     } else {
+      totals.count += agg.count;
+      totals.evalGoogle += agg.evalGoogle;
+      totals.evalBooking += agg.evalBooking;
+      totals.net += typeof net === 'number' && !isNaN(net) ? net : 0;
       rowsHtml += '<tr>' + td(idx + 1) + td(name, 'right') + td(agg.count) + td(attendanceStr) + td(agg.evalGoogle) + td(agg.evalBooking) + td(netStr, 'left') + '</tr>';
     }
   });
 
-  var tableHtml = '<table dir="rtl" style="width:100%;border-collapse:collapse;font-family:\'IBM Plex Sans Arabic\',Arial,sans-serif;background:#fff;">' +
+  var totalNetStr = (totals.net != null && !isNaN(totals.net)) ? Number(totals.net).toFixed(2) : '0.00';
+  if (hasBreakdown && nVip > 0) {
+    rowsHtml += '<tr>' + tdTotal('الإجمالي', 'right') + tdTotal('', 'right');
+    rowsHtml += tdTotal(totals.contracts) + tdTotal(totals.reception) + tdTotal(totals.booking) + tdTotal(totals.morning) + tdTotal(totals.evening) + tdTotal(totals.night);
+    rowsHtml += tdTotal(totals.morning) + tdTotal(totals.evening) + tdTotal(totals.night);
+    vipRooms.forEach(function () { rowsHtml += tdTotal(''); });
+    rowsHtml += tdTotal(totals.alertCount) + tdTotal(totals.alertTotal > 0 ? Math.round(totals.alertTotal).toLocaleString('en-SA') : '—') + tdTotal('') + tdTotal(totals.evalGoogle) + tdTotal(totals.evalBooking) + tdTotal(totalNetStr, 'left') + '</tr>';
+  } else {
+    rowsHtml += '<tr>' + tdTotal('الإجمالي', 'right') + tdTotal('', 'right') + tdTotal(totals.count) + tdTotal('') + tdTotal(totals.evalGoogle) + tdTotal(totals.evalBooking) + tdTotal(totalNetStr, 'left') + '</tr>';
+  }
+
+  var approvalHtml = '<div style="margin-top:24px;display:flex;flex-wrap:wrap;gap:24px;justify-content:space-between;">' +
+    '<div style="flex:1;min-width:160px;"><div style="border:1px solid #999;padding:14px;text-align:center;min-height:56px;background:#fafafa;">' +
+    '<div style="font-weight:700;font-size:12px;margin-bottom:6px;color:#1a1a1a;">اعتماد المشرف</div>' +
+    '<div style="font-size:10px;color:#666;">التوقيع / الختم</div></div></div>' +
+    '<div style="flex:1;min-width:160px;"><div style="border:1px solid #999;padding:14px;text-align:center;min-height:56px;background:#fafafa;">' +
+    '<div style="font-weight:700;font-size:12px;margin-bottom:6px;color:#1a1a1a;">اعتماد مدير التشغيل</div>' +
+    '<div style="font-size:10px;color:#666;">التوقيع / الختم</div></div></div></div>' +
+    '<div style="margin-top:12px;"><div style="border:1px solid #999;padding:14px;text-align:center;min-height:56px;max-width:260px;background:#fafafa;">' +
+    '<div style="font-weight:700;font-size:12px;margin-bottom:6px;color:#1a1a1a;">اعتماد الحسابات</div>' +
+    '<div style="font-size:10px;color:#666;">التوقيع / الختم</div></div></div>';
+
+  var tableHtml = '<table dir="rtl" style="width:100%;border-collapse:collapse;font-family:\'Tajawal\',\'Segoe UI\',Arial,sans-serif;background:#fff;">' +
     '<thead>' + groupRow + subRow + '</thead><tbody>' + rowsHtml + '</tbody></table>';
   var titleHtml = '<div style="margin-bottom:14px;padding-bottom:10px;border-bottom:2px solid #333;">' +
-    '<h1 style="margin:0 0 6px 0;font-size:18px;font-weight:700;color:#1a1a1a;">تقرير مكافآت فنادق إليت</h1>' +
-    '<p style="margin:0;font-size:12px;color:#444;">الفترة من ' + esc(periodText) + ' إلى تاريخ التصدير: ' + esc(reportDate) + '</p></div>';
-  var fullHtml = '<div dir="rtl" lang="ar" style="padding:14px;background:#fff;color:#1a1a1a;font-family:\'IBM Plex Sans Arabic\',Arial,sans-serif;">' + titleHtml + tableHtml + '</div>';
+    '<h1 style="margin:0 0 6px 0;font-size:18px;font-weight:700;color:#1a1a1a;font-family:\'Tajawal\',\'Segoe UI\',Arial,sans-serif;">تقرير مكافآت فنادق إليت</h1>' +
+    '<p style="margin:0;font-size:12px;color:#444;font-family:\'Tajawal\',\'Segoe UI\',Arial,sans-serif;">الفترة من ' + esc(periodText) + ' إلى تاريخ التصدير: ' + esc(reportDate) + '</p></div>';
+  var fullHtml = '<div dir="rtl" lang="ar" style="padding:14px;background:#fff;color:#1a1a1a;font-family:\'Tajawal\',\'Segoe UI\',Arial,sans-serif;">' + titleHtml + tableHtml + approvalHtml + '</div>';
   var fileName = 'تقرير-مكافآت-الكل-' + (periodText.replace(/\s/g, '-').replace(/[^\w\u0600-\u06FF\-]/g, '').substring(0, 25)) + '.pdf';
   if (fileName.length > 55) fileName = fileName.substring(0, 55); else if (fileName.indexOf('.pdf') !== fileName.length - 4) fileName = fileName + '.pdf';
   var btn = document.getElementById('exportPdfTableAllBtn');
@@ -5723,10 +5781,14 @@ function exportPdfTableAll() {
   loadScript('https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.1/html2pdf.bundle.min.js').then(function () {
     var html2pdfFn = typeof window.html2pdf !== 'undefined' ? window.html2pdf : null;
     if (!html2pdfFn) { if (btn) btn.disabled = false; return Promise.reject(new Error('html2pdf not available')); }
+    var link = document.createElement('link');
+    link.href = 'https://fonts.googleapis.com/css2?family=Tajawal:wght@400;500;700&display=swap';
+    link.rel = 'stylesheet';
+    document.head.appendChild(link);
     var wrapper = document.createElement('div');
     wrapper.setAttribute('dir', 'rtl');
     wrapper.setAttribute('lang', 'ar');
-    wrapper.style.cssText = 'width:270mm;max-width:100%;margin:0 auto;padding:0;background:#fff;color:#1a1a1a;font-family:\'IBM Plex Sans Arabic\',Arial,sans-serif;';
+    wrapper.style.cssText = 'width:270mm;max-width:100%;margin:0 auto;padding:0;background:#fff;color:#1a1a1a;font-family:\'Tajawal\',\'Segoe UI\',Arial,sans-serif;';
     wrapper.innerHTML = fullHtml;
     document.body.appendChild(wrapper);
     var opt = {
@@ -8494,18 +8556,6 @@ ${commitmentBonus > 0 ? `
 </div>
 ` : ''}
 ${totalDiscountAmount > 0 ? `
-${discountDetails.map(discount => {
-  const discountAmount = discount.isHotelRating && discount.amount != null ? Number(discount.amount) : (typeof calculateAggregatedNetForEmployee === 'function' ? (calculateAggregatedNetForEmployee(emp.name) * (discount.discountPercentage / 100)) : 0);
-  const eventDate = discount.eventDate ? new Date(discount.eventDate + 'T00:00:00').toLocaleDateString('ar-SA') : '';
-  const appliedByLabel = (discount.appliedBy && typeof discount.appliedBy === 'string' && discount.appliedBy.trim()) ? discount.appliedBy : (discount.appliedBy || 'الأدمن');
-  const label = discount.isHotelRating ? discount.discountType : `خصم ${discount.discountPercentage}% (${discount.discountType})${eventDate ? ` - ${eventDate}` : ''} - مطبق من ${appliedByLabel}`;
-  return `
-<div class="row">
-<span>${label}:</span>
-<span><strong style="color: #b91c1c;">-${discountAmount.toFixed(2)} ${unit}</strong></span>
-</div>
-`;
-}).join('')}
 <div class="row" style="border-bottom: 1px solid #e5e7eb; padding-bottom: 2px; margin-bottom: 2px;">
 <span>إجمالي الخصومات:</span>
 <span><strong style="color: #ef4444;">-${totalDiscountAmount.toFixed(2)} ${unit}</strong></span>

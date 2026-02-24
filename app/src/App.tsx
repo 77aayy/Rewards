@@ -1785,7 +1785,7 @@ function SettingsPanel({ config, discoveredBranches, onSave, onSaveAsDefault, on
                 <input type="number" min={0} value={draft.minBookingThreshold}
                   onChange={(e) => updateThreshold('minBookingThreshold', parseInt(e.target.value) || 0)}
                   className="w-full bg-[var(--adora-input-bg)] border border-[var(--adora-border)] text-[var(--adora-text)] text-sm rounded-lg px-3 py-2 outline-none focus:ring-2 focus:ring-cyan-500/50" />
-                <p className="text-sm text-[var(--adora-text-secondary)] mt-1">الموظفون الذين تقل حجوزاتهم عن هذا العدد يُستبعدون من التقرير</p>
+                <p className="text-sm text-[var(--adora-text-secondary)] mt-1">الموظفون الذين تقل حجوزاتهم عن هذا العدد يُستبعدون. <span className="text-cyan-400/90">0 = إظهار الكل بدون استبعاد</span></p>
               </div>
               <div>
                 <label className="text-sm text-[var(--adora-text-secondary)] block mb-1">عتبة الحجز الشهري (ليالي)</label>

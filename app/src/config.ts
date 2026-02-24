@@ -166,7 +166,7 @@ export const DEFAULT_REWARD_PRICING: RewardPricing = {
 
 /** الافتراضي المعتمد: الحدود العامة + أسعار المكافآت. تُستعمل عند فتح الإعدادات أول مرة وعند «استعادة الافتراضي». */
 export const DEFAULT_CONFIG: AppConfig = {
-  minBookingThreshold: 10,
+  minBookingThreshold: 0,
   monthlyNightsThreshold: 28,
   branches: {
     'الكورنيش': DEFAULT_CORNICHE,

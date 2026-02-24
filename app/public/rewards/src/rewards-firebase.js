@@ -327,6 +327,17 @@ function applyLivePeriod(data) {
           try { localStorage.setItem('adora_admin_submitted_' + periodId + '_' + role, String(data.adminSubmitted[role])); } catch (_) {}
         });
       }
+      // عند فتح الرابط برول مشرف/HR نمسح حالة «تم الإرسال» محلياً حتى يفتح واجهة الإدخال مباشرة دون حاجة لمسح الكاش
+      try {
+        var params = typeof window !== 'undefined' && window.location && window.location.search ? new URLSearchParams(window.location.search) : null;
+        var urlRole = params ? params.get('role') : null;
+        var urlPeriod = params ? (params.get('period') || '').trim() : '';
+        if ((urlRole === 'supervisor' || urlRole === 'hr') && urlPeriod) {
+          if (lastAppliedAdminSubmitted && typeof lastAppliedAdminSubmitted === 'object') delete lastAppliedAdminSubmitted[urlRole];
+          if (typeof window !== 'undefined' && window.lastAppliedAdminSubmitted) delete window.lastAppliedAdminSubmitted[urlRole];
+          try { localStorage.removeItem('adora_admin_submitted_' + urlPeriod + '_' + urlRole); } catch (_) {}
+        }
+      } catch (_) {}
     } else {
       lastAppliedAdminSubmitted = {};
       if (typeof window !== 'undefined') window.lastAppliedAdminSubmitted = lastAppliedAdminSubmitted;
