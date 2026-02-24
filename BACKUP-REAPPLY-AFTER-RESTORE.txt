@@ -1,0 +1,25 @@
+# إعادة المميزات بعد استعادة نسخة أمس
+
+## الفرع الاحتياطي
+- الاسم: backup-2026-02-24-before-restore
+- فيه: آخر تعديلات قبل الاستعادة (App.tsx، سكربتات، توثيق Excel)
+- استعادة المميزات: دمج أو cherry-pick من هذا الفرع بعد الرجوع لنسخة أمس
+
+## ما يشمله الفرع الاحتياطي
+- app/src/App.tsx — منطق التوزيع التناسبي لجدول الملخص (استقبال/بوكينج، صباح/مساء/ليل)
+- app/Rewards/src/app.js و app/public/rewards/src/app.js — تعديلات واجهة المكافآت
+- app/scripts/count-night-raghad.mjs — عد صباح/مساء/ليل لموظف من الإكسيل
+- app/scripts/debug-raghad-excel.mjs — تشخيص مصدر المرجع وعدد الصفوف
+- app/scripts/debug-raghad-units.mjs — عد الحجوزات من ملف الوحدات
+- excel/EXCEL-TO-ANALYSIS-MAPPING.md — ربط الملفات السبعة بصفحة التحليل
+
+## مميزات قد تحتاج إعادة تطبيق بعد الاستعادة (إن كانت في نسخة أمس أصلاً)
+- طباعة جدول التحليل (زر طباعة — نافذة A4 landscape)
+- طباعة الشروط (buildConditionsPrintHtml)
+- طباعة اللائحة (printInstructionsModal)
+- أي تحسينات PDF/طباعة أخرى تمت لاحقاً
+
+## أوامر مفيدة بعد الاستعادة
+- git checkout main   (أو الفرع الذي استعدت عليه)
+- git merge backup-2026-02-24-before-restore   (لإعادة كل التعديلات)
+- أو git cherry-pick <commit>   (لاختيار كوميتات محددة)
