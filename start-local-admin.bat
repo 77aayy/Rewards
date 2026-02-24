@@ -9,14 +9,20 @@ if not exist "app\package.json" (
   exit /b 1
 )
 
-cd /d "%~dp0app"
+set "APP=%~dp0app"
+set "REWARDS=%APP%\Rewards"
+cd /d "%APP%"
 
 echo ========================================
 echo   Local server + Admin page
 echo ========================================
 echo/
 
-start "Vite Dev Server" cmd /k "npm run dev"
+REM Run Rewards watcher (auto-sync shared/ and Rewards/src → public/rewards)
+start "Rewards Watch" cmd /k "cd /d \"%REWARDS%\" && node scripts/watch-and-predeploy.js"
+
+REM Run Vite Dev Server
+start "Vite Dev Server" cmd /k "cd /d \"%APP%\" && npm run dev"
 
 echo Waiting for server on port 5180...
 timeout /t 6 /nobreak >nul

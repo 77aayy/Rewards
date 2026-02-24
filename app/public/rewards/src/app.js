@@ -274,6 +274,20 @@ function getPricingConfig() {
 }
 
 /**
+ * Update table header spans to show current eval rates from config (adora_rewards_pricing / SettingsPanel).
+ * Ensures "BOOKING" and "GOOGLE" column headers show the same values as in Settings.
+ */
+function updateEvalRatesInTableHeader() {
+  try {
+    var p = getPricingConfig();
+    var bEl = document.getElementById('header-eval-booking-rate');
+    var gEl = document.getElementById('header-eval-google-rate');
+    if (bEl) bEl.textContent = (p.rateEvalBooking != null ? p.rateEvalBooking : DEFAULT_REWARD_PRICING.rateEvalBooking) + ' ر.س';
+    if (gEl) gEl.textContent = (p.rateEvalGoogle != null ? p.rateEvalGoogle : DEFAULT_REWARD_PRICING.rateEvalGoogle) + ' ر.س';
+  } catch (_) {}
+}
+
+/**
  * Compute gross reward from breakdown fields using configurable pricing.
  *
  * NEW FORMULA (split by source first):
@@ -3904,6 +3918,8 @@ currentFilter = filter;
 if (typeof window !== 'undefined') window.currentFilter = filter;
 // Cache pricing config once per render cycle
 var _pricingRenderUI = getPricingConfig();
+// Sync table header eval rates with config (so "30 ر.س" / "10 ر.س" match SettingsPanel)
+if (typeof updateEvalRatesInTableHeader === 'function') updateEvalRatesInTableHeader();
 
 // Check role and filter restrictions
 const currentRole = localStorage.getItem('adora_current_role');
@@ -7800,7 +7816,7 @@ function buildEmployeeReportModalHTMLMultiBranch(report, opts) {
     evalsSection += '<div class="p-3 rounded-lg border border-yellow-500/20 bg-yellow-500/5"><p class="font-bold text-yellow-300 mb-2">' + esc(be.branch) + '</p><div class="space-y-2 text-sm text-gray-300"><div class="flex justify-between items-center"><span>تقييمات Booking: ' + eb + ' × ' + _rp.rateEvalBooking + ' ' + unit + '/تقييم</span><span class="font-bold text-yellow-400">' + (eb * _rp.rateEvalBooking).toFixed(2) + ' ' + unit + '</span></div><div class="flex justify-between items-center"><span>تقييمات Google Maps: ' + eg + ' × ' + _rp.rateEvalGoogle + ' ' + unit + '/تقييم</span><span class="font-bold text-yellow-400">' + (eg * _rp.rateEvalGoogle).toFixed(2) + ' ' + unit + '</span></div><div class="flex justify-between items-center pt-2 border-t border-white/10"><span class="font-bold text-green-400">إجمالي التقييمات (الفرع):</span><span class="font-bold text-yellow-400">' + tot.toFixed(2) + ' ' + unit + '</span></div></div></div>';
   });
   evalsSection += '<div class="p-3 rounded-lg border-2 border-yellow-400/40 bg-yellow-500/10 mt-2"><p class="font-bold text-yellow-200 mb-2">الإجمالي (كل الفروع)</p><div class="space-y-2 text-sm text-gray-300"><div class="flex justify-between items-center"><span>تقييمات Booking: ' + (report.evBooking || 0) + ' × ' + _rp.rateEvalBooking + ' ' + unit + '/تقييم</span><span class="font-bold text-yellow-400">' + ((report.evBooking || 0) * _rp.rateEvalBooking).toFixed(2) + ' ' + unit + '</span></div><div class="flex justify-between items-center"><span>تقييمات Google Maps: ' + (report.evGoogle || 0) + ' × ' + _rp.rateEvalGoogle + ' ' + unit + '/تقييم</span><span class="font-bold text-yellow-400">' + ((report.evGoogle || 0) * _rp.rateEvalGoogle).toFixed(2) + ' ' + unit + '</span></div><div class="flex justify-between items-center pt-2 border-t-2 border-yellow-500/30"><span class="font-bold text-green-400">إجمالي مكافآت التقييمات:</span><span class="font-bold text-yellow-400 text-lg">' + (((report.evBooking || 0) * _rp.rateEvalBooking) + ((report.evGoogle || 0) * _rp.rateEvalGoogle)).toFixed(2) + ' ' + unit + '</span></div></div></div></div></div>';
-  var rest = '<div class="bg-purple-500/10 p-3 rounded-lg border border-purple-500/30"><h5 class="text-sm font-bold text-purple-400 mb-1">الإجمالي قبل مساهمة شركاء النجاح</h5><div class="flex justify-between items-center text-xs"><span class="text-gray-300">إجمالي المكافآت (حجوزات + تقييمات):</span><span class="font-bold text-white text-sm">' + gross.toFixed(2) + ' ' + unit + '</span></div></div><div class="bg-orange-500/10 p-3 rounded-lg border border-orange-500/30"><h5 class="text-sm font-bold text-orange-400 mb-1">' + (pointsMode ? 'مساهمة شركاء النجاح في نقاطك' : 'مساهمة شركاء النجاح') + '</h5><div class="flex justify-between items-center text-xs"><span>' + fundLabel + '</span><span class="font-bold text-orange-400">' + fundSign + fund.toFixed(2) + ' ' + unit + '</span></div><p class="text-[10px] text-orange-300/60 mt-1">⚠️ هذه النسبة تُخصم من المبلغ المالي فقط ولا تؤثر على تقييم الأداء أو رصيد النقاط التراكمي.</p></div><div class="bg-turquoise/10 p-3 rounded-lg border border-turquoise/30"><h5 class="text-sm font-bold text-turquoise mb-1">الحوافز الإضافية</h5><div class="space-y-2 text-xs">' + (attendance26Days ? '<div class="bg-green-500/10 p-3 rounded-lg border border-green-500/30"><div class="flex justify-between items-center mb-1"><span class="text-gray-300">✓ حافز تحدي الظروف (25%):</span><span class="font-bold text-green-400">+' + attendanceBonus.toFixed(2) + ' ' + unit + '</span></div><p class="text-xs text-gray-400 mt-1">تم إتمام ' + actualAttendanceDays + ' يوماً وأكثر من العطاء</p></div>' : '') + (hasExcellenceBonus ? '<div class="bg-turquoise/20 p-3 rounded-lg border border-turquoise/50"><div class="flex justify-between items-center mb-1"><span class="text-gray-300">✨ حافز الأفضل تقييماً + الأكثر حجوزات</span><span class="font-bold text-turquoise">+' + excellenceBonus.toFixed(2) + ' ' + unit + '</span></div></div>' : '') + (hasCommitmentBonus ? '<div class="bg-purple-500/20 p-3 rounded-lg border border-purple-500/50"><div class="flex justify-between items-center mb-1"><span class="text-gray-300">✓ حافز الجمع بين الحضور والأكثر تميز</span><span class="font-bold text-purple-400">+' + commitmentBonus.toFixed(2) + ' ' + unit + '</span></div>' + (commitmentExplainMulti ? '<p class="text-xs text-gray-400 mt-1">' + commitmentExplainMulti + '</p>' : '') + '</div>' : '') + (!attendance26Days && !hasExcellenceBonus && !hasCommitmentBonus ? '<p class="text-gray-400 text-center py-2">لا توجد حوافز إضافية</p>' : '') + '</div></div>' + (function(){var nbf=gross-fund;var totalDisc=report.totalDiscountAmount||0;var lines='<div class="bg-gradient-to-r from-slate-800/50 to-slate-900/50 p-3 rounded-lg border border-white/10"><h5 class="text-sm font-bold text-white mb-1">ملخص الحساب</h5><div class="space-y-1 text-xs"><div class="flex justify-between items-center text-gray-300"><span>إجمالي المكافآت:</span><span class="font-bold text-white">'+gross.toFixed(2)+' '+unit+'</span></div><div class="flex justify-between items-center text-gray-300"><span>'+fundLabel+'</span><span class="font-bold text-orange-400">'+fundSign+fund.toFixed(2)+' '+unit+'</span></div><div class="flex justify-between items-center text-gray-300"><span>الصافي قبل الحوافز:</span><span class="font-bold text-white">'+nbf.toFixed(2)+' '+unit+'</span></div>';if(attendanceBonus>0)lines+='<div class="flex justify-between items-center text-green-400"><span>+ حافز تحدي الظروف (25%):</span><span class="font-bold">+'+attendanceBonus.toFixed(2)+' '+unit+'</span></div>';if(excellenceBonus>0)lines+='<div class="flex justify-between items-center text-turquoise"><span>+ حافز التفوق:</span><span class="font-bold">+'+excellenceBonus.toFixed(2)+' '+unit+'</span></div>';if(commitmentBonus>0)lines+='<div class="flex justify-between items-center text-purple-400"><span>+ حافز الالتزام:</span><span class="font-bold">+'+commitmentBonus.toFixed(2)+' '+unit+'</span></div>';if(totalDisc>0)lines+='<div class="flex justify-between items-center text-red-400"><span>− الخصومات:</span><span class="font-bold">-'+totalDisc.toFixed(2)+' '+unit+'</span></div>';lines+='<div class="flex justify-between items-center pt-1 border-t border-white/10"><span class="font-bold text-turquoise text-sm">'+summaryTitle+':</span><span class="font-bold text-white text-base">'+mainTotal.toFixed(2)+' '+unit+'</span></div></div></div>';return lines;})();
+  var rest = '<div class="bg-purple-500/10 p-3 rounded-lg border border-purple-500/30"><h5 class="text-sm font-bold text-purple-400 mb-1">الإجمالي قبل مساهمة شركاء النجاح</h5><div class="flex justify-between items-center text-xs"><span class="text-gray-300">إجمالي المكافآت (حجوزات + تقييمات):</span><span class="font-bold text-white text-sm">' + gross.toFixed(2) + ' ' + unit + '</span></div></div><div class="bg-orange-500/10 p-3 rounded-lg border border-orange-500/30 space-y-2 shadow-sm"><h5 class="text-sm font-bold text-orange-400">' + (pointsMode ? 'مساهمة شركاء النجاح في نقاطك' : 'مساهمة شركاء النجاح') + '</h5><div class="flex justify-between items-baseline gap-4 text-xs"><span class="text-gray-300">' + (pointsMode ? 'النسبة (15%)' : '15%') + '</span><span class="font-bold text-orange-400 shrink-0">' + fundSign + fund.toFixed(2) + ' ' + unit + '</span></div><p class="text-[10px] text-orange-300/60 leading-snug">⚠️ تُخصم من المبلغ المالي فقط ولا تؤثر على تقييم الأداء أو رصيد النقاط التراكمي.</p></div><div class="bg-turquoise/10 p-3 rounded-lg border border-turquoise/30 border-t-2 border-teal-400/60 mt-4"><h5 class="text-sm font-bold text-turquoise mb-1">الحوافز الإضافية</h5><div class="space-y-2 text-xs">' + (attendance26Days ? '<div class="bg-green-500/10 p-3 rounded-lg border border-green-500/30"><div class="flex justify-between items-center mb-1"><span class="text-gray-300">✓ حافز تحدي الظروف (25%):</span><span class="font-bold text-green-400">+' + attendanceBonus.toFixed(2) + ' ' + unit + '</span></div><p class="text-xs text-gray-400 mt-1">تم إتمام ' + actualAttendanceDays + ' يوماً وأكثر من العطاء</p></div>' : '') + (hasExcellenceBonus ? '<div class="bg-turquoise/20 p-3 rounded-lg border border-turquoise/50"><div class="flex justify-between items-center mb-1"><span class="text-gray-300">✨ حافز الأفضل تقييماً + الأكثر حجوزات</span><span class="font-bold text-turquoise">+' + excellenceBonus.toFixed(2) + ' ' + unit + '</span></div></div>' : '') + (hasCommitmentBonus ? '<div class="bg-purple-500/20 p-3 rounded-lg border border-purple-500/50"><div class="flex justify-between items-center mb-1"><span class="text-gray-300">✓ حافز الجمع بين الحضور والأكثر تميز</span><span class="font-bold text-purple-400">+' + commitmentBonus.toFixed(2) + ' ' + unit + '</span></div>' + (commitmentExplainMulti ? '<p class="text-xs text-gray-400 mt-1">' + commitmentExplainMulti + '</p>' : '') + '</div>' : '') + (!attendance26Days && !hasExcellenceBonus && !hasCommitmentBonus ? '<p class="text-gray-400 text-center py-2">لا توجد حوافز إضافية</p>' : '') + '</div></div>' + (function(){var nbf=gross-fund;var totalDisc=report.totalDiscountAmount||0;var lines='<div class="bg-gradient-to-r from-slate-800/50 to-slate-900/50 p-3 rounded-lg border border-white/10"><h5 class="text-sm font-bold text-white mb-1">ملخص الحساب</h5><div class="space-y-1 text-xs"><div class="flex justify-between items-center text-gray-300"><span>إجمالي المكافآت:</span><span class="font-bold text-white">'+gross.toFixed(2)+' '+unit+'</span></div><div class="flex justify-between items-center text-gray-300"><span>'+fundLabel+'</span><span class="font-bold text-orange-400">'+fundSign+fund.toFixed(2)+' '+unit+'</span></div><div class="flex justify-between items-center text-gray-300"><span>الصافي قبل الحوافز:</span><span class="font-bold text-white">'+nbf.toFixed(2)+' '+unit+'</span></div>';if(attendanceBonus>0)lines+='<div class="flex justify-between items-center text-green-400"><span>+ حافز تحدي الظروف (25%):</span><span class="font-bold">+'+attendanceBonus.toFixed(2)+' '+unit+'</span></div>';if(excellenceBonus>0)lines+='<div class="flex justify-between items-center text-turquoise"><span>+ حافز التفوق:</span><span class="font-bold">+'+excellenceBonus.toFixed(2)+' '+unit+'</span></div>';if(commitmentBonus>0)lines+='<div class="flex justify-between items-center text-purple-400"><span>+ حافز الالتزام:</span><span class="font-bold">+'+commitmentBonus.toFixed(2)+' '+unit+'</span></div>';if(totalDisc>0)lines+='<div class="flex justify-between items-center text-red-400"><span>− الخصومات:</span><span class="font-bold">-'+totalDisc.toFixed(2)+' '+unit+'</span></div>';lines+='<div class="flex justify-between items-center pt-1 border-t border-white/10"><span class="font-bold text-turquoise text-sm">'+summaryTitle+':</span><span class="font-bold text-white text-base">'+mainTotal.toFixed(2)+' '+unit+'</span></div></div></div>';return lines;})();
   return normalizeBonusNamingText('<div class="space-y-3 employee-report-content">' + header + summary + breakdownBlock + discountBlock + '<div class="space-y-2">' + bookingsSection + evalsSection + rest + '</div></div>');
 }
 function showEmployeeReport(empId, options) {
@@ -7932,21 +7948,37 @@ body {
 .header p { font-size: 9px; color: #1c1c1c; margin: 1px 0; line-height: 1.25; }
 .header-right { text-align: left; }
 .detail-section {
-  margin-bottom: 5px;
-  padding: 6px 8px;
+  margin-bottom: 6px;
+  padding: 6px 8px 6px 10px;
   border: 1px solid #cbd5e1;
   border-radius: 4px;
   background: #f8fafc;
   page-break-inside: avoid;
+  border-right-width: 3px;
+  border-right-color: #94a3b8;
 }
+.detail-section.section-breakdown { border-right-color: #64748b; background: #f1f5f9; }
+.detail-section.section-bookings { border-right-color: #0ea5e9; background: #f0f9ff; }
+.detail-section.section-evals { border-right-color: #eab308; background: #fefce8; }
+.detail-section.section-fund { border-right-color: #f97316; background: #fff7ed; }
+.detail-section.section-bonuses { border-right-color: #14b8a6; background: #f0fdfa; }
+.detail-section.section-discounts { border-right-color: #dc2626; background: #fef2f2; }
+.detail-section.section-final { border-right-color: #0d9488; background: #ccfbf1; }
 .detail-section h3 {
   font-size: 10px;
   font-weight: 800;
   color: #0c0c0c;
   margin-bottom: 3px;
-  border-bottom: 1px solid #0d9488;
+  border-bottom: 1px solid #cbd5e1;
   padding-bottom: 2px;
 }
+.detail-section.section-breakdown h3 { border-bottom-color: #64748b; color: #334155; }
+.detail-section.section-bookings h3 { border-bottom-color: #0ea5e9; color: #0369a1; }
+.detail-section.section-evals h3 { border-bottom-color: #eab308; color: #a16207; }
+.detail-section.section-fund h3 { border-bottom-color: #f97316; color: #c2410c; }
+.detail-section.section-bonuses h3 { border-bottom-color: #14b8a6; color: #0f766e; }
+.detail-section.section-discounts h3 { border-bottom-color: #dc2626; color: #b91c1c; }
+.detail-section.section-final h3 { border-bottom-color: #0d9488; color: #0f766e; }
 .summary-box {
   background: linear-gradient(135deg, #0d9488 0%, #0f766e 100%);
   color: #fff;
@@ -8044,7 +8076,7 @@ function buildEmployeeReportBodyContent(report, periodText, reportDate, options)
   if (hasBreakdown) {
     var bt = breakdownText;
     var b = breakdown;
-    breakdownSection = '<div class="detail-section"><h3>📋 تفاصيل الحجوزات والشفتات والتنبيهات</h3>' +
+    breakdownSection = '<div class="detail-section section-breakdown"><h3>📋 تفاصيل الحجوزات والشفتات والتنبيهات</h3>' +
       (bt ? (
         rowBreakdown('العقود', bt.staffCount) +
         rowBreakdown('استقبال', bt.reception) +
@@ -8124,9 +8156,9 @@ if (_bdV > 0) {
 var _sec3 = _vipRows ? '<p style="font-weight:700;margin:6px 0 2px;">👑 ثالثاً: حجوزات الـ VIP (سعر الغرفة)</p>' + _vipRows : '';
 var _gbOnly = _shiftAmt + _bookingAmt + _vipAmt;
 var _refCount = emp.count || 0;
-return '<div class="detail-section"><h3>📊 مكافآت الحجوزات</h3>' + _sec1 + _sec2 + _sec3 + '<div class="row total-row"><span>💰 المجموع النهائي للمكافأة:</span><span><strong>' + _gbOnly.toFixed(2) + ' ' + unit + '</strong></span></div><p style="font-size:9px;opacity:0.9;">(إجمالي الحجوزات: ' + _refCount + ' حجز)</p></div>';
+return '<div class="detail-section section-bookings"><h3>📊 مكافآت الحجوزات</h3>' + _sec1 + _sec2 + _sec3 + '<div class="row total-row"><span>💰 المجموع النهائي للمكافأة:</span><span><strong>' + _gbOnly.toFixed(2) + ' ' + unit + '</strong></span></div><p style="font-size:9px;opacity:0.9;">(إجمالي الحجوزات: ' + _refCount + ' حجز)</p></div>';
 })()}
-<div class="detail-section">
+<div class="detail-section section-evals">
 <h3>⭐ مكافآت التقييمات</h3>
 <div class="row">
 <span>تقييمات Booking: ${evBooking} × ${_p.rateEvalBooking} ${unit}/تقييم</span>
@@ -8141,7 +8173,7 @@ return '<div class="detail-section"><h3>📊 مكافآت الحجوزات</h3>'
 <span><strong>${((evBooking * _p.rateEvalBooking) + (evGoogle * _p.rateEvalGoogle)).toFixed(2)} ${unit}</strong></span>
 </div>
 </div>
-<div class="detail-section">
+<div class="detail-section section-fund">
 <h3>${pointsMode ? 'الإجمالي ومساهمة شركاء النجاح في نقاطك' : 'الإجمالي ومساهمة شركاء النجاح'}</h3>
 <div class="row">
 <span>إجمالي المكافآت (حجوزات + تقييمات):</span>
@@ -8158,7 +8190,7 @@ return '<div class="detail-section"><h3>📊 مكافآت الحجوزات</h3>'
 </div>
 </div>
 ${attendanceBonus > 0 || excellenceBonus > 0 || commitmentBonus > 0 ? `
-<div class="detail-section">
+<div class="detail-section section-bonuses">
 <h3>🏆 الحوافز الإضافية</h3>
 ${attendance26Days ? `
 <div class="row" style="border-bottom: 1px solid #e5e7eb; padding-bottom: 2px; margin-bottom: 2px;">
@@ -8190,7 +8222,7 @@ ${hasCommitmentBonus ? `
 </div>
 ` : ''}
 ${totalDiscountAmount > 0 ? `
-<div class="detail-section">
+<div class="detail-section section-discounts">
 <h3>💰 الخصومات المطبقة</h3>
 ${discountDetails.map(discount => {
   const discountAmount = discount.isHotelRating && discount.amount != null ? Number(discount.amount) : (typeof calculateAggregatedNetForEmployee === 'function' ? (calculateAggregatedNetForEmployee(emp.name) * (discount.discountPercentage / 100)) : 0);
@@ -8213,7 +8245,7 @@ ${discountDetails.map(discount => {
 </div>
 </div>
 ` : ''}
-<div class="detail-section final-summary-section">
+<div class="detail-section final-summary-section section-final">
 <h3>ملخص الحساب النهائي</h3>
 <div class="row">
 <span>إجمالي المكافآت:</span>
@@ -8316,16 +8348,16 @@ function buildEmployeeReportBodyContentMultiBranch(report, periodText, reportDat
     var _attD = r.actualAttendanceDays != null ? r.actualAttendanceDays : 0;
     breakdownPerBranch += '<div class="detail-section" style="margin-bottom: 3px;"><h3>' + esc(be.branch) + '</h3><div class="row"><span>العقود</span><span><strong>' + (b.staffCount != null ? b.staffCount : (be.count || 0)) + '</strong></span></div><div class="row"><span>استقبال</span><span><strong>' + (b.reception != null ? b.reception : 0) + '</strong></span></div><div class="row"><span>بوكينج</span><span><strong>' + (b.booking != null ? b.booking : 0) + '</strong></span></div><div class="row"><span>صباح</span><span><strong>' + (b.morning != null ? b.morning : 0) + '</strong></span></div><div class="row"><span>مساء</span><span><strong>' + (b.evening != null ? b.evening : 0) + '</strong></span></div><div class="row"><span>ليل</span><span><strong>' + (b.night != null ? b.night : 0) + '</strong></span></div>' + (b.vipTotal ? '<div class="row"><span>VIP</span><span><strong>' + b.vipTotal + '</strong></span></div>' : '') + '<div class="row"><span>حضور</span><span><strong>' + _attD + '</strong></span></div></div>';
   });
-  var breakdownBlock = breakdownPerBranch ? '<div class="detail-section"><h3>📋 تفاصيل الحجوزات والشفتات (كل فرع)</h3>' + breakdownPerBranch + '</div>' : '';
+  var breakdownBlock = breakdownPerBranch ? '<div class="detail-section section-breakdown"><h3>📋 تفاصيل الحجوزات والشفتات (كل فرع)</h3>' + breakdownPerBranch + '</div>' : '';
   var discountBlock = '';
   if (totalDiscountAmount > 0 && discountDetails.length > 0) {
-    discountBlock = '<div class="detail-section"><h3>💰 الخصومات المطبقة</h3>' + discountDetails.map(function(d) {
+    discountBlock = '<div class="detail-section section-discounts"><h3>💰 الخصومات المطبقة</h3>' + discountDetails.map(function(d) {
       var amt = d.isHotelRating && d.amount != null ? Number(d.amount) : (typeof calculateAggregatedNetForEmployee === 'function' ? calculateAggregatedNetForEmployee(emp.name) * (d.discountPercentage / 100) : 0);
       var label = d.isHotelRating ? d.discountType : d.discountType + ' (' + d.discountPercentage + '%)';
       return '<div class="row"><span>' + esc(label) + '</span><span><strong style="color: #ef4444;">-' + amt.toFixed(2) + ' ' + unit + '</strong></span></div>';
     }).join('') + '</div>';
   }
-  var bookingsSection = '<div class="detail-section"><h3>📊 مكافآت الحجوزات</h3>';
+  var bookingsSection = '<div class="detail-section section-bookings"><h3>📊 مكافآت الحجوزات</h3>';
   var _sumBranchBookOnly = 0;
   function _wPrint(n) { return n === 1 ? 'حجز' : 'حجوزات'; }
   branchReports.forEach(function(r) {
@@ -8372,7 +8404,7 @@ function buildEmployeeReportBodyContentMultiBranch(report, periodText, reportDat
     bookingsSection += '<div style="margin-bottom:4px;padding:3px;border:0.5px solid #e5e7eb;">' + sec1 + sec2 + sec3 + '<div class="row total-row"><span>💰 المجموع النهائي للمكافأة:</span><span><strong>' + rbBookOnly.toFixed(2) + ' ' + unit + '</strong></span></div><p style="font-size:8px;opacity:0.9;">(إجمالي الحجوزات: ' + bc + ' حجز)</p></div>';
   });
   bookingsSection += '<div class="row total-row" style="margin-top:4px;"><span>💰 المجموع النهائي للمكافأة (كل الفروع):</span><span><strong>' + _sumBranchBookOnly.toFixed(2) + ' ' + unit + '</strong></span></div><p style="font-size:8px;opacity:0.9;">(إجمالي الحجوزات: ' + (emp.count || 0) + ' حجز)</p></div>';
-  var evalsSection = '<div class="detail-section"><h3>⭐ مكافآت التقييمات</h3>';
+  var evalsSection = '<div class="detail-section section-evals"><h3>⭐ مكافآت التقييمات</h3>';
   branchReports.forEach(function(r) {
     var be = r.emp;
     var eb = r.evBooking || 0, eg = r.evGoogle || 0;
@@ -8381,15 +8413,15 @@ function buildEmployeeReportBodyContentMultiBranch(report, periodText, reportDat
   });
   var evalTotal = (report.evBooking || 0) * (_rp.rateEvalBooking || 0) + (report.evGoogle || 0) * (_rp.rateEvalGoogle || 0);
   evalsSection += '<div class="row total-row"><span>إجمالي مكافآت التقييمات</span><span><strong>' + evalTotal.toFixed(2) + ' ' + unit + '</strong></span></div></div>';
-  var rest = '<div class="detail-section"><h3>الإجمالي ومساهمة شركاء النجاح</h3><div class="row"><span>إجمالي المكافآت (حجوزات + تقييمات)</span><span><strong>' + gross.toFixed(2) + ' ' + unit + '</strong></span></div><div class="row"><span>' + fundLabel + '</span><span><strong style="color: #ef4444;">' + fundSign + fund.toFixed(2) + ' ' + unit + '</strong></span></div><p class="fund-note">⚠️ النسبة تُخصم من المبلغ المالي فقط ولا تؤثر على تقييم الأداء أو رصيد النقاط التراكمي.</p></div>';
-  rest += '<div class="detail-section"><h3>🏆 الحوافز الإضافية</h3>';
+  var rest = '<div class="detail-section section-fund"><h3>الإجمالي ومساهمة شركاء النجاح</h3><div class="row"><span>إجمالي المكافآت (حجوزات + تقييمات)</span><span><strong>' + gross.toFixed(2) + ' ' + unit + '</strong></span></div><div class="row"><span>' + fundLabel + '</span><span><strong style="color: #ef4444;">' + fundSign + fund.toFixed(2) + ' ' + unit + '</strong></span></div><p class="fund-note">⚠️ النسبة تُخصم من المبلغ المالي فقط ولا تؤثر على تقييم الأداء أو رصيد النقاط التراكمي.</p></div>';
+  rest += '<div class="detail-section section-bonuses"><h3>🏆 الحوافز الإضافية</h3>';
   if (attendance26Days && attendanceBonus > 0) rest += '<div class="row"><span>✓ حافز تحدي الظروف (25%)</span><span><strong style="color: #10b981;">+' + attendanceBonus.toFixed(2) + ' ' + unit + '</strong></span></div>';
   if (hasExcellenceBonus) rest += '<div class="row"><span>✨ خبير إرضاء العميل في الفرع</span><span><strong style="color: #14b8a6;">+' + excellenceBonus.toFixed(2) + ' ' + unit + '</strong></span></div>';
   if (hasCommitmentBonus) rest += '<div class="row"><span>✓ حافز الالتزام والانجاز</span><span><strong style="color: #a855f7;">+' + commitmentBonus.toFixed(2) + ' ' + unit + '</strong></span></div>';
   if (!attendance26Days && !hasExcellenceBonus && !hasCommitmentBonus) rest += '<div class="row"><span>لا توجد حوافز إضافية</span><span>—</span></div>';
   rest += '</div>';
   var nbf = gross - fund;
-  rest += '<div class="detail-section final-summary-section"><h3>ملخص الحساب النهائي</h3><div class="row"><span>إجمالي المكافآت</span><span><strong>' + gross.toFixed(2) + ' ' + unit + '</strong></span></div><div class="row"><span>' + fundLabel + '</span><span><strong style="color: #b91c1c;">' + fundSign + fund.toFixed(2) + ' ' + unit + '</strong></span></div><div class="row"><span>الصافي قبل الحوافز</span><span><strong>' + nbf.toFixed(2) + ' ' + unit + '</strong></span></div>';
+  rest += '<div class="detail-section final-summary-section section-final"><h3>ملخص الحساب النهائي</h3><div class="row"><span>إجمالي المكافآت</span><span><strong>' + gross.toFixed(2) + ' ' + unit + '</strong></span></div><div class="row"><span>' + fundLabel + '</span><span><strong style="color: #b91c1c;">' + fundSign + fund.toFixed(2) + ' ' + unit + '</strong></span></div><div class="row"><span>الصافي قبل الحوافز</span><span><strong>' + nbf.toFixed(2) + ' ' + unit + '</strong></span></div>';
   if (attendanceBonus > 0) rest += '<div class="row"><span>+ حافز تحدي الظروف</span><span><strong style="color: #047857;">+' + attendanceBonus.toFixed(2) + ' ' + unit + '</strong></span></div>';
   if (excellenceBonus > 0) rest += '<div class="row"><span>+ حافز التفوق</span><span><strong>+' + excellenceBonus.toFixed(2) + ' ' + unit + '</strong></span></div>';
   if (commitmentBonus > 0) rest += '<div class="row"><span>+ حافز الالتزام</span><span><strong>+' + commitmentBonus.toFixed(2) + ' ' + unit + '</strong></span></div>';

@@ -10,6 +10,7 @@ const fs = require('fs');
 const root = path.resolve(__dirname, '..');
 const srcDir = path.join(root, 'src');
 const appRoot = path.join(root, '..');
+const sharedDir = path.join(appRoot, 'shared');
 
 function runPredeploy() {
   const scriptPath = path.join(root, 'scripts', 'prepare-deploy.js');
@@ -56,5 +57,7 @@ runPredeploy();
 watch(root, '.', false);
 // مراقبة src بعمق
 watch(srcDir, 'src', true);
+// مراقبة shared (الشروط، الأزرار المشتركة، إلخ) لضمان مزامنة فورية مع Rewards و app/public/rewards
+watch(sharedDir, 'shared', true);
 
 console.log('[watch] جاري المراقبة — احفظ الملفات وحدّث المتصفح بعد كل حفظ.\nإيقاف: Ctrl+C');

@@ -95,9 +95,10 @@ export interface AppConfig {
 // ===================================================================
 // القيم الافتراضية — تُستخدم عند أول تحميل أو عند «استعادة الافتراضي»
 // (ما لم يكن قد تم «حفظ كافتراضي» من لوحة الإعدادات).
-// لتعديل الافتراضي مستقبلاً: إما عدّل القيم أدناه (DEFAULT_*) في هذا الملف،
-// أو من لوحة الإعدادات اضغط «حفظ كافتراضي» بعد ضبط القيم المطلوبة.
-// (حفظ كافتراضي من اللوحة يخزّن في المتصفح ويُستعاد بزر «استعادة الافتراضي».)
+// ===================================================================
+// القيم الافتراضية للإعدادات — تظهر في لوحة الإعدادات عند عدم وجود حفظ سابق،
+// وعند الضغط على «استعادة الافتراضي». لتعديلها: عدّل DEFAULT_CONFIG و DEFAULT_REWARD_PRICING أدناه،
+// أو من اللوحة اضغط «حفظ كافتراضي» بعد ضبط القيم (يُخزّن في المتصفح فقط).
 // ===================================================================
 
 const DEFAULT_CORNICHE: BranchConfig = {
@@ -137,21 +138,30 @@ const DEFAULT_ANDALOUS: BranchConfig = {
 };
 
 export const DEFAULT_REWARD_PRICING: RewardPricing = {
-  rateMorning: 1,
-  rateEvening: 1,
-  rateNight: 2,
-  rateBooking: 1,
+  rateMorning: 2,
+  rateEvening: 3,
+  rateNight: 4,
+  rateBooking: 2,
   rateContract: 200,
-  rateVipByBranch: {},
-  rateVipDefault: { reception: 0, booking: 0 },
-  vipDescription: 'حجوزات VIP — تُسعّر من خانات VIP (استقبال/بوكينج لكل غرفة)',
-  rateEvalBooking: 20,
+  rateVipByBranch: {
+    'الكورنيش': { '603': { reception: 30, booking: 3 }, '604': { reception: 30, booking: 3 } },
+    'الأندلس': {
+      '601': { reception: 30, booking: 3 },
+      '602': { reception: 30, booking: 3 },
+      '603': { reception: 30, booking: 3 },
+      '604': { reception: 10, booking: 2 },
+    },
+  },
+  rateVipDefault: { reception: 30, booking: 3 },
+  vipDescription: 'الحد الادني لعدد الحجوزات = شفت الليل 75 عقد باقي الشفتات 120 عقد',
+  rateEvalBooking: 30,
   rateEvalGoogle: 10,
   minEvalCorniche: 8.7,
   minEvalAndalus: 8.2,
   minEvalGoogle: 4.3,
 };
 
+/** الافتراضي المعتمد: الحدود العامة + أسعار المكافآت. تُستعمل عند فتح الإعدادات أول مرة وعند «استعادة الافتراضي». */
 export const DEFAULT_CONFIG: AppConfig = {
   minBookingThreshold: 10,
   monthlyNightsThreshold: 28,

@@ -1,5 +1,6 @@
 @echo off
 REM Full deploy: sync + build + Firebase + git commit + push. Run from project root only.
+REM عند الدفع إلى main يعمل أيضاً النشر التلقائي عبر GitHub Actions.
 chcp 65001 >nul
 setlocal
 
