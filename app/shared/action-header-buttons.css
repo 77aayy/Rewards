@@ -92,6 +92,38 @@
   width: 1rem !important;
   height: 1rem !important;
 }
+
+/* حالة التحميل للأزرار (مثلاً تصدير PDF) */
+.action-header-btn.is-loading {
+  position: relative;
+  opacity: 0.85;
+  cursor: wait;
+}
+.action-header-btn.is-loading::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: radial-gradient(circle at center, rgba(20,184,166,0.25), transparent 55%);
+  opacity: 1;
+  pointer-events: none;
+}
+.action-header-btn.is-loading .btn-spinner {
+  display: inline-block;
+  width: 0.85rem;
+  height: 0.85rem;
+  border-radius: 999px;
+  border-width: 2px;
+  border-style: solid;
+  border-color: rgba(148,163,184,0.4);
+  border-top-color: var(--adora-accent, #14b8a6);
+  margin-inline-start: 0.35rem;
+  animation: btn-spin 0.7s linear infinite;
+}
+
+@keyframes btn-spin {
+  from { transform: rotate(0deg); }
+  to { transform: rotate(360deg); }
+}
 @media (max-width: 480px) {
   .action-header-btn {
     min-height: 36px !important;

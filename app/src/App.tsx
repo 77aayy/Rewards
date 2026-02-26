@@ -112,9 +112,11 @@ import {
   aggregateData,
   getStaffFileStats,
   getStaffDateRange,
+  getLogCreationShiftCounts,
   getLogFileStats,
   getReportFileStats,
   getUnitsFileStats,
+  getActualDatesFileStats,
   detectFileType,
   getFileTypeLabel,
   getFileTypeIcon,
@@ -396,6 +398,7 @@ const STORAGE_KEYS = {
   staffList: 'adora_analysis_staffList',
   dateRange: 'adora_analysis_dateRange',
   analyzed: 'adora_analysis_analyzed',
+  logCreationShiftCounts: 'adora_analysis_logCreationShiftCounts',
 };
 
 function getAdminAuth() {
@@ -411,12 +414,20 @@ function isAllowedAdminEmail(email: string | null | undefined): boolean {
   return ADMIN_ALLOWED_EMAILS.includes(normalized);
 }
 
-function saveAnalysisToStorage(d: MatchedRow[], staff: StaffRecord[], range: { from: string; to: string } | null) {
+function saveAnalysisToStorage(
+  d: MatchedRow[],
+  staff: StaffRecord[],
+  range: { from: string; to: string } | null,
+  logCreationShiftCounts?: Record<string, { صباح: number; مساء: number; ليل: number; total: number }>,
+) {
   try {
     localStorage.setItem(STORAGE_KEYS.data, JSON.stringify(d));
     localStorage.setItem(STORAGE_KEYS.staffList, JSON.stringify(staff));
     localStorage.setItem(STORAGE_KEYS.dateRange, JSON.stringify(range));
     localStorage.setItem(STORAGE_KEYS.analyzed, 'true');
+    if (logCreationShiftCounts) {
+      localStorage.setItem(STORAGE_KEYS.logCreationShiftCounts, JSON.stringify(logCreationShiftCounts));
+    }
   } catch (e) {
     console.warn('⚠️ Failed to save analysis to localStorage:', e);
   }
@@ -427,14 +438,16 @@ function loadAnalysisFromStorage(): {
   staffList: StaffRecord[];
   dateRange: { from: string; to: string } | null;
   analyzed: boolean;
+  logCreationShiftCounts: Record<string, { صباح: number; مساء: number; ليل: number; total: number }>;
 } | null {
   try {
     if (localStorage.getItem(STORAGE_KEYS.analyzed) !== 'true') return null;
     const d = JSON.parse(localStorage.getItem(STORAGE_KEYS.data) || '[]');
     const s = JSON.parse(localStorage.getItem(STORAGE_KEYS.staffList) || '[]');
     const r = JSON.parse(localStorage.getItem(STORAGE_KEYS.dateRange) || 'null');
+    const logCounts = JSON.parse(localStorage.getItem(STORAGE_KEYS.logCreationShiftCounts) || '{}');
     if (!Array.isArray(d) || d.length === 0) return null;
-    return { data: d, staffList: s, dateRange: r, analyzed: true };
+    return { data: d, staffList: s, dateRange: r, analyzed: true, logCreationShiftCounts: logCounts };
   } catch {
     return null;
   }
@@ -650,6 +663,9 @@ export default function App() {
   const [data, setData] = useState<MatchedRow[]>(() => cachedAnalysis?.data ?? []);
   const [staffList, setStaffList] = useState<StaffRecord[]>(() => cachedAnalysis?.staffList ?? []);
   const [dateRange, setDateRange] = useState<{ from: string; to: string } | null>(() => cachedAnalysis?.dateRange ?? null);
+  const [logCreationShiftCounts, setLogCreationShiftCounts] = useState<
+    Record<string, { صباح: number; مساء: number; ليل: number; total: number }>
+  >(() => cachedAnalysis?.logCreationShiftCounts ?? {});
   const [analyzing, setAnalyzing] = useState(false);
   const [analyzed, setAnalyzed] = useState(() => cachedAnalysis?.analyzed ?? false);
   const [loadProgress, setLoadProgress] = useState(false);
@@ -734,6 +750,9 @@ export default function App() {
         } else if (result.baseType === 'units') {
           const s = getUnitsFileStats(buffer);
           stats = `${s.bookings} حجز • ${s.units} وحدة`;
+        } else if (result.baseType === 'actualDates') {
+          const s = getActualDatesFileStats(buffer);
+          stats = `${s.rows} صف`;
         }
 
         newSlots[result.slotKey] = {
@@ -844,6 +863,7 @@ export default function App() {
     ];
     for (const br of discoveredBranches) {
       slots.push({ key: `report-${br}`, baseType: 'report', branch: br, required: true });
+      slots.push({ key: `actualDates-${br}`, baseType: 'actualDates', branch: br, required: true });
       slots.push({ key: `log-${br}`, baseType: 'log', branch: br, required: false });
       slots.push({ key: `units-${br}`, baseType: 'units', branch: br, required: false });
     }
@@ -894,6 +914,8 @@ export default function App() {
       const logLookup = buildLogLookup(allLogBookings);
       const unitsLookup = buildUnitsLookup(allUnits);
       const staffDateRange = getStaffDateRange(staffBuf);
+      const logCounts = getLogCreationShiftCounts(allLogBookings, staffDateRange);
+      setLogCreationShiftCounts(logCounts);
       const matched = aggregateData(staff, allReportBookings, logLookup, unitsLookup, staffDateRange, config);
       const stats = getStaffFileStats(staffBuf);
 
@@ -905,7 +927,7 @@ export default function App() {
       setDateRange(range);
       setAnalyzed(true);
       // Persist to localStorage so refresh preserves the results
-      saveAnalysisToStorage(matched, staff, range);
+      saveAnalysisToStorage(matched, staff, range, logCounts);
     } catch (err) {
       console.error('Analysis error:', err);
       alert('خطأ في التحليل. تأكد من صحة الملفات.');
@@ -933,6 +955,12 @@ export default function App() {
       startAnalysis();
     }
   }, [pendingReanalysis, canAnalyze, analyzing, startAnalysis]);
+
+  // ربط الرفع بالنتيجة: عند اكتمال كل الملفات المطلوبة تشغيل التحليل تلقائياً فتظهر النتيجة في جدول "ملخص المكافآت"
+  useEffect(() => {
+    if (!isAllFilesFilled || !canAnalyze || analyzed || analyzing) return;
+    startAnalysis();
+  }, [isAllFilesFilled, canAnalyze, analyzed, analyzing, startAnalysis]);
 
   // Derived data
   const countedData = useMemo(() => data.filter((d) => !d.isExcess), [data]);
@@ -1229,7 +1257,12 @@ export default function App() {
                     <div className="text-center space-y-1.5">
                       <p className="text-lg font-bold text-[var(--adora-text)]">ارفع كل الملفات دفعة واحدة</p>
                       <p className="text-sm text-[var(--adora-text-secondary)]">اسحب الملفات هنا أو اضغط لاختيارها — التعرف تلقائي من المحتوى</p>
-                      <p className="text-sm text-[var(--adora-text-secondary)]">تقرير إحصائيات الموظفين + سجل حركات النظام + تقرير حجوزات العملاء + تقرير وحدات الحجوزات</p>
+                      <p className="text-sm text-[var(--adora-text-secondary)]">
+                        <span className="text-[var(--adora-accent)]">مطلوب:</span> تقرير إحصائيات الموظفين (واحد لجميع الفروع) • تقرير التواريخ الفعلية للحجوزات (ملف لكل فرع) • تقرير حجوزات العملاء (ملف لكل فرع)
+                      </p>
+                      <p className="text-xs text-[var(--adora-text-secondary)]/80">
+                        اختياري: سجل حركات النظام • تقرير وحدات الحجوزات (ملف لكل فرع)
+                      </p>
                     </div>
                     <div className="flex items-center gap-2 text-[var(--adora-text-secondary)] text-sm mt-1">
                       <Upload className="w-3.5 h-3.5" /> xlsx / xls
@@ -1459,7 +1492,7 @@ export default function App() {
             </section>
 
             {/* Employee Breakdown */}
-            <EmployeeBreakdown staffList={staffList} data={data} config={config} dateRange={dateRange} />
+            <EmployeeBreakdown staffList={staffList} data={data} config={config} dateRange={dateRange} logCreationShiftCounts={logCreationShiftCounts} />
 
             {/* Filters */}
             <section className="glass rounded-2xl sm:rounded-[28px] p-5 space-y-4 neon-glow animate-in animate-delay-200">
@@ -2223,6 +2256,7 @@ function MethodologyPopup({ config, onClose }: { config: AppConfig; onClose: () 
             </h4>
             <div className="space-y-1.5 text-slate-300 text-sm mr-8">
               <p><span className="text-cyan-300 font-bold">تقرير إحصائيات الموظفين</span> — المرجع النهائي لعدد الحجوزات لكل موظف (الحَكَم). يُستخرج منه عدد الحجوزات + فترة التقرير.</p>
+              <p><span className="text-violet-300 font-bold">تقرير التواريخ الفعلية للحجوزات</span> — دخول/خروج فعلي لكل فرع (لتحديد الشفت بدقة).</p>
               <p><span className="text-sky-300 font-bold">تقرير حجوزات العملاء</span> — المصدر الأساسي للتفاصيل: اسم العميل، الوحدة، السعر، تاريخ الدخول/الخروج، مصدر الحجز.</p>
               <p><span className="text-teal-300 font-bold">سجل حركات النظام</span> — مصدر ثانوي لكشف نقل الغرف فقط (Room Transfer).</p>
               <p><span className="text-amber-300 font-bold">تقرير وحدات الحجوزات</span> — مصدر تكميلي لأسعار الغرف المدمجة بدقة (per-unit pricing).</p>
@@ -2854,9 +2888,10 @@ interface DrilldownInfo {
   bookings: DrilldownBooking[];
 }
 
-function EmployeeBreakdown({ staffList, data, config, dateRange }: {
+function EmployeeBreakdown({ staffList, data, config, dateRange, logCreationShiftCounts }: {
   staffList: StaffRecord[]; data: MatchedRow[]; config: AppConfig;
   dateRange: { from: string; to: string } | null;
+  logCreationShiftCounts: Record<string, { صباح: number; مساء: number; ليل: number; total: number }>;
 }) {
   const [transferring, setTransferring] = useState(false);
   const [transferDone, setTransferDone] = useState(false);
@@ -3055,11 +3090,34 @@ function EmployeeBreakdown({ staffList, data, config, dateRange }: {
       if (d.isMerged) a.mergedCount++;
     }
 
-    // عندما المحلّل من التقرير أقل من المرجع: نوزّع تناسبياً حتى المجموع = المرجع (عشان الرسالة للموظف تكون منطقية: 111 عقد = X استقبال + Y بوكينج).
+    // مصدر التوزيع: إن وُجد سجل إنشاء حجز كافٍ (من اللوج) نستخدمه؛ وإلا نوزّع تناسبياً من التقرير.
     for (const k of Object.keys(agg)) {
       const a = agg[k];
       const ref = a.staffCount;
       const counted = a.counted;
+      const logCount = logCreationShiftCounts[k];
+      if (logCount && logCount.total >= ref) {
+        // توزيع من الإكسيل (سجل النشاط — حركات إنشاء حجز) = صباح+مساء+ليل = المرجع
+        let صباح = logCount.صباح;
+        let مساء = logCount.مساء;
+        let ليل = logCount.ليل;
+        if (logCount.total > ref) {
+          const ratio = ref / logCount.total;
+          صباح = Math.round(logCount.صباح * ratio);
+          مساء = Math.round(logCount.مساء * ratio);
+          ليل = ref - صباح - مساء;
+        }
+        a['صباح'] = صباح;
+        a['مساء'] = مساء;
+        a['ليل'] = ليل;
+        // استقبال/بوكينج من التقرير إن كان counted = ref؛ وإلا نترك التوزيع التناسبي التالي يطبّق عليهم
+        if (counted < ref) {
+          const oldRec = a['استقبال'];
+          a['استقبال'] = Math.round(ref * (oldRec / counted));
+          a['بوكينج'] = ref - a['استقبال'];
+        }
+        continue;
+      }
       if (ref <= 0 || counted <= 0) continue;
       if (counted === ref) continue;
 
@@ -3101,8 +3159,17 @@ function EmployeeBreakdown({ staffList, data, config, dateRange }: {
       }
     }
 
+    // تطبيع نهائي: ضمان استقبال+بوكينج = المرجع و صباح+مساء+ليل = المرجع (بدون خلل تقريب)
+    for (const k of Object.keys(agg)) {
+      const a = agg[k];
+      const ref = a.staffCount;
+      if (ref <= 0) continue;
+      a['بوكينج'] = ref - a['استقبال'];
+      a['ليل'] = ref - a['صباح'] - a['مساء'];
+    }
+
     return Object.values(agg);
-  }, [staffList, data, countedData, ALL_VIP_NUMS, VIP_ROOMS]);
+  }, [staffList, data, countedData, logCreationShiftCounts, ALL_VIP_NUMS, VIP_ROOMS]);
 
   // Sort handler
   const handleSort = useCallback((key: string) => {

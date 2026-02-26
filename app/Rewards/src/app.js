@@ -355,6 +355,43 @@ function computeGrossFromBreakdown(emp, pricing) {
 }
 
 /**
+ * Return gross breakdown by component (استقبال، بوكينج، VIP، تقييم بوكينج، تقييم جوجل) for one employee.
+ * Used in PDF export to build one-line explanation per employee.
+ * @param {object} emp — employee row
+ * @param {object} [pricing] — optional pricing config
+ * @returns {{ reception: number, booking: number, vip: number, evalBooking: number, evalGoogle: number, total: number }}
+ */
+function computeGrossBreakdown(emp, pricing) {
+  if (!pricing) pricing = getPricingConfig();
+  var reception = 0, booking = 0, vip = 0, evalBooking = 0, evalGoogle = 0;
+  var useNewFormula = (emp._receptionMorning != null || emp._bookingRegular != null);
+  if (useNewFormula) {
+    var recM = emp._receptionMorning || 0, recE = emp._receptionEvening || 0, recN = emp._receptionNight || 0;
+    reception = (recM * (pricing.rateMorning || 0)) + (recE * (pricing.rateEvening || 0)) + (recN * (pricing.rateNight || 0));
+    booking = (emp._bookingRegular || 0) * (pricing.rateBooking || 0);
+  } else {
+    var morning = emp._morning || 0, evening = emp._evening || 0, night = emp._night || 0;
+    var vipMorning = emp._vipMorning || 0, vipEvening = emp._vipEvening || 0, vipNight = emp._vipNight || 0;
+    var regularMorning = Math.max(0, morning - vipMorning), regularEvening = Math.max(0, evening - vipEvening), regularNight = Math.max(0, night - vipNight);
+    reception = (regularMorning * (pricing.rateMorning || 0)) + (regularEvening * (pricing.rateEvening || 0)) + (regularNight * (pricing.rateNight || 0));
+  }
+  var vipBySource = emp._vipBySource || {};
+  var vipDefault = pricing.rateVipDefault || { reception: 0, booking: 0 };
+  var branchVipRates = (pricing.rateVipByBranch && emp.branch) ? (pricing.rateVipByBranch[emp.branch] || {}) : {};
+  Object.keys(vipBySource).forEach(function(roomNum) {
+    var src = vipBySource[roomNum];
+    var rates = branchVipRates[String(roomNum)] || vipDefault;
+    vip += (src.reception || 0) * (rates.reception || 0);
+    vip += (src.booking || 0) * (rates.booking || 0);
+  });
+  var evB = emp.evaluationsBooking || 0, evG = emp.evaluationsGoogle || 0;
+  evalBooking = evB * (pricing.rateEvalBooking || 0);
+  evalGoogle = evG * (pricing.rateEvalGoogle || 0);
+  var total = reception + booking + vip + evalBooking + evalGoogle;
+  return { reception: reception, booking: booking, vip: vip, evalBooking: evalBooking, evalGoogle: evalGoogle, total: total };
+}
+
+/**
  * Get the old-style "rate" (1/2/3) for display purposes only (الفئة column).
  * Actual calculation now uses computeGrossFromBreakdown.
  */
@@ -5613,83 +5650,97 @@ alert('حدث خطأ أثناء الطباعة: ' + error.message);
 }
 }
 
-/** تصدير جدول الكل كـ PDF احترافي: نفس رؤوس وأعمدة جدول الكل، خلفية بيضاء وألوان أبيض/أسود/رمادي، ترويسة تقرير مكافآت فنادق إليت. */
+/** تصدير جدول الكل كـ PDF — مُعاد بناؤه من الصفر: جدول مضبوط، ألوان فاتحة، كل الأعمدة، إجماليات، اعتمادات، سطر شرح واضح، خط Tajawal. */
 function exportPdfTableAll() {
   if (typeof db === 'undefined' || !Array.isArray(db) || db.length === 0) {
     if (typeof showToast === 'function') showToast('لا توجد بيانات لتصدير جدول الكل.', 'error');
     else alert('لا توجد بيانات لتصدير جدول الكل.');
     return;
   }
+
+  var FONT = 'Tajawal,\'Segoe UI\',Arial,sans-serif';
+  var BLACK = '#000000';
+  var HEADER_BG = '#f0f0f0';
+  var HEADER_TEXT = BLACK;
+  var HEADER_BORDER = BLACK;
+  var CELL_BORDER = BLACK;
+  var ROW_ALT = '#f5f5f5';
+  var TOTAL_BG = '#f0f0f0';
+  var TOTAL_BORDER = BLACK;
+  var MAX_MM = 287;
+
+  function esc(s) {
+    return String(s == null ? '' : s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+  }
+  var PDF_FONT_CELL = '11.25px';
+  var PDF_FONT_HEADER = '8px';
+  var PDF_FONT_NET = '18.75px';
+  var PDF_FONT_TOTAL = '17.5px';
+  var PDF_FONT_NAME = '12.15px';
+  var PDF_PADDING = '3.0px 4px';
+  var PDF_HEADER_PADDING = '3.5px 4px';
+  function tdNameCell(name) {
+    return '<td style="padding:2.7px 4px;border:1px solid ' + CELL_BORDER + ';text-align:right;font-size:' + PDF_FONT_NAME + ';color:#000000;background:transparent;font-weight:700;font-family:' + FONT + ';line-height:2.05;overflow:hidden;">' + esc(String(name)) + '</td>';
+  }
+  function tdCell(val, align, isTotal, isNet) {
+    var a = align || 'center';
+    if (isNet) a = 'center';
+    var bg = isTotal ? (HEADER_BG + ' !important') : 'transparent';
+    var fw = isTotal ? '700' : '400';
+    var border = isTotal ? HEADER_BORDER : CELL_BORDER;
+    var color = isTotal ? HEADER_TEXT : BLACK;
+    var fs = PDF_FONT_CELL;
+    if (isNet) fs = PDF_FONT_NET;
+    else if (isTotal && val !== '' && String(val) !== 'الإجمالي' && !isNaN(parseFloat(String(val).replace(/[\s\u0660-\u0669,]/g, '')))) fs = PDF_FONT_TOTAL;
+    var pad = isTotal ? PDF_HEADER_PADDING : PDF_PADDING;
+    return '<td style="padding:' + pad + ';border:1px solid ' + border + ';text-align:' + a + ';font-size:' + fs + ';color:' + color + ';background:' + bg + ';font-weight:' + fw + ';font-family:' + FONT + ';line-height:2.05;overflow:hidden;">' + esc(String(val)) + '</td>';
+  }
+  function tdTotalLabel2() {
+    return '<td colspan="2" style="padding:' + PDF_HEADER_PADDING + ';border:1px solid ' + HEADER_BORDER + ';text-align:right;font-size:' + PDF_FONT_HEADER + ';color:' + HEADER_TEXT + ';background:' + HEADER_BG + ' !important;font-weight:700;font-family:' + FONT + ';line-height:2.1;">' + esc('الإجمالي') + '</td>';
+  }
+  function th1(text, colspan) {
+    var c = colspan ? ' colspan="' + colspan + '"' : '';
+    return '<th' + c + ' style="padding:' + PDF_HEADER_PADDING + ';border:1px solid ' + HEADER_BORDER + ';font-size:' + PDF_FONT_HEADER + ';font-weight:700;background:' + HEADER_BG + ' !important;color:' + HEADER_TEXT + ' !important;font-family:' + FONT + ';line-height:2.1;">' + esc(String(text)) + '</th>';
+  }
+  function th2(text) {
+    return '<th style="padding:' + PDF_HEADER_PADDING + ';border:1px solid ' + HEADER_BORDER + ';font-size:' + PDF_FONT_HEADER + ';font-weight:600;background:' + HEADER_BG + ' !important;color:' + HEADER_TEXT + ' !important;font-family:' + FONT + ';line-height:2.1;">' + esc(String(text)) + '</th>';
+  }
+
   var uniqueNames = [];
   db.forEach(function (e) {
     if (uniqueNames.indexOf(e.name) === -1) uniqueNames.push(e.name);
   });
-  // ترتيب حسب الأعلى صافي في الأعلى
   uniqueNames.sort(function (a, b) {
-    var netA = typeof getDisplayNetForEmployee === 'function' ? getDisplayNetForEmployee(a, { aggregated: true }) : 0;
-    var netB = typeof getDisplayNetForEmployee === 'function' ? getDisplayNetForEmployee(b, { aggregated: true }) : 0;
-    return (Number(netB) || 0) - (Number(netA) || 0);
+    var na = typeof getDisplayNetForEmployee === 'function' ? getDisplayNetForEmployee(a, { aggregated: true }) : 0;
+    var nb = typeof getDisplayNetForEmployee === 'function' ? getDisplayNetForEmployee(b, { aggregated: true }) : 0;
+    return (Number(nb) || 0) - (Number(na) || 0);
   });
+
   var periodText = (document.getElementById('headerPeriodRange') && document.getElementById('headerPeriodRange').innerText) ? document.getElementById('headerPeriodRange').innerText : '-';
   var reportDate = typeof getReportDateGregorian === 'function' ? getReportDateGregorian() : new Date().toLocaleDateString('en-GB', { day: '2-digit', month: '2-digit', year: 'numeric' });
-  function esc(s) { return String(s == null ? '' : s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;'); }
-  function td(v, align) { align = align || 'center'; return '<td style="padding:5px 6px;border:1px solid #b0b0b0;text-align:' + align + ';font-size:10px;color:#1a1a1a;">' + esc(String(v)) + '</td>'; }
-  function tdTotal(v, align) { align = align || 'center'; return '<td style="padding:6px 8px;border:1px solid #333;text-align:' + align + ';font-size:10px;font-weight:700;color:#1a1a1a;background:#f5f5f5;">' + esc(String(v)) + '</td>'; }
   var hasBreakdown = window.adoraTransferMode && db.some(function (e) { return e._reception != null || e._booking != null || e._morning != null; });
-  var vipRooms = (window.adoraActiveVipRooms && window.adoraActiveVipRooms.length > 0) ? window.adoraActiveVipRooms : [];
+  var vipRooms = (window.adoraActiveVipRooms && window.adoraActiveVipRooms.length > 0) ? window.adoraActiveVipRooms.slice() : [];
   var nVip = vipRooms.length;
+  var fundRate = typeof getSupportFundRate === 'function' ? getSupportFundRate() : 0.15;
+  var pricing = typeof getPricingConfig === 'function' ? getPricingConfig() : {};
+  var totalCols = (hasBreakdown && nVip > 0) ? (14 + nVip) : 6;
+  var totals = { contracts: 0, reception: 0, booking: 0, morning: 0, evening: 0, night: 0, alertCount: 0, alertTotal: 0, evalBooking: 0, evalGoogle: 0, count: 0, net: 0 };
 
-  var thStyle = 'padding:5px 6px;border:1px solid #0d9488;font-size:9px;font-weight:600;background:#0d9488;color:#fff;';
-  var thGroupStyle = 'padding:6px 8px;border:1px solid #0d9488;font-size:10px;font-weight:700;background:#0d9488;color:#fff;';
-  var groupRow = '';
-  var subRow = '';
+  var thead = '';
   if (hasBreakdown && nVip > 0) {
-    groupRow = '<tr>' +
-      '<th colspan="2" style="' + thGroupStyle + '">بيانات الموظف</th>' +
-      '<th colspan="6" style="' + thGroupStyle + '">الحجوزات</th>' +
-      '<th colspan="3" style="' + thGroupStyle + '">الشفتات</th>' +
-      '<th colspan="' + nVip + '" style="' + thGroupStyle + '">VIP</th>' +
-      '<th colspan="2" style="' + thGroupStyle + '">تنبيهات</th>' +
-      '<th style="' + thGroupStyle + '">الحضور</th>' +
-      '<th colspan="2" style="' + thGroupStyle + '">التقييمات</th>' +
-      '<th style="' + thGroupStyle + '">المكافأة</th></tr>';
-    subRow = '<tr>' +
-      '<th style="' + thStyle + '">م</th><th style="' + thStyle + '">الموظف</th>' +
-      '<th style="' + thStyle + '">العقود</th><th style="' + thStyle + '">استقبال</th><th style="' + thStyle + '">بوكينج</th>' +
-      '<th style="' + thStyle + '">صباح</th><th style="' + thStyle + '">مساء</th><th style="' + thStyle + '">ليل</th>' +
-      '<th style="' + thStyle + '">صباح</th><th style="' + thStyle + '">مساء</th><th style="' + thStyle + '">ليل</th>';
-    vipRooms.forEach(function (num) { subRow += '<th style="' + thStyle + '">' + num + '</th>'; });
-    subRow += '<th style="' + thStyle + '">تنبيه</th><th style="' + thStyle + '">نقص SAR</th>' +
-      '<th style="' + thStyle + '">بطل تحدي الظروف</th>' +
-      '<th style="' + thStyle + '">GOOGLE</th><th style="' + thStyle + '">BOOKING</th>' +
-      '<th style="' + thStyle + '">الصافي</th></tr>';
+    thead += '<tr>' + th1('بيانات الموظف', 2) + th1('الحجوزات', 6) + th1('الشفتات', 3) + th1('VIP', nVip) + th1('التقييمات', 2) + th1('المكافأة', 1) + '</tr>';
+    thead += '<tr>' + th2('م') + th2('الموظف') + th2('العقود') + th2('استقبال') + th2('بوكينج') + th2('صباح') + th2('مساء') + th2('ليل') + th2('صباح') + th2('مساء') + th2('ليل');
+    for (var v = 0; v < nVip; v++) thead += th2(vipRooms[v]);
+    thead += th2('GOOGLE') + th2('BOOKING') + th2('الصافي') + '</tr>';
   } else {
-    groupRow = '<tr>' +
-      '<th colspan="2" style="' + thGroupStyle + '">بيانات الموظف</th>' +
-      '<th style="' + thGroupStyle + '">الحجوزات</th>' +
-      '<th style="' + thGroupStyle + '">الحضور</th>' +
-      '<th colspan="2" style="' + thGroupStyle + '">التقييمات</th>' +
-      '<th style="' + thGroupStyle + '">المكافأة</th></tr>';
-    subRow = '<tr>' +
-      '<th style="' + thStyle + '">م</th><th style="' + thStyle + '">الموظف</th>' +
-      '<th style="' + thStyle + '">عدد الحجوزات</th>' +
-      '<th style="' + thStyle + '">الحضور</th>' +
-      '<th style="' + thStyle + '">GOOGLE</th><th style="' + thStyle + '">BOOKING</th>' +
-      '<th style="' + thStyle + '">الصافي</th></tr>';
+    thead += '<tr>' + th1('بيانات الموظف', 2) + th1('الحجوزات', 1) + th1('التقييمات', 2) + th1('المكافأة', 1) + '</tr>';
+    thead += '<tr>' + th2('م') + th2('الموظف') + th2('عدد الحجوزات') + th2('GOOGLE') + th2('BOOKING') + th2('الصافي') + '</tr>';
   }
 
-  var totals = {
-    contracts: 0, reception: 0, booking: 0, morning: 0, evening: 0, night: 0,
-    alertCount: 0, alertTotal: 0, evalBooking: 0, evalGoogle: 0, count: 0, net: 0
-  };
-  var rowsHtml = '';
+  var tbody = '';
   uniqueNames.forEach(function (name, idx) {
     var allEmpBranches = db.filter(function (e) { return e.name === name; });
-    var agg = {
-      count: 0, reception: 0, booking: 0, morning: 0, evening: 0, night: 0,
-      alertCount: 0, alertTotal: 0, evalBooking: 0, evalGoogle: 0,
-      attendanceDone: false, vipRooms: {}
-    };
+    var agg = { count: 0, reception: 0, booking: 0, morning: 0, evening: 0, night: 0, alertCount: 0, alertTotal: 0, evalBooking: 0, evalGoogle: 0, attendanceDone: false, vipRooms: {} };
     allEmpBranches.forEach(function (e) {
       agg.count += e.count || 0;
       agg.reception += e._reception || 0;
@@ -5707,11 +5758,49 @@ function exportPdfTableAll() {
       }
     });
     var net = typeof getDisplayNetForEmployee === 'function' ? getDisplayNetForEmployee(name, { aggregated: true }) : 0;
-    var netStr = (typeof net === 'number' && !isNaN(net)) ? Number(net).toFixed(2) : '0.00';
+    var netNum = (typeof net === 'number' && !isNaN(net)) ? net : 0;
+    var netStr = Number(netNum).toFixed(2);
     var attendanceStr = agg.attendanceDone ? 'تم' : 'لم يتم';
 
+    var bd = { reception: 0, booking: 0, vip: 0, evalBooking: 0, evalGoogle: 0 };
+    allEmpBranches.forEach(function (e) {
+      var c = typeof computeGrossBreakdown === 'function' ? computeGrossBreakdown(e, pricing) : { reception: 0, booking: 0, vip: 0, evalBooking: 0, evalGoogle: 0 };
+      bd.reception += c.reception || 0;
+      bd.booking += c.booking || 0;
+      bd.vip += c.vip || 0;
+      bd.evalBooking += c.evalBooking || 0;
+      bd.evalGoogle += c.evalGoogle || 0;
+    });
+    var gross = bd.reception + bd.booking + bd.vip + bd.evalBooking + bd.evalGoogle;
+    var fund = gross * fundRate;
+    var diff = netNum - (gross - fund);
+    var pct = (fundRate * 100).toFixed(0);
+
+    function numFmt(n) { return esc(Number(n).toFixed(2)); }
+    var numSpan = function (n) { return '<span dir="ltr" style="display:inline;margin:0 3px;white-space:nowrap;">' + numFmt(n) + '</span>'; };
+    var incomePartsHtml = [];
+    if (bd.reception > 0) incomePartsHtml.push(esc('حجوزات استقبال ') + numSpan(bd.reception) + esc(' ريال'));
+    if (bd.booking > 0) incomePartsHtml.push(esc('بوكينج ') + numSpan(bd.booking) + esc(' ريال'));
+    if (bd.vip > 0) incomePartsHtml.push(esc('غرف VIP ') + numSpan(bd.vip) + esc(' ريال '));
+    if (bd.evalBooking > 0) incomePartsHtml.push(esc('تقييم بوكينج ') + numSpan(bd.evalBooking) + esc(' ريال'));
+    if (bd.evalGoogle > 0) incomePartsHtml.push(esc('تقييم جوجل ') + numSpan(bd.evalGoogle) + esc(' ريال'));
+    var incomeHtml = incomePartsHtml.join(' — ');
+    var deductText = 'خصم صندوق الدعم (' + pct + '%) ' + Number(fund).toFixed(2) + ' ريال';
+    if (diff > 0) deductText += ' — حوافز إضافية ' + Number(diff).toFixed(2) + ' ريال';
+    if (diff < 0) deductText += ' — خصومات ' + Number(-diff).toFixed(2) + ' ريال';
+    var resultText = 'النتيجة النهائية (صافي المستحق) ' + netStr + ' ريال';
+    var explainHtml = '<div style="font-family:' + FONT + ';font-size:8px;line-height:2.34;padding:3.8px 6px;text-align:right;direction:rtl;color:' + BLACK + ';max-width:100%;overflow:hidden;box-sizing:border-box;word-spacing:1px;">' +
+      '<span style="white-space:normal;word-break:break-word;">' +
+      '<span style="color:' + BLACK + ';font-weight:500;">' + incomeHtml + '</span>' +
+      ' <span style="color:' + BLACK + ';">|</span> ' +
+      '<span style="color:' + BLACK + ';font-weight:500;">' + esc(deductText) + '</span>' +
+      ' <span style="color:' + BLACK + ';font-weight:600;">' + esc(resultText) + '</span>' +
+      '</span></div>';
+    var explainRow = '<tr><td colspan="' + totalCols + '" style="padding:0;border:1px solid ' + CELL_BORDER + ';background:#f0f0f0;vertical-align:middle;overflow:hidden;">' + explainHtml + '</td></tr>';
+
+    var rowBg = idx % 2 === 0 ? '#ffffff' : ROW_ALT;
     if (hasBreakdown && nVip > 0) {
-      var contracts = allEmpBranches.reduce(function (s, e) { return s + (e._bookingRegular || 0); }, 0);
+      var contracts = allEmpBranches.reduce(function (s, e) { return s + (e._staffCount || 0); }, 0);
       totals.contracts += contracts;
       totals.reception += agg.reception;
       totals.booking += agg.booking;
@@ -5722,90 +5811,126 @@ function exportPdfTableAll() {
       totals.alertTotal += agg.alertTotal;
       totals.evalGoogle += agg.evalGoogle;
       totals.evalBooking += agg.evalBooking;
-      totals.net += typeof net === 'number' && !isNaN(net) ? net : 0;
-      rowsHtml += '<tr>' + td(idx + 1) + td(name, 'right');
-      rowsHtml += td(contracts) + td(agg.reception) + td(agg.booking) + td(agg.morning) + td(agg.evening) + td(agg.night);
-      rowsHtml += td(agg.morning) + td(agg.evening) + td(agg.night);
-      vipRooms.forEach(function (num) { rowsHtml += td(agg.vipRooms[num] || 0); });
-      rowsHtml += td(agg.alertCount) + td(agg.alertTotal > 0 ? Math.round(agg.alertTotal).toLocaleString('en-SA') : '—') + td(attendanceStr) + td(agg.evalGoogle) + td(agg.evalBooking) + td(netStr, 'left') + '</tr>';
+      totals.net += netNum;
+      tbody += '<tr style="background:' + rowBg + '">' + tdCell(idx + 1) + tdNameCell(name) + tdCell(contracts) + tdCell(agg.reception) + tdCell(agg.booking) + tdCell(agg.morning) + tdCell(agg.evening) + tdCell(agg.night) + tdCell(agg.morning) + tdCell(agg.evening) + tdCell(agg.night);
+      vipRooms.forEach(function (num) { tbody += tdCell(agg.vipRooms[num] || 0); });
+      tbody += tdCell(agg.evalGoogle) + tdCell(agg.evalBooking) + tdCell(netStr, 'center', false, true) + '</tr>' + explainRow;
     } else {
       totals.count += agg.count;
       totals.evalGoogle += agg.evalGoogle;
       totals.evalBooking += agg.evalBooking;
-      totals.net += typeof net === 'number' && !isNaN(net) ? net : 0;
-      rowsHtml += '<tr>' + td(idx + 1) + td(name, 'right') + td(agg.count) + td(attendanceStr) + td(agg.evalGoogle) + td(agg.evalBooking) + td(netStr, 'left') + '</tr>';
+      totals.net += netNum;
+      tbody += '<tr style="background:' + rowBg + '">' + tdCell(idx + 1) + tdNameCell(name) + tdCell(agg.count) + tdCell(agg.evalGoogle) + tdCell(agg.evalBooking) + tdCell(netStr, 'center', false, true) + '</tr>' + explainRow;
     }
   });
 
   var totalNetStr = (totals.net != null && !isNaN(totals.net)) ? Number(totals.net).toFixed(2) : '0.00';
+  var tfoot = '<tr style="background:' + HEADER_BG + ';border-top:2px solid ' + HEADER_BORDER + ';">';
   if (hasBreakdown && nVip > 0) {
-    rowsHtml += '<tr>' + tdTotal('الإجمالي', 'right') + tdTotal('', 'right');
-    rowsHtml += tdTotal(totals.contracts) + tdTotal(totals.reception) + tdTotal(totals.booking) + tdTotal(totals.morning) + tdTotal(totals.evening) + tdTotal(totals.night);
-    rowsHtml += tdTotal(totals.morning) + tdTotal(totals.evening) + tdTotal(totals.night);
-    vipRooms.forEach(function () { rowsHtml += tdTotal(''); });
-    rowsHtml += tdTotal(totals.alertCount) + tdTotal(totals.alertTotal > 0 ? Math.round(totals.alertTotal).toLocaleString('en-SA') : '—') + tdTotal('') + tdTotal(totals.evalGoogle) + tdTotal(totals.evalBooking) + tdTotal(totalNetStr, 'left') + '</tr>';
+    tfoot += tdTotalLabel2() + tdCell(totals.contracts, null, true) + tdCell(totals.reception, null, true) + tdCell(totals.booking, null, true) + tdCell(totals.morning, null, true) + tdCell(totals.evening, null, true) + tdCell(totals.night, null, true) + tdCell(totals.morning, null, true) + tdCell(totals.evening, null, true) + tdCell(totals.night, null, true);
+    vipRooms.forEach(function () { tfoot += tdCell('', null, true); });
+    tfoot += tdCell(totals.evalGoogle, null, true) + tdCell(totals.evalBooking, null, true) + tdCell(totalNetStr, 'center', true, true);
   } else {
-    rowsHtml += '<tr>' + tdTotal('الإجمالي', 'right') + tdTotal('', 'right') + tdTotal(totals.count) + tdTotal('') + tdTotal(totals.evalGoogle) + tdTotal(totals.evalBooking) + tdTotal(totalNetStr, 'left') + '</tr>';
+    tfoot += tdTotalLabel2() + tdCell(totals.count, null, true) + tdCell(totals.evalGoogle, null, true) + tdCell(totals.evalBooking, null, true) + tdCell(totalNetStr, 'center', true, true);
   }
+  tfoot += '</tr>';
 
-  var approvalHtml = '<div style="margin-top:24px;display:flex;flex-wrap:wrap;gap:24px;justify-content:space-between;">' +
-    '<div style="flex:1;min-width:160px;"><div style="border:1px solid #999;padding:14px;text-align:center;min-height:56px;background:#fafafa;">' +
-    '<div style="font-weight:700;font-size:12px;margin-bottom:6px;color:#1a1a1a;">اعتماد المشرف</div>' +
-    '<div style="font-size:10px;color:#666;">التوقيع / الختم</div></div></div>' +
-    '<div style="flex:1;min-width:160px;"><div style="border:1px solid #999;padding:14px;text-align:center;min-height:56px;background:#fafafa;">' +
-    '<div style="font-weight:700;font-size:12px;margin-bottom:6px;color:#1a1a1a;">اعتماد مدير التشغيل</div>' +
-    '<div style="font-size:10px;color:#666;">التوقيع / الختم</div></div></div></div>' +
-    '<div style="margin-top:12px;"><div style="border:1px solid #999;padding:14px;text-align:center;min-height:56px;max-width:260px;background:#fafafa;">' +
-    '<div style="font-weight:700;font-size:12px;margin-bottom:6px;color:#1a1a1a;">اعتماد الحسابات</div>' +
-    '<div style="font-size:10px;color:#666;">التوقيع / الختم</div></div></div>';
+  var footFundEl = document.getElementById('footFund');
+  var fundVal = (footFundEl && footFundEl.innerText) ? String(footFundEl.innerText).trim() : '0';
+  var fundNum = parseFloat(String(fundVal).replace(/[^\d.-]/g, '')) || 0;
+  var fundDisplay = fundNum.toLocaleString('ar-SA', { minimumFractionDigits: 1, maximumFractionDigits: 1 });
+  var footTotalEl = document.getElementById('footTotalNet');
+  var totalVal = (footTotalEl && footTotalEl.innerText) ? String(footTotalEl.innerText).trim() : '0';
+  var totalNum = parseFloat(String(totalVal).replace(/[^\d.-]/g, '')) || 0;
+  var totalDisplay = totalNum.toLocaleString('ar-SA', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 
-  var tableHtml = '<table dir="rtl" style="width:100%;border-collapse:collapse;font-family:\'Tajawal\',\'Segoe UI\',Arial,sans-serif;background:#fff;">' +
-    '<thead>' + groupRow + subRow + '</thead><tbody>' + rowsHtml + '</tbody></table>';
-  var titleHtml = '<div style="margin-bottom:14px;padding-bottom:10px;border-bottom:2px solid #333;">' +
-    '<h1 style="margin:0 0 6px 0;font-size:18px;font-weight:700;color:#1a1a1a;font-family:\'Tajawal\',\'Segoe UI\',Arial,sans-serif;">تقرير مكافآت فنادق إليت</h1>' +
-    '<p style="margin:0;font-size:12px;color:#444;font-family:\'Tajawal\',\'Segoe UI\',Arial,sans-serif;">الفترة من ' + esc(periodText) + ' إلى تاريخ التصدير: ' + esc(reportDate) + '</p></div>';
-  var fullHtml = '<div dir="rtl" lang="ar" style="padding:14px;background:#fff;color:#1a1a1a;font-family:\'Tajawal\',\'Segoe UI\',Arial,sans-serif;">' + titleHtml + tableHtml + approvalHtml + '</div>';
-  var fileName = 'تقرير-مكافآت-الكل-' + (periodText.replace(/\s/g, '-').replace(/[^\w\u0600-\u06FF\-]/g, '').substring(0, 25)) + '.pdf';
-  if (fileName.length > 55) fileName = fileName.substring(0, 55); else if (fileName.indexOf('.pdf') !== fileName.length - 4) fileName = fileName + '.pdf';
+  var approvalHtml = '<div style="margin-top:6px;font-family:' + FONT + ';"><table style="width:100%;max-width:100%;table-layout:fixed;border-collapse:separate;border-spacing:0;border:2px solid ' + BLACK + ';border-radius:6px;background:#f5f5f5;"><tr>' +
+    '<td style="width:22%;min-width:0;border:1px solid ' + BLACK + ';padding:6px 8px;text-align:center;vertical-align:middle;background:#fff;"><div style="font-weight:700;font-size:8.8px;color:' + BLACK + ';">اعتماد المشرف</div><div style="font-size:7.7px;color:' + BLACK + ';margin-top:3px;">التوقيع / الختم</div></td>' +
+    '<td style="width:22%;min-width:0;border:1px solid ' + BLACK + ';padding:6px 8px;text-align:center;vertical-align:middle;background:#fff;"><div style="font-weight:700;font-size:8.8px;color:' + BLACK + ';">اعتماد مدير التشغيل</div><div style="font-size:7.7px;color:' + BLACK + ';margin-top:3px;">التوقيع / الختم</div></td>' +
+    '<td style="width:56%;min-width:0;border:1px solid ' + BLACK + ';padding:6px 8px;text-align:center;vertical-align:middle;background:#fff;"><div style="font-weight:700;font-size:8.8px;color:' + BLACK + ';margin-bottom:3px;">اعتماد الحسابات</div>' +
+    '<table style="width:100%;border-collapse:collapse;font-size:7.7px;margin:3px auto 0;"><tr><td style="text-align:right;padding:0 2px;color:' + BLACK + ';">إجمالي نسبة العمالة</td><td style="text-align:left;padding:0 2px;font-weight:600;font-size:13.75px;color:' + BLACK + ';">' + esc(fundDisplay) + ' ريال</td></tr>' +
+    '<tr><td style="text-align:right;padding:0 2px;color:' + BLACK + ';">الإجمالي الكلي</td><td style="text-align:left;padding:0 2px;font-weight:600;font-size:13.75px;color:' + BLACK + ';">' + esc(totalDisplay) + ' ريال</td></tr></table>' +
+    '<div style="font-size:7.7px;color:' + BLACK + ';margin-top:3px;">التوقيع / الختم</div></td></tr></table></div>';
+
+  var colgroup = '';
+  if (hasBreakdown && nVip > 0) {
+    colgroup = '<colgroup><col style="width:3%"><col style="width:22%"><col style="width:5%"><col style="width:5%"><col style="width:5%"><col style="width:4%"><col style="width:4%"><col style="width:4%"><col style="width:4%"><col style="width:4%"><col style="width:4%">';
+    for (var v = 0; v < nVip; v++) colgroup += '<col style="width:2%">';
+    colgroup += '<col style="width:4%"><col style="width:4%"><col style="width:14%"></colgroup>';
+  } else {
+    colgroup = '<colgroup><col style="width:4%"><col style="width:28%"><col style="width:12%"><col style="width:12%"><col style="width:12%"><col style="width:32%"></colgroup>';
+  }
+  var tableHtml = '<div style="border:1px solid ' + CELL_BORDER + ';border-radius:4px;overflow:hidden;margin-top:0;"><table dir="rtl" style="width:100%;max-width:100%;table-layout:fixed;border-collapse:collapse;font-family:' + FONT + ';font-size:' + PDF_FONT_CELL + ';background:#fff;">' +
+    colgroup + '<thead>' + thead + '</thead><tbody>' + tbody + '</tbody><tfoot>' + tfoot + '</tfoot></table></div>';
+  var headerHtml = '<header style="padding-bottom:0;margin-bottom:0;border-bottom:1px solid ' + BLACK + ';display:flex;align-items:center;justify-content:space-between;gap:4px;flex-wrap:wrap;">' +
+    '<div style="text-align:right;flex:1;min-width:0;"><h1 style="margin:0;font-size:12px;font-weight:600;color:' + BLACK + ';font-family:' + FONT + ';">تقرير مكافآت فنادق إليت</h1>' +
+    '<p style="margin:0;font-size:8px;color:' + BLACK + ';font-family:' + FONT + ';">الفترة: ' + esc(periodText) + ' — تاريخ التصدير: ' + esc(reportDate) + '</p></div>' +
+    '<img src="unnamed.png" alt="إليت" style="height:28px;width:auto;object-fit:contain;" onerror="this.style.display=\'none\'"></header>';
+  var fullHtml = '<div dir="rtl" lang="ar" style="width:100%;max-width:' + MAX_MM + 'mm;margin:0 auto;box-sizing:border-box;padding:2px;background:#fff;color:' + BLACK + ';font-family:' + FONT + ';">' + headerHtml + tableHtml + approvalHtml + '</div>';
+
+  var fileName = 'تقرير-مكافآت-الكل-' + (periodText.replace(/\s/g, '-').replace(/[^\w\u0600-\u06FF\-]/g, '').substring(0, 28)) + '.pdf';
+  if (fileName.length > 55) fileName = fileName.substring(0, 55);
+  if (fileName.indexOf('.pdf') !== fileName.length - 4) fileName = fileName + '.pdf';
   var btn = document.getElementById('exportPdfTableAllBtn');
-  if (btn) btn.disabled = true;
+  if (btn) {
+    btn.disabled = true;
+    if (!btn.dataset.originalLabel) btn.dataset.originalLabel = btn.innerHTML;
+    btn.classList.add('is-loading');
+    btn.innerHTML = '<span class="hidden sm:inline">جاري إنشاء PDF...</span><span class="btn-spinner" aria-hidden="true"></span>';
+  }
   loadScript('https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.1/html2pdf.bundle.min.js').then(function () {
     var html2pdfFn = typeof window.html2pdf !== 'undefined' ? window.html2pdf : null;
     if (!html2pdfFn) { if (btn) btn.disabled = false; return Promise.reject(new Error('html2pdf not available')); }
     var link = document.createElement('link');
-    link.href = 'https://fonts.googleapis.com/css2?family=Tajawal:wght@400;500;700&display=swap';
+    link.href = 'https://fonts.googleapis.com/css2?family=Tajawal:wght@400;500;600;700&display=swap';
     link.rel = 'stylesheet';
     document.head.appendChild(link);
-    var wrapper = document.createElement('div');
-    wrapper.setAttribute('dir', 'rtl');
-    wrapper.setAttribute('lang', 'ar');
-    wrapper.style.cssText = 'width:270mm;max-width:100%;margin:0 auto;padding:0;background:#fff;color:#1a1a1a;font-family:\'Tajawal\',\'Segoe UI\',Arial,sans-serif;';
-    wrapper.innerHTML = fullHtml;
-    document.body.appendChild(wrapper);
-    var opt = {
-      margin: [8, 8, 8, 8],
-      filename: fileName,
-      image: { type: 'jpeg', quality: 0.95 },
-      html2canvas: { scale: 1.5, useCORS: true, logging: false },
-      jsPDF: { unit: 'mm', format: 'a4', orientation: 'landscape' },
-      pagebreak: { mode: ['avoid-all', 'css', 'legacy'] }
-    };
-    return html2pdfFn().set(opt).from(wrapper).outputPdf('blob').then(function (blob) {
-      if (document.body.contains(wrapper)) document.body.removeChild(wrapper);
-      var url = URL.createObjectURL(blob);
-      var a = document.createElement('a');
-      a.href = url;
-      a.download = fileName;
-      a.click();
-      setTimeout(function () { URL.revokeObjectURL(url); }, 2000);
-      if (typeof showToast === 'function') showToast('تم تحميل PDF تقرير جدول الكل');
-      return { blob: blob, fileName: fileName };
-    }).catch(function (err) {
-      if (document.body.contains(wrapper)) document.body.removeChild(wrapper);
-      throw err;
-    });
-  }).then(function () { if (btn) btn.disabled = false; }).catch(function (err) {
-    if (btn) btn.disabled = false;
+    var wrap = document.createElement('div');
+    wrap.setAttribute('dir', 'rtl');
+    wrap.setAttribute('lang', 'ar');
+    wrap.style.cssText = 'width:' + MAX_MM + 'mm;max-width:100%;margin:0 auto;padding:0;background:#fff;color:#000;font-family:' + FONT + ';box-sizing:border-box;';
+    var scaleInner = document.createElement('div');
+    scaleInner.style.cssText = 'transform:scale(0.85);transform-origin:top right;width:' + (100 / 0.85) + '%;';
+    scaleInner.innerHTML = fullHtml;
+    wrap.appendChild(scaleInner);
+    document.body.appendChild(wrap);
+    function runPdf() {
+      var opt = {
+        margin: [2, 3, 2, 3],
+        filename: fileName,
+        image: { type: 'png', quality: 1 },
+        html2canvas: { scale: 6, useCORS: true, logging: false, allowTaint: true, letterRendering: true },
+        jsPDF: { unit: 'mm', format: 'a4', orientation: 'landscape' },
+        pagebreak: { mode: ['avoid-all', 'css', 'legacy'] }
+      };
+      return html2pdfFn().set(opt).from(wrap).outputPdf('blob').then(function (blob) {
+        if (document.body.contains(wrap)) document.body.removeChild(wrap);
+        var url = URL.createObjectURL(blob);
+        var a = document.createElement('a');
+        a.href = url;
+        a.download = fileName;
+        a.click();
+        setTimeout(function () { URL.revokeObjectURL(url); }, 2000);
+        if (typeof showToast === 'function') showToast('تم تحميل PDF تقرير جدول الكل');
+        return { blob: blob, fileName: fileName };
+      }).catch(function (err) {
+        if (document.body.contains(wrap)) document.body.removeChild(wrap);
+        throw err;
+      });
+    }
+    return (document.fonts && document.fonts.ready ? document.fonts.ready : Promise.resolve()).then(function () { return new Promise(function (r) { setTimeout(r, 800); }); }).then(runPdf);
+  }).then(function () {
+    if (btn) {
+      btn.disabled = false;
+      btn.classList.remove('is-loading');
+      if (btn.dataset.originalLabel) btn.innerHTML = btn.dataset.originalLabel;
+    }
+  }).catch(function (err) {
+    if (btn) {
+      btn.disabled = false;
+      btn.classList.remove('is-loading');
+      if (btn.dataset.originalLabel) btn.innerHTML = btn.dataset.originalLabel;
+    }
     console.error('exportPdfTableAll', err);
     if (typeof showToast === 'function') showToast('فشل تصدير PDF. جرّب مرة أخرى.', 'error');
     else alert('فشل تصدير PDF: ' + (err && err.message ? err.message : err));
@@ -6024,6 +6149,7 @@ if (filter === 'الكل' && !onlySelected) {
     const allEmpBranches = db.filter(e => e.name === name);
     const firstEmp = allEmpBranches[0];
     const aggregatedCount = allEmpBranches.reduce((sum, e) => sum + (e.count || 0), 0);
+    const aggregatedStaffCount = allEmpBranches.reduce((sum, e) => sum + (e._staffCount != null ? e._staffCount : (e.count || 0)), 0);
     const aggregatedEvalBooking = allEmpBranches.reduce((sum, e) => sum + (e.evaluationsBooking || 0), 0);
     const aggregatedEvalGoogle = allEmpBranches.reduce((sum, e) => sum + (e.evaluationsGoogle || 0), 0);
     let aggregatedDays = 0;
@@ -6115,6 +6241,7 @@ if (filter === 'الكل' && !onlySelected) {
       name: name,
       branch: 'جميع الفروع',
       count: aggregatedCount,
+      staffCount: aggregatedStaffCount,
       totalDiscountAmount: totalDiscountAmount,
       discountDetails: discountDetails,
       rate: rate,
@@ -6201,10 +6328,12 @@ if (filter === 'الكل' && !onlySelected) {
       }
     }
     const explanationText = explanations.length > 0 ? explanations.join(' | ') : '';
+    const rowStaffCount = emp._staffCount != null ? emp._staffCount : s.count;
     printRows.push({
       name: s.name,
       branch: s.branch,
       count: s.count,
+      staffCount: rowStaffCount,
       totalDiscountAmount: totalDiscountAmount,
       discountDetails: discountDetails,
       rate: s.count > 100 ? 3 : (s.count > 50 ? 2 : 1),
@@ -6229,13 +6358,15 @@ alert('لا توجد بيانات للطباعة. يرجى التأكد من ت�
 return;
 }
 
-// Generate HTML — عند طباعة الكل تكون الصفحة بالعرض (landscape) وتقرير محاسبي بصفوف ضيقة بدون أيقونات
+const totalStaffCount = printRows.reduce((sum, r) => sum + (r.staffCount != null ? r.staffCount : r.count), 0);
+
+// Generate HTML — عند طباعة الكل تكون الصفحة بالعرض (landscape) وتقرير محاسبي بصفوف ضيقة بدون أيقونات — كل البيانات من جدول الكل (عدة العقود من _staffCount أو count)
 const printWindow = window.open('', '_blank');
 const reportTitle = filter === 'الكل' ? 'جميع الفروع' : filter;
 const useLandscape = !onlySelected && filter === 'الكل';
 const accountingStyle = !onlySelected && filter === 'الكل';
 const printContent = generatePrintHTML(reportTitle, periodText, reportDate, printRows, {
-totalFund, totalNet, totalEval, totalBookings, totalNetNoEval,
+totalFund, totalNet, totalEval, totalBookings, totalNetNoEval, totalStaffCount,
 totalExcellenceBonus, totalCommitmentBonus
 }, useLandscape, accountingStyle);
 printWindow.document.write(printContent);
@@ -6414,7 +6545,7 @@ return `<tr>
 <td class="number-col">${index + 1}</td>
 <td class="name-col">${row.name}</td>
 <td class="branch-col">${row.branch}</td>
-<td class="number-col group-divider-subtle">${row.count}</td>
+<td class="number-col group-divider-subtle">${row.staffCount != null ? row.staffCount : row.count}</td>
 <td class="number-col">${row.evBooking + row.evGoogle}</td>
 <td class="number-col group-divider-subtle">${row.gross.toFixed(2)}</td>
 <td class="number-col">${row.fund.toFixed(2)}</td>
@@ -6436,7 +6567,7 @@ return `<tr>
 </tr>
 <tr>
 <td colspan="3" class="label-col">إجمالي العقود:</td>
-<td class="number-col" colspan="2">${totals.totalBookings}</td>
+<td class="number-col" colspan="2">${totals.totalStaffCount != null ? totals.totalStaffCount : totals.totalBookings}</td>
 <td colspan="6"></td>
 </tr>
 <tr>
@@ -7881,7 +8012,8 @@ function buildEmployeeReportModalHTML(report, opts) {
     var eventDate = discount.eventDate ? new Date(discount.eventDate + 'T00:00:00').toLocaleDateString('ar-SA') : '';
     var amt = discount.isHotelRating && discount.amount != null ? Number(discount.amount) : (typeof calculateAggregatedNetForEmployee === 'function' ? calculateAggregatedNetForEmployee(emp.name) * (discount.discountPercentage / 100) : 0);
     var label = discount.isHotelRating ? discount.discountType : discount.discountType + ' (' + discount.discountPercentage + '%)';
-    return '<div class="bg-red-500/5 p-3 rounded-lg border border-red-500/20"><div class="flex justify-between items-center mb-1"><span class="text-gray-300">' + esc(label) + ':</span><span class="font-bold text-red-400">-' + amt.toFixed(2) + ' ' + unit + '</span></div><p class="text-xs text-gray-400 mt-1">' + (discount.isHotelRating ? discount.discountType : 'تم خصم ' + discount.discountPercentage + '% بسبب ' + discount.discountType) + (eventDate ? ' - تاريخ الحدث: ' + eventDate : '') + '</p>' + (discount.isHotelRating ? '' : '<p class="text-xs text-gray-500 mt-0.5">مطبق من: ' + (discount.appliedBy || 'الأدمن') + '</p>') + '</div>';
+    var paraText = discount.isHotelRating ? 'خصم تقييم الفندق (مكالمات لم يُرد عليها).' : ('تم خصم ' + discount.discountPercentage + '% بسبب ' + discount.discountType);
+    return '<div class="bg-red-500/5 p-3 rounded-lg border border-red-500/20"><div class="flex justify-between items-center mb-1"><span class="text-gray-300">' + esc(label) + ':</span><span class="font-bold text-red-400">-' + amt.toFixed(2) + ' ' + unit + '</span></div><p class="text-xs text-gray-400 mt-1">' + paraText + (eventDate ? ' - تاريخ الحدث: ' + eventDate : '') + '</p>' + (discount.isHotelRating ? '' : '<p class="text-xs text-gray-500 mt-0.5">مطبق من: ' + (discount.appliedBy || 'الأدمن') + '</p>') + '</div>';
   }).join('') + '</div></div>') : '';
   // كل الأرقام من الـ payload = جدول "ملخص المكافآت لكل موظف" (مصدر موثّق واحد)
   return normalizeBonusNamingText('<div class="space-y-3 employee-report-content"><div class="bg-gradient-to-r from-turquoise/20 to-transparent p-3 rounded-lg border border-turquoise/30"><h3 class="text-lg font-black text-turquoise mb-1">' + esc(emp.name) + '</h3><p class="text-xs text-gray-300">الفرع: <span class="text-turquoise font-bold">' + esc(emp.branch) + '</span></p><p class="text-xs text-gray-300">الفترة: <span class="text-turquoise font-bold">' + esc(periodText) + '</span></p><p class="text-xs text-gray-300">تاريخ التقرير: <span class="text-turquoise font-bold">' + reportDate + '</span></p></div><div class="bg-gradient-to-r from-turquoise/20 to-transparent p-4 rounded-lg border border-turquoise/30 text-center"><h4 class="text-base font-bold text-turquoise mb-1">' + summaryTitle + '</h4><p class="text-2xl font-black text-white">' + mainTotal.toFixed(2) + ' <span class="text-base text-turquoise">' + unit + '</span></p>' + (totalDiscountAmount > 0 ? '<p class="text-sm text-red-400 mt-2">بعد خصم ' + totalDiscountAmount.toFixed(2) + ' ' + unit + '</p>' : '') + (pointsMode ? '<p class="text-xs text-gray-400 mt-2">(صافي النقاط + مساهمة شركاء النجاح في نقاطك)</p>' : '') + '</div>' + breakdownBlock + discountBlock + '<div class="space-y-3">' + (function(){

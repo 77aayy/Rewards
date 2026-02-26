@@ -246,7 +246,7 @@ export function getStaffBranches(buffer: ArrayBuffer): string[] {
 
 export interface FileDetectionResult {
   slotKey: string;   // e.g. 'report-الكورنيش', 'staff'
-  baseType: 'staff' | 'log' | 'report' | 'units' | 'unknown';
+  baseType: 'staff' | 'log' | 'report' | 'units' | 'actualDates' | 'unknown';
   branch: string;    // Arabic branch name, '' for staff/unknown
 }
 
@@ -256,6 +256,7 @@ export function getFileTypeLabel(baseType: string, branch: string): string {
     log: 'سجل حركات النظام',
     report: 'تقرير حجوزات العملاء',
     units: 'تقرير وحدات الحجوزات',
+    actualDates: 'تقرير التواريخ الفعلية للحجوزات',
     unknown: 'ملف غير معروف',
   };
   const base = typeLabels[baseType] || 'ملف';
@@ -268,6 +269,7 @@ export function getFileTypeIcon(baseType: string): { color: string; bg: string }
     log: { color: 'text-teal-400', bg: 'bg-teal-500/20' },
     report: { color: 'text-sky-400', bg: 'bg-sky-500/20' },
     units: { color: 'text-amber-400', bg: 'bg-amber-500/20' },
+    actualDates: { color: 'text-violet-400', bg: 'bg-violet-500/20' },
     unknown: { color: 'text-[var(--adora-error)]', bg: 'bg-adora-error-subtle' },
   };
   return icons[baseType] || icons.unknown;
@@ -283,12 +285,13 @@ export function detectFileType(buffer: ArrayBuffer): FileDetectionResult {
   }) as unknown[][];
 
   const sn = sheetName.toLowerCase();
-  let baseType: 'staff' | 'log' | 'report' | 'units' | 'unknown' = 'unknown';
+  let baseType: 'staff' | 'log' | 'report' | 'units' | 'actualDates' | 'unknown' = 'unknown';
 
   if (sn.includes('userstatisticsreport')) baseType = 'staff';
   else if (sn.includes('activitylog')) baseType = 'log';
   else if (sn.includes('resesrvationsunits') || sn.includes('reservationsunits')) baseType = 'units';
   else if (sn.includes('guestsstatistical')) baseType = 'report';
+  else if (sn.includes('actualdates') || sn.includes('resesrvationactual') || sn.includes('resesrvatinactual')) baseType = 'actualDates';
   else {
     for (let r = 0; r < Math.min(20, rows.length); r++) {
       const row = rows[r];
@@ -298,6 +301,7 @@ export function detectFileType(buffer: ArrayBuffer): FileDetectionResult {
       if (rowText.includes('تقرير سجل الحركات') || rowText.includes('إنشاء حجز جديد')) { baseType = 'log'; break; }
       if (rowText.includes('تقرير وحدات الحجوزات')) { baseType = 'units'; break; }
       if (rowText.includes('تقرير حجوزات العملاء') || rowText.includes('مصدر الحجز')) { baseType = 'report'; break; }
+      if (rowText.includes('الدخول والخروج الفعلي للحجوزات') || rowText.includes('تقرير تسجيل الدخول والخروج الفعلي')) { baseType = 'actualDates'; break; }
     }
   }
 
@@ -496,6 +500,20 @@ export function getUnitsFileStats(buffer: ArrayBuffer): { bookings: number; unit
   return { bookings, units };
 }
 
+/** تقرير التواريخ الفعلية — عدد صفوف البيانات (الهيدر في الصف 15، البيانات من 16) */
+export function getActualDatesFileStats(buffer: ArrayBuffer): { rows: number } {
+  const rows = readSheet(buffer);
+  const headerRow = 15;
+  let count = 0;
+  for (let r = headerRow + 1; r < rows.length; r++) {
+    const row = rows[r];
+    if (!row) continue;
+    const user = String(row[1] ?? '').trim();
+    if (user && user !== 'المستخدم') count++;
+  }
+  return { rows: count };
+}
+
 // ===================================================================
 // 6. Full Parsers (with column discovery)
 // ===================================================================
@@ -540,7 +558,7 @@ export function parseStaffFile(buffer: ArrayBuffer, config: AppConfig): StaffRec
 
 // --- Change Log Parser ---
 
-interface LogBooking {
+export interface LogBooking {
   employeeName: string;
   bookingNumber: string;
   creationDateTime: string;
@@ -555,6 +573,8 @@ interface LogBooking {
   priceSAR: number;
   shift: ShiftType;
   branch: string;
+  /** حركة إنشاء حجز جديد (من تفاصيل الحركة في السجل) */
+  isCreation: boolean;
 }
 
 function parseChangeText(text: string): {
@@ -596,6 +616,7 @@ export function parseChangeLog(buffer: ArrayBuffer, branchName: string): LogBook
 
     const numMatch = bookingInfo.match(/رقم الحجز[:\s]*(\d+)/);
     const bookingNumber = numMatch ? numMatch[1] : '';
+    const isCreation = /إنشاء\s*حجز|حجز\s*جديد|إضافة\s*حجز|تم\s*إنشاء/i.test(changeText);
     const parsed = parseChangeText(changeText);
     const creationDate = parseDateTime(dateTimeStr);
     const shift: ShiftType = creationDate ? getShiftFromTime(creationDate) : 'صباح';
@@ -622,6 +643,7 @@ export function parseChangeLog(buffer: ArrayBuffer, branchName: string): LogBook
       priceSAR: parsed.price,
       shift,
       branch: branchName,
+      isCreation,
     });
   }
   return bookings;
@@ -791,6 +813,31 @@ export function buildLogLookup(logBookings: LogBooking[]): Map<string, string> {
     }
   }
   return map;
+}
+
+/**
+ * توزيع الشفتات من سجل النشاط — حركات "إنشاء حجز" فقط، مع فلتر الفترة.
+ * يُستخدم للمطابقة مع المرجع عندما السجل يعطي عددًا كافيًا (لا توزيع عشوائي).
+ */
+export function getLogCreationShiftCounts(
+  logBookings: LogBooking[],
+  dateRange: { from: Date; to: Date } | null,
+): Record<string, { صباح: number; مساء: number; ليل: number; total: number }> {
+  const out: Record<string, { صباح: number; مساء: number; ليل: number; total: number }> = {};
+  for (const b of logBookings) {
+    if (!b.isCreation) continue;
+    if (dateRange) {
+      const d = parseDateOnly(b.creationDateTime);
+      if (!d || d < dateRange.from || d > dateRange.to) continue;
+    }
+    const key = `${b.branch}|${b.employeeName}`;
+    if (!out[key]) out[key] = { صباح: 0, مساء: 0, ليل: 0, total: 0 };
+    out[key].total++;
+    if (b.shift === 'صباح') out[key].صباح++;
+    else if (b.shift === 'مساء') out[key].مساء++;
+    else out[key].ليل++;
+  }
+  return out;
 }
 
 export function buildUnitsLookup(
@@ -982,6 +1029,13 @@ export function aggregateData(
       const unitsData = unitsLookup.get(`${b.bookingNumber}|${b.branch}`);
       const effectivePrice = (unitsData && unitsData.totalRent > 0) ? unitsData.totalRent : b.priceSAR;
 
+      // ========== معادلات التنبيهات ونقص SAR (مراجعة) ==========
+      // • المتوقع = حد الأدنى لليلة (من الإعدادات) × عدد الليالي
+      // • النقص = المتوقع − الإيجار الفعلي  (فقط إذا النقص > 0)
+      // • الإعفاءات: حجوزات بوكينج (مصدر الحجز = بوكينج) + نقل نزيل بين غرف (isRoomTransfer) → لا يُحتسب تنبيه
+      // • حد الأدنى: من config (priceRules أو mergedRules) حسب نوع الوحدة وعدد الليالي (شهري ≥ 28 ليلة)
+      // • تنبيه (عمود) = عدد حجوزات فيها priceShortfall > 0  |  نقص SAR = مجموع priceShortfall لتلك الحجوزات
+      // ============================================================
       // Pricing (config-based)
       let minPrice = 0;
       let roomTypeLabel = '';

@@ -2291,6 +2291,18 @@ body.role-manager #currentPeriodStatsBlock { order: 1; }
 body.role-manager #cumulativePointsSection { order: 2; }
 body.role-manager #archivedPeriodsSection { order: 3; display: block !important; }
 
+/* جدول تقييم الموظفين: إظهاره دائماً مع الإحصائيات (صافي + صندوق شركاء النجاح = نقاط) */
+#currentPeriodStatsTableWrap {
+  display: block !important;
+  visibility: visible !important;
+  opacity: 1 !important;
+}
+body.role-manager #currentPeriodStatsTableWrap {
+  display: block !important;
+  visibility: visible !important;
+  opacity: 1 !important;
+}
+
 /* المشرف: إخفاء الحضور + التقارير + الطباعة + إغلاق الفترة (نسخة CSS احتياطية) */
 body.role-supervisor .attendance-toggle,
 body.role-supervisor .attendance-days-input {
