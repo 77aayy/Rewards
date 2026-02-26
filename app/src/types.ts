@@ -71,3 +71,37 @@ export interface LogFileStats {
 export interface ReportFileStats {
   bookings: number;
 }
+
+// --- Attendance (TeamAttendanceReport) ---
+export type AttendanceDayStatus = 'valid' | 'incomplete' | 'absent' | 'permitted_absence' | 'review_required';
+
+export interface AttendanceDayResult {
+  workDateStr: string;
+  status: AttendanceDayStatus;
+  netHours: number;
+  isOrphan: boolean;
+  /** true = بصمة ليلية (نسيان دخول) تُحسب حضور */
+  orphanNightExit?: boolean;
+  overrideAbsent?: boolean;
+}
+
+export interface AttendanceFileResult {
+  fileName: string;
+  employeeName: string;
+  period: string;
+  /** إجمالي أيام الفترة = حاضر كامل + بصمة غير مكتملة + غياب + إجازة + تحتاج مراجعة */
+  totalDaysInPeriod: number;
+  /** أيام الحضور فقط = حاضر كامل + بصمة غير مكتملة (لنسبة البصمة) */
+  totalWorkDays: number;
+  validDays: number;
+  incompleteDays: number;
+  absentDays: number;
+  permittedAbsence: number;
+  /** أيام بصمة وحيدة غير ليلية (تحتاج مراجعة يدوية) */
+  reviewRequiredDays: number;
+  /** صافي الساعات (مجموع min(ActualDuration, 12)) */
+  totalNetHours: number;
+  /** نسبة الالتزام بالبصمة = (حاضر كامل / إجمالي أيام الحضور) × 100 */
+  fingerprintAccuracy: number;
+  days: AttendanceDayResult[];
+}

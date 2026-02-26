@@ -56,7 +56,7 @@ import {
   Loader2,
 } from 'lucide-react';
 import { getTheme, toggleTheme } from '../shared/theme.js';
-import type { MatchedRow, StaffRecord, BookingSource, ShiftType, RoomCategory } from './types';
+import type { MatchedRow, StaffRecord, BookingSource, ShiftType, RoomCategory, AttendanceFileResult } from './types';
 import {
   ADMIN_SECRET_KEY,
   ADMIN_ALLOWED_EMAILS,
@@ -124,6 +124,7 @@ import {
   extractRoomNumber,
   MAX_FILE_SIZE_BYTES,
   setXLSXModule,
+  parseAttendanceReport,
   type FileDetectionResult,
 } from './parser';
 import {
@@ -624,6 +625,7 @@ export default function App() {
   // Last transfer payload — child tab can request it via postMessage if localStorage fails
   const transferPayloadRef = useRef<Record<string, unknown> | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const attendanceInputRef = useRef<HTMLInputElement>(null);
 
   // On first load: if no local config (new device), try fetching from Firebase
   useEffect(() => {
@@ -686,6 +688,62 @@ export default function App() {
   const [showRatingExplanation, setShowRatingExplanation] = useState(false);
   const [showConditions, setShowConditions] = useState(false);
   const [showSettings, setShowSettings] = useState(false);
+  const [showAttendanceModal, setShowAttendanceModal] = useState(false);
+  const [attendanceResults, setAttendanceResults] = useState<AttendanceFileResult[] | null>(null);
+  const [attendanceLoading, setAttendanceLoading] = useState(false);
+  /** عند النقر على رقم في جدول الحضور: { resultIndex, column } لفتح نافذة التفاصيل */
+  const [attendanceDetail, setAttendanceDetail] = useState<{ resultIndex: number; column: string } | null>(null);
+
+  // Attendance: upload TeamAttendanceReport.xls files and show results
+  const handleAttendanceFiles = useCallback(async (files: FileList | File[]) => {
+    const fileArray = Array.from(files).filter((f) => /\.xls$/i.test(f.name) || /\.xlsx$/i.test(f.name));
+    if (fileArray.length === 0) {
+      alert('اختر ملفات Excel (تقارير حضور فريق العمل — .xls أو .xlsx)');
+      return;
+    }
+    setAttendanceLoading(true);
+    setAttendanceResults(null);
+    try {
+      const xlsxMod = await import('xlsx');
+      setXLSXModule(xlsxMod);
+    } catch (err) {
+      setAttendanceLoading(false);
+      alert('تعذّر تحميل مكتبة Excel.\n' + (err instanceof Error ? err.message : String(err)));
+      return;
+    }
+    try {
+      const results: AttendanceFileResult[] = [];
+      for (const file of fileArray) {
+        if (file.size > MAX_FILE_SIZE_BYTES) continue;
+        try {
+          const buffer = await readFileAsArrayBuffer(file);
+          const result = parseAttendanceReport(buffer, file.name);
+          results.push(result);
+        } catch {
+        results.push({
+          fileName: file.name,
+          employeeName: '—',
+          period: '',
+          totalDaysInPeriod: 0,
+          totalWorkDays: 0,
+          validDays: 0,
+          incompleteDays: 0,
+          absentDays: 0,
+          permittedAbsence: 0,
+          reviewRequiredDays: 0,
+          totalNetHours: 0,
+          fingerprintAccuracy: 0,
+          days: [],
+        });
+        }
+      }
+      setAttendanceResults(results);
+      setShowAttendanceModal(true);
+      if (attendanceInputRef.current) attendanceInputRef.current.value = '';
+    } finally {
+      setAttendanceLoading(false);
+    }
+  }, []);
 
   // Detect and classify files from content
   const handleFiles = useCallback(async (files: FileList | File[]) => {
@@ -1211,6 +1269,28 @@ export default function App() {
                   </button>
                 );
               })}
+              <button
+                type="button"
+                onClick={() => attendanceInputRef.current?.click()}
+                className="action-header-btn action-header-btn--cyan"
+                title="رفع تقارير حضور فريق العمل (TeamAttendanceReport.xls) وعرض النتيجة"
+              >
+                <Upload className="w-4 h-4 shrink-0" />
+                <span className="hidden sm:inline">رفع تقارير الحضور</span>
+                <span className="sm:hidden">الحضور</span>
+              </button>
+              <input
+                ref={attendanceInputRef}
+                type="file"
+                accept=".xls,.xlsx"
+                multiple
+                aria-label="رفع تقارير الحضور"
+                className="sr-only"
+                onChange={(e) => {
+                  const list = e.target.files;
+                  if (list && list.length > 0) handleAttendanceFiles(list);
+                }}
+              />
             </div>
           </div>
         </div>
@@ -1660,6 +1740,165 @@ export default function App() {
       )}
       {showConditions && (
         <ConditionsPopup config={config} onClose={() => setShowConditions(false)} />
+      )}
+
+      {/* ===== Attendance results modal ===== */}
+      {showAttendanceModal && attendanceResults && (
+        <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm" role="dialog" aria-modal="true" aria-labelledby="attendance-modal-title">
+          <div className="bg-[var(--adora-bg-card)] border border-[var(--adora-border)] rounded-2xl shadow-2xl max-w-4xl w-full max-h-[90vh] flex flex-col overflow-hidden">
+            <div className="flex items-center justify-between px-5 py-4 border-b border-[var(--adora-border)] bg-[var(--adora-modal-header-bg)]">
+              <div>
+                <h2 id="attendance-modal-title" className="text-lg font-bold text-[var(--adora-text)]">نتيجة تقارير الحضور</h2>
+                {attendanceResults.length > 0 && attendanceResults[0].period && (
+                  <p className="text-sm text-[var(--adora-text-secondary)] mt-0.5">الفترة: {attendanceResults[0].period}</p>
+                )}
+              </div>
+              <button type="button" onClick={() => { setShowAttendanceModal(false); setAttendanceResults(null); setAttendanceDetail(null); }} className="p-2 rounded-lg hover:bg-[var(--adora-hover-bg)] transition-colorss" aria-label="إغلاق">
+                <X className="w-5 h-5 text-[var(--adora-text-secondary)]" />
+              </button>
+            </div>
+            <div className="overflow-auto flex-1 p-5">
+              <table className="w-full text-right border-collapse">
+                <thead>
+                  <tr className="border-b border-[var(--adora-border)]">
+                    <th className="py-2 px-2 text-[var(--adora-text-secondary)] font-semibold">الموظف</th>
+                    <th className="py-2 px-2 text-[var(--adora-text-secondary)] font-semibold">أيام العمل</th>
+                    <th className="py-2 px-2 text-[var(--adora-text-secondary)] font-semibold">حاضر كامل</th>
+                    <th className="py-2 px-2 text-yellow-500 font-semibold" title="حضور محسوب لكن البصمة غير مكتملة (دخول فقط أو خروج فقط)">بصمة غير مكتملة</th>
+                    <th className="py-2 px-2 text-[var(--adora-text-secondary)] font-semibold">غياب</th>
+                    <th className="py-2 px-2 text-[var(--adora-text-secondary)] font-semibold">إجازة</th>
+                    <th className="py-2 px-2 text-[var(--adora-text-secondary)] font-semibold">تحتاج مراجعة</th>
+                    <th className="py-2 px-2 text-[var(--adora-text-secondary)] font-semibold">صافي الساعات</th>
+                    <th className="py-2 px-2 text-[var(--adora-text-secondary)] font-semibold">نسبة البصمة %</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {attendanceResults.map((r, idx) => {
+                    const openDetail = (column: string) => () => setAttendanceDetail({ resultIndex: idx, column });
+                    const cellClass = 'py-2.5 px-2 tabular-nums cursor-pointer hover:ring-1 hover:ring-[var(--adora-accent)]/50 rounded';
+                    return (
+                      <tr key={idx} className="border-b border-[var(--adora-border)]/60 hover:bg-[var(--adora-hover-bg)]/50">
+                        <td className="py-2.5 px-2 text-[var(--adora-text)] font-medium">{r.employeeName}</td>
+                        <td className={`${cellClass} text-[var(--adora-accent)] font-bold`} onClick={openDetail('totalDaysInPeriod')} title="اضغط للتفاصيل">{r.totalDaysInPeriod ?? (r.validDays + r.incompleteDays + r.absentDays + r.permittedAbsence + (r.reviewRequiredDays ?? 0))}</td>
+                        <td className={`${cellClass} text-emerald-500/90`} onClick={openDetail('validDays')} title="اضغط للتفاصيل">{r.validDays}</td>
+                        <td className={`${cellClass} text-yellow-500 font-medium bg-yellow-500/10`} onClick={openDetail('incompleteDays')} title="اضغط للتفاصيل">{r.incompleteDays}</td>
+                        <td className={`${cellClass} text-red-400/90`} onClick={openDetail('absentDays')} title="اضغط للتفاصيل">{r.absentDays}</td>
+                        <td className={`${cellClass} text-[var(--adora-text-secondary)]`} onClick={openDetail('permittedAbsence')} title="اضغط للتفاصيل">{r.permittedAbsence}</td>
+                        <td className={`${cellClass} text-amber-600/90`} onClick={openDetail('reviewRequiredDays')} title="اضغط للتفاصيل">{r.reviewRequiredDays ?? 0}</td>
+                        <td className={`${cellClass} text-[var(--adora-text)]`} onClick={openDetail('totalNetHours')} title="اضغط للتفاصيل">{typeof r.totalNetHours === 'number' ? r.totalNetHours.toFixed(1) : '—'}</td>
+                        <td className={`${cellClass} text-[var(--adora-accent)]`} onClick={openDetail('fingerprintAccuracy')} title="اضغط للتفاصيل">{typeof r.fingerprintAccuracy === 'number' ? r.fingerprintAccuracy + '%' : '—'}</td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+
+              {/* نافذة تفاصيل الرقم عند النقر على خلية */}
+              {attendanceDetail != null && attendanceResults && attendanceResults[attendanceDetail.resultIndex] && (() => {
+                const res = attendanceResults[attendanceDetail.resultIndex];
+                const col = attendanceDetail.column;
+                const days = res.days ?? [];
+                const statusMap: Record<string, string> = {
+                  validDays: 'valid',
+                  incompleteDays: 'incomplete',
+                  absentDays: 'absent',
+                  permittedAbsence: 'permitted_absence',
+                  reviewRequiredDays: 'review_required',
+                };
+                const filtered = statusMap[col] ? days.filter((d) => d.status === statusMap[col]) : [];
+                const titles: Record<string, string> = {
+                  totalDaysInPeriod: 'أيام العمل (إجمالي الفترة)',
+                  totalWorkDays: 'أيام الحضور',
+                  validDays: 'حاضر كامل',
+                  incompleteDays: 'بصمة غير مكتملة',
+                  absentDays: 'غياب',
+                  permittedAbsence: 'إجازة',
+                  reviewRequiredDays: 'تحتاج مراجعة',
+                  totalNetHours: 'صافي الساعات',
+                  fingerprintAccuracy: 'نسبة البصمة %',
+                };
+                const desc: Record<string, string> = {
+                  totalDaysInPeriod: 'إجمالي أيام الفترة = حاضر كامل + بصمة غير مكتملة + غياب + إجازة + تحتاج مراجعة.',
+                  totalWorkDays: 'أيام الحضور فقط = حاضر كامل + بصمة غير مكتملة (لنسبة البصمة).',
+                  validDays: 'أيام ذات بصمة دخول + خروج ومدة ≥ 4 ساعات.',
+                  incompleteDays: 'أيام ذات بصمة واحدة فقط (دخول أو خروج) — محسوبة تقديرياً.',
+                  absentDays: 'أيام بدون أي بصمة في التقرير.',
+                  permittedAbsence: 'أيام مسجلة كإجازة/غياب مسموح.',
+                  reviewRequiredDays: 'أيام بصمة وحيدة غير ليلية — تحتاج قرار إداري.',
+                  totalNetHours: 'مجموع ساعات كل أيام الحضور (حد أقصى 12 ساعة/يوم).',
+                  fingerprintAccuracy: 'نسبة الالتزام = (حاضر كامل ÷ أيام الحضور) × 100.',
+                };
+                const value =
+                  col === 'totalDaysInPeriod' ? (res.totalDaysInPeriod ?? (res.validDays + res.incompleteDays + res.absentDays + res.permittedAbsence + (res.reviewRequiredDays ?? 0)))
+                  : col === 'totalWorkDays' ? res.totalWorkDays
+                  : col === 'validDays' ? res.validDays
+                  : col === 'incompleteDays' ? res.incompleteDays
+                  : col === 'absentDays' ? res.absentDays
+                  : col === 'permittedAbsence' ? res.permittedAbsence
+                  : col === 'reviewRequiredDays' ? (res.reviewRequiredDays ?? 0)
+                  : col === 'totalNetHours' ? (typeof res.totalNetHours === 'number' ? res.totalNetHours.toFixed(1) : '—')
+                  : col === 'fingerprintAccuracy' ? (typeof res.fingerprintAccuracy === 'number' ? res.fingerprintAccuracy + '%' : '—')
+                  : '';
+                return (
+                  <div className="fixed inset-0 z-[102] flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm" onClick={() => setAttendanceDetail(null)} role="presentation">
+                    <div className="bg-[var(--adora-bg-card)] border border-[var(--adora-border)] rounded-xl shadow-2xl max-w-sm w-full max-h-[70vh] flex flex-col overflow-hidden" onClick={(e) => e.stopPropagation()} role="dialog" aria-label="تفاصيل الرقم">
+                      <div className="flex items-center justify-between p-3 border-b border-[var(--adora-border)]">
+                        <h4 className="text-[var(--adora-text)] font-semibold">{res.employeeName}: {titles[col]} ({value})</h4>
+                        <button type="button" onClick={() => setAttendanceDetail(null)} className="p-1.5 rounded-lg hover:bg-[var(--adora-hover-bg)] text-[var(--adora-text-secondary)]" aria-label="إغلاق">×</button>
+                      </div>
+                      <div className="p-3 overflow-auto text-[13px] text-[var(--adora-text-secondary)]">
+                        <p className="mb-2">{desc[col]}</p>
+                        {filtered.length > 0 ? (
+                          <p className="mt-2 text-[var(--adora-text)] font-medium">التواريخ ({filtered.length}):</p>
+                        ) : null}
+                        {filtered.length > 0 ? (
+                          <ul className="mt-1 list-disc list-inside space-y-0.5 text-[var(--adora-text)]">
+                            {filtered.map((d) => {
+                              const [y, m, day] = d.workDateStr.split('-');
+                              const dateLabel = `${day}/${m}/${y}`;
+                              return <li key={d.workDateStr}>{dateLabel}{col === 'validDays' || col === 'incompleteDays' ? ` — ${d.netHours.toFixed(1)} س` : ''}</li>;
+                            })}
+                          </ul>
+                        ) : col === 'totalDaysInPeriod' ? (
+                          <p className="text-[var(--adora-text)]">حاضر كامل: {res.validDays} + بصمة غير مكتملة: {res.incompleteDays} + غياب: {res.absentDays} + إجازة: {res.permittedAbsence} + تحتاج مراجعة: {res.reviewRequiredDays ?? 0} = إجمالي {res.totalDaysInPeriod ?? (res.validDays + res.incompleteDays + res.absentDays + res.permittedAbsence + (res.reviewRequiredDays ?? 0))} يوم</p>
+                        ) : col === 'totalWorkDays' ? (
+                          <p className="text-[var(--adora-text)]">حاضر كامل: {res.validDays} + بصمة غير مكتملة: {res.incompleteDays} = أيام الحضور (لنسبة البصمة).</p>
+                        ) : col === 'totalNetHours' ? (
+                          <p className="text-[var(--adora-text)]">مجموع ساعات أيام الحضور (كل يوم حد أقصى 12 ساعة).</p>
+                        ) : col === 'fingerprintAccuracy' ? (
+                          <p className="text-[var(--adora-text)]">حاضر كامل {res.validDays} ÷ أيام الحضور {res.totalWorkDays} × 100 = {typeof res.fingerprintAccuracy === 'number' ? res.fingerprintAccuracy + '%' : '—'}</p>
+                        ) : null}
+                      </div>
+                    </div>
+                  </div>
+                );
+              })()}
+
+              <div className="mt-4 space-y-3">
+                {attendanceResults.some((r) => (r.fingerprintAccuracy ?? 0) === 0 && (r.totalWorkDays ?? 0) > 0) && (
+                  <div className="p-3 rounded-xl bg-amber-500/15 border border-amber-500/40 text-[13px] text-amber-800 dark:text-amber-200">
+                    <p className="font-semibold">تنبيه إداري</p>
+                    <p className="mt-1">نسبة البصمة 0% تعني أن كل أيام الحضور محسوبة من «بصمة وحيدة» (خروج فقط). الحضور مقبول تقنياً لعدم الظلم، لكن الالتزام بنظام البصمة (دخول + خروج) ضعيف. يُفضّل تشجيع البصمة الكاملة لاحتساب الساعات الفعلية والأوفر تايم بدقة.</p>
+                  </div>
+                )}
+                <div className="p-3 rounded-xl bg-[var(--adora-hover-bg)]/50 border border-[var(--adora-border)]/50 text-[13px] text-[var(--adora-text-secondary)] space-y-1">
+                  <p><strong className="text-[var(--adora-text)]">المعادلات:</strong> أيام العمل (إجمالي الفترة) = حاضر كامل + بصمة غير مكتملة + غياب + إجازة + تحتاج مراجعة. صافي الساعات: بصمة وحيدة = 8 ساعات تقديرياً؛ بصمتين = المدة الفعلية (حد أقصى 12 ساعة). نسبة البصمة = (حاضر كامل ÷ أيام الحضور) × 100.</p>
+                  <p>التاريخ الذكي: بصمة قبل 06:00 → تُحسب لليوم السابق. البصمة الوحيدة ليلاً (21–01) = حضور نسيان دخول؛ غير ذلك = تحتاج مراجعة (لا تُحسب).</p>
+                  <p className="text-[var(--adora-text)]/80 mt-1">الأيام ذات البصمة غير المكتملة (دخول فقط أو خروج فقط) محسوبة تقديرياً — للمراجعة والاعتماد الإداري.</p>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {attendanceLoading && (
+        <div className="fixed inset-0 z-[99] flex items-center justify-center bg-black/50 backdrop-blur-sm">
+          <div className="flex flex-col items-center gap-3 px-6 py-5 rounded-2xl bg-[var(--adora-bg-card)] border border-[var(--adora-border)]">
+            <Loader2 className="w-10 h-10 text-[var(--adora-accent)] animate-spin" />
+            <p className="text-[var(--adora-text)] font-medium">جاري معالجة تقارير الحضور...</p>
+          </div>
+        </div>
       )}
     </div>
     )

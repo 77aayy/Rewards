@@ -5677,8 +5677,8 @@ function exportPdfTableAll() {
   var PDF_FONT_NET = '18.75px';
   var PDF_FONT_TOTAL = '17.5px';
   var PDF_FONT_NAME = '12.15px';
-  var PDF_PADDING = '3.0px 4px';
-  var PDF_HEADER_PADDING = '3.5px 4px';
+  var PDF_PADDING = '2.85px 4px';
+  var PDF_HEADER_PADDING = '3.3px 4px';
   function tdNameCell(name) {
     return '<td style="padding:2.7px 4px;border:1px solid ' + CELL_BORDER + ';text-align:right;font-size:' + PDF_FONT_NAME + ';color:#000000;background:transparent;font-weight:700;font-family:' + FONT + ';line-height:2.05;overflow:hidden;">' + esc(String(name)) + '</td>';
   }
@@ -5696,7 +5696,7 @@ function exportPdfTableAll() {
     return '<td style="padding:' + pad + ';border:1px solid ' + border + ';text-align:' + a + ';font-size:' + fs + ';color:' + color + ';background:' + bg + ';font-weight:' + fw + ';font-family:' + FONT + ';line-height:2.05;overflow:hidden;">' + esc(String(val)) + '</td>';
   }
   function tdTotalLabel2() {
-    return '<td colspan="2" style="padding:' + PDF_HEADER_PADDING + ';border:1px solid ' + HEADER_BORDER + ';text-align:right;font-size:' + PDF_FONT_HEADER + ';color:' + HEADER_TEXT + ';background:' + HEADER_BG + ' !important;font-weight:700;font-family:' + FONT + ';line-height:2.1;">' + esc('الإجمالي') + '</td>';
+    return '<td colspan="2" style="padding:' + PDF_HEADER_PADDING + ';border:1px solid ' + HEADER_BORDER + ';text-align:right;font-size:12px;color:' + HEADER_TEXT + ';background:' + HEADER_BG + ' !important;font-weight:700;font-family:' + FONT + ';line-height:2.1;">' + esc('الإجمالي') + '</td>';
   }
   function th1(text, colspan) {
     var c = colspan ? ' colspan="' + colspan + '"' : '';
@@ -5824,17 +5824,6 @@ function exportPdfTableAll() {
     }
   });
 
-  var totalNetStr = (totals.net != null && !isNaN(totals.net)) ? Number(totals.net).toFixed(2) : '0.00';
-  var tfoot = '<tr style="background:' + HEADER_BG + ';border-top:2px solid ' + HEADER_BORDER + ';">';
-  if (hasBreakdown && nVip > 0) {
-    tfoot += tdTotalLabel2() + tdCell(totals.contracts, null, true) + tdCell(totals.reception, null, true) + tdCell(totals.booking, null, true) + tdCell(totals.morning, null, true) + tdCell(totals.evening, null, true) + tdCell(totals.night, null, true) + tdCell(totals.morning, null, true) + tdCell(totals.evening, null, true) + tdCell(totals.night, null, true);
-    vipRooms.forEach(function () { tfoot += tdCell('', null, true); });
-    tfoot += tdCell(totals.evalGoogle, null, true) + tdCell(totals.evalBooking, null, true) + tdCell(totalNetStr, 'center', true, true);
-  } else {
-    tfoot += tdTotalLabel2() + tdCell(totals.count, null, true) + tdCell(totals.evalGoogle, null, true) + tdCell(totals.evalBooking, null, true) + tdCell(totalNetStr, 'center', true, true);
-  }
-  tfoot += '</tr>';
-
   var footFundEl = document.getElementById('footFund');
   var fundVal = (footFundEl && footFundEl.innerText) ? String(footFundEl.innerText).trim() : '0';
   var fundNum = parseFloat(String(fundVal).replace(/[^\d.-]/g, '')) || 0;
@@ -5844,13 +5833,33 @@ function exportPdfTableAll() {
   var totalNum = parseFloat(String(totalVal).replace(/[^\d.-]/g, '')) || 0;
   var totalDisplay = totalNum.toLocaleString('ar-SA', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 
+  var totalNetStr = (totals.net != null && !isNaN(totals.net)) ? Number(totals.net).toFixed(2) : '0.00';
+  var tfoot = '';
+  // صف إجمالي موظفي الاستقبال (نفس توزيع الأعمدة الحالي)
+  tfoot += '<tr style="background:' + HEADER_BG + ';border-top:2px solid ' + HEADER_BORDER + ';">';
+  if (hasBreakdown && nVip > 0) {
+    tfoot += tdTotalLabel2() + tdCell(totals.contracts, null, true) + tdCell(totals.reception, null, true) + tdCell(totals.booking, null, true) + tdCell(totals.morning, null, true) + tdCell(totals.evening, null, true) + tdCell(totals.night, null, true) + tdCell(totals.morning, null, true) + tdCell(totals.evening, null, true) + tdCell(totals.night, null, true);
+    vipRooms.forEach(function () { tfoot += tdCell('', null, true); });
+    tfoot += tdCell(totals.evalGoogle, null, true) + tdCell(totals.evalBooking, null, true) + tdCell(totalNetStr, 'center', true, true);
+  } else {
+    tfoot += tdTotalLabel2() + tdCell(totals.count, null, true) + tdCell(totals.evalGoogle, null, true) + tdCell(totals.evalBooking, null, true) + tdCell(totalNetStr, 'center', true, true);
+  }
+  tfoot += '</tr>';
+  // صف إجمالي نسبة العمالة
+  tfoot += '<tr style="background:' + HEADER_BG + ';border-top:1px solid ' + HEADER_BORDER + ';">' +
+    '<td colspan="' + (totalCols - 1) + '" style="padding:' + PDF_HEADER_PADDING + ';border:1px solid ' + HEADER_BORDER + ';text-align:right;font-size:11px;font-weight:600;background:' + HEADER_BG + ' !important;color:' + HEADER_TEXT + ';font-family:' + FONT + ';">إجمالي نسبة العمالة</td>' +
+    '<td style="padding:' + PDF_HEADER_PADDING + ';border:1px solid ' + HEADER_BORDER + ';text-align:center;font-size:' + PDF_FONT_TOTAL + ';font-weight:700;background:' + HEADER_BG + ' !important;color:' + HEADER_TEXT + ';font-family:' + FONT + ';">' + esc(fundDisplay) + ' ريال</td>' +
+    '</tr>';
+  // صف الإجمالي الكلي عمال وموظفين
+  tfoot += '<tr style="background:' + HEADER_BG + ';border-top:1px solid ' + HEADER_BORDER + ';">' +
+    '<td colspan="' + (totalCols - 1) + '" style="padding:' + PDF_HEADER_PADDING + ';border:1px solid ' + HEADER_BORDER + ';text-align:right;font-size:11px;font-weight:600;background:' + HEADER_BG + ' !important;color:' + HEADER_TEXT + ';font-family:' + FONT + ';">الإجمالي الكلي (عمال وموظفين)</td>' +
+    '<td style="padding:' + PDF_HEADER_PADDING + ';border:1px solid ' + HEADER_BORDER + ';text-align:center;font-size:' + PDF_FONT_TOTAL + ';font-weight:700;background:' + HEADER_BG + ' !important;color:' + HEADER_TEXT + ';font-family:' + FONT + ';">' + esc(totalDisplay) + ' ريال</td>' +
+    '</tr>';
+
   var approvalHtml = '<div style="margin-top:6px;font-family:' + FONT + ';"><table style="width:100%;max-width:100%;table-layout:fixed;border-collapse:separate;border-spacing:0;border:2px solid ' + BLACK + ';border-radius:6px;background:#f5f5f5;"><tr>' +
-    '<td style="width:22%;min-width:0;border:1px solid ' + BLACK + ';padding:6px 8px;text-align:center;vertical-align:middle;background:#fff;"><div style="font-weight:700;font-size:8.8px;color:' + BLACK + ';">اعتماد المشرف</div><div style="font-size:7.7px;color:' + BLACK + ';margin-top:3px;">التوقيع / الختم</div></td>' +
-    '<td style="width:22%;min-width:0;border:1px solid ' + BLACK + ';padding:6px 8px;text-align:center;vertical-align:middle;background:#fff;"><div style="font-weight:700;font-size:8.8px;color:' + BLACK + ';">اعتماد مدير التشغيل</div><div style="font-size:7.7px;color:' + BLACK + ';margin-top:3px;">التوقيع / الختم</div></td>' +
-    '<td style="width:56%;min-width:0;border:1px solid ' + BLACK + ';padding:6px 8px;text-align:center;vertical-align:middle;background:#fff;"><div style="font-weight:700;font-size:8.8px;color:' + BLACK + ';margin-bottom:3px;">اعتماد الحسابات</div>' +
-    '<table style="width:100%;border-collapse:collapse;font-size:7.7px;margin:3px auto 0;"><tr><td style="text-align:right;padding:0 2px;color:' + BLACK + ';">إجمالي نسبة العمالة</td><td style="text-align:left;padding:0 2px;font-weight:600;font-size:13.75px;color:' + BLACK + ';">' + esc(fundDisplay) + ' ريال</td></tr>' +
-    '<tr><td style="text-align:right;padding:0 2px;color:' + BLACK + ';">الإجمالي الكلي</td><td style="text-align:left;padding:0 2px;font-weight:600;font-size:13.75px;color:' + BLACK + ';">' + esc(totalDisplay) + ' ريال</td></tr></table>' +
-    '<div style="font-size:7.7px;color:' + BLACK + ';margin-top:3px;">التوقيع / الختم</div></td></tr></table></div>';
+    '<td style="width:22%;min-width:0;border:1px solid ' + BLACK + ';padding:6px 8px 10px 8px;text-align:center;vertical-align:top;background:#fff;"><div style="font-weight:700;font-size:8.8px;color:' + BLACK + ';">اعتماد المشرف</div><div style="font-size:7.7px;color:' + BLACK + ';margin-top:18px;">التوقيع / الختم</div></td>' +
+    '<td style="width:22%;min-width:0;border:1px solid ' + BLACK + ';padding:6px 8px 10px 8px;text-align:center;vertical-align:top;background:#fff;"><div style="font-weight:700;font-size:8.8px;color:' + BLACK + ';">اعتماد مدير التشغيل</div><div style="font-size:7.7px;color:' + BLACK + ';margin-top:18px;">التوقيع / الختم</div></td>' +
+    '<td style="width:56%;min-width:0;border:1px solid ' + BLACK + ';padding:6px 8px 10px 8px;text-align:center;vertical-align:top;background:#fff;"><div style="font-weight:700;font-size:8.8px;color:' + BLACK + ';margin-bottom:3px;">اعتماد الحسابات</div><div style="font-size:7.7px;color:' + BLACK + ';margin-top:18px;">التوقيع / الختم</div></td></tr></table></div>';
 
   var colgroup = '';
   if (hasBreakdown && nVip > 0) {
@@ -5888,15 +5897,15 @@ function exportPdfTableAll() {
     var wrap = document.createElement('div');
     wrap.setAttribute('dir', 'rtl');
     wrap.setAttribute('lang', 'ar');
-    wrap.style.cssText = 'width:' + MAX_MM + 'mm;max-width:100%;margin:0 auto;padding:0;background:#fff;color:#000;font-family:' + FONT + ';box-sizing:border-box;';
+    wrap.style.cssText = 'width:' + MAX_MM + 'mm;max-width:100%;max-height:208mm;overflow:hidden;margin:0 auto;padding:0;background:#fff;color:#000;font-family:' + FONT + ';box-sizing:border-box;';
     var scaleInner = document.createElement('div');
-    scaleInner.style.cssText = 'transform:scale(0.85);transform-origin:top right;width:' + (100 / 0.85) + '%;';
+    scaleInner.style.cssText = 'transform:scale(0.78);transform-origin:top right;width:' + (100 / 0.78) + '%;';
     scaleInner.innerHTML = fullHtml;
     wrap.appendChild(scaleInner);
     document.body.appendChild(wrap);
     function runPdf() {
       var opt = {
-        margin: [2, 3, 2, 3],
+        margin: [1, 3, 1, 3],
         filename: fileName,
         image: { type: 'png', quality: 1 },
         html2canvas: { scale: 6, useCORS: true, logging: false, allowTaint: true, letterRendering: true },
