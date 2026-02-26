@@ -1180,11 +1180,29 @@ function netHoursCapped(entryMins: number, exitMins: number): number {
   return Math.min(diff, MAX_SHIFT_HOURS);
 }
 
+/** آخر يوم في الشهر بصيغة YYYY-MM-DD */
+function lastDayOfMonth(ym: string): string {
+  const [y, m] = ym.split('-').map(Number);
+  const last = new Date(y, m, 0);
+  const d = last.getDate();
+  return `${y}-${String(m).padStart(2, '0')}-${String(d).padStart(2, '0')}`;
+}
+
+/** عدد الأيام التقويمية بين تاريخين YYYY-MM-DD (شامل البداية والنهاية) */
+function calendarDaysInRange(start: string, end: string): number {
+  const a = new Date(start);
+  const b = new Date(end);
+  if (isNaN(a.getTime()) || isNaN(b.getTime()) || a > b) return 0;
+  const ms = b.getTime() - a.getTime();
+  return Math.round(ms / (24 * 60 * 60 * 1000)) + 1;
+}
+
 /** استخراج بداية ونهاية الفترة من نص مثل "01-01-2026 -- 31-01-2026" (DD-MM-YYYY) أو YYYY-MM-DD. يرجع [start, end] بصيغة YYYY-MM-DD أو null لو فشل. */
 function parsePeriodRange(period: string): [string, string] | null {
   const s = period.trim();
   if (!s) return null;
-  const parts = s.split(/\s*--\s*|\s*-\s*/).map((p) => p.trim()).filter(Boolean);
+  // فصل بين تاريخين فقط: -- (مع أو بدون مسافات) أو " - " أو "إلى"/to، وليس داخل التاريخ
+  const parts = s.split(/\s*--\s*|\s+-\s+|\s+إلى\s+|\s+to\s+/i).map((p) => p.trim()).filter(Boolean);
   if (parts.length < 2) return null;
   const toYmd = (str: string): string | null => {
     const dash = str.includes('-');
@@ -1202,6 +1220,28 @@ function parsePeriodRange(period: string): [string, string] | null {
   const end = toYmd(parts[parts.length - 1]);
   if (!start || !end) return null;
   return [start, end];
+}
+
+/** استنتاج نطاق الفترة من مصفوفة الأيام: الشهر الذي فيه أكبر عدد أيام يُعتبر شهر التقرير (حتى لا يتجاوز 31 يومًا في يناير). */
+function inferPeriodFromDays(days: { workDateStr: string }[]): [string, string] | null {
+  if (days.length === 0) return null;
+  const byMonth = new Map<string, number>();
+  for (const d of days) {
+    const ym = d.workDateStr.slice(0, 7);
+    byMonth.set(ym, (byMonth.get(ym) ?? 0) + 1);
+  }
+  let bestYm = '';
+  let bestCount = 0;
+  for (const [ym, count] of byMonth) {
+    if (count > bestCount) {
+      bestCount = count;
+      bestYm = ym;
+    }
+  }
+  if (!bestYm) return null;
+  const periodStart = `${bestYm}-01`;
+  const periodEnd = lastDayOfMonth(bestYm);
+  return [periodStart, periodEnd];
 }
 
 export function parseAttendanceReport(buffer: ArrayBuffer, fileName: string): AttendanceFileResult {
@@ -1344,11 +1384,27 @@ export function parseAttendanceReport(buffer: ArrayBuffer, fileName: string): At
 
   // تصفية الأيام بفترة التقرير فقط (مثلاً يناير = 31 يوم) لتفادي احتساب يوم من شهر آخر (مثل 31 ديسمبر من بصمة فجر 1 يناير)
   let daysInScope = days;
+  let periodStart: string | null = null;
+  let periodEnd: string | null = null;
   const range = parsePeriodRange(period);
   if (range) {
-    const [periodStart, periodEnd] = range;
-    daysInScope = days.filter((d) => d.workDateStr >= periodStart && d.workDateStr <= periodEnd);
-    // إعادة احتساب الأعداد من الأيام داخل الفترة فقط
+    [periodStart, periodEnd] = range;
+  }
+  // بديل 1: إن لم يُستخرج النطاق من نص الفترة، نستنتج الشهر الغالب من الأيام (الأكثر ظهورًا) حتى لا يتجاوز أيام الشهر 28–31
+  if ((!periodStart || !periodEnd) && days.length > 0) {
+    const inferred = inferPeriodFromDays(days);
+    if (inferred) {
+      [periodStart, periodEnd] = inferred;
+    }
+  }
+  // بديل 2: إن لم نستنتج شهرًا، نستخدم أصغر وأكبر تاريخ في صفوف التقرير
+  if ((!periodStart || !periodEnd) && rowDatesSet.size > 0) {
+    const sortedRowDates = Array.from(rowDatesSet).sort();
+    periodStart = periodStart ?? sortedRowDates[0];
+    periodEnd = periodEnd ?? sortedRowDates[sortedRowDates.length - 1];
+  }
+  if (periodStart && periodEnd) {
+    daysInScope = days.filter((d) => d.workDateStr >= periodStart! && d.workDateStr <= periodEnd!);
     validDays = daysInScope.filter((d) => d.status === 'valid').length;
     incompleteDays = daysInScope.filter((d) => d.status === 'incomplete').length;
     absentDays = daysInScope.filter((d) => d.status === 'absent').length;
@@ -1357,7 +1413,11 @@ export function parseAttendanceReport(buffer: ArrayBuffer, fileName: string): At
   }
 
   const totalWorkDays = validDays + incompleteDays;
-  const totalDaysInPeriod = validDays + incompleteDays + absentDays + permittedAbsence + reviewRequiredDays;
+  // أيام العمل = طول الفترة التقويمية (مثلاً 31 في يناير) وليس مجموع الصفوف، حتى يتسق مع غياب وإجازة وبصمة غير مكتملة
+  const totalDaysInPeriod =
+    periodStart && periodEnd
+      ? calendarDaysInRange(periodStart, periodEnd)
+      : validDays + incompleteDays + absentDays + permittedAbsence + reviewRequiredDays;
   const totalNetHours = daysInScope.reduce((s, d) => s + d.netHours, 0);
   const fingerprintAccuracy = totalWorkDays > 0 ? Math.round((validDays / totalWorkDays) * 100) : 0;
 

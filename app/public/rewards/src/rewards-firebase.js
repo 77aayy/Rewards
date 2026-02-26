@@ -265,7 +265,7 @@ function mergeEvaluationsFromSourceIntoDb(targetDb, sourceDb) {
   if (!targetDb || !sourceDb || !Array.isArray(targetDb) || !Array.isArray(sourceDb)) return 0;
   var sourceMap = new Map();
   sourceDb.forEach(function(emp) { sourceMap.set(emp.name + '|' + emp.branch, emp); });
-  var fbFields = ['evaluations', 'evaluationsBooking', 'evaluationsGoogle', 'totalAttendanceDays', 'attendance26Days', 'attendanceDaysPerBranch', 'doneStatus', 'doneCheckmark', 'repeaterDays', 'repeaterNotes'];
+  var fbFields = ['evaluations', 'evaluationsBooking', 'evaluationsGoogle', 'totalAttendanceDays', 'attendance26Days', 'attendanceDaysPerBranch', '_monthlyContracts', 'doneStatus', 'doneCheckmark', 'repeaterDays', 'repeaterNotes'];
   var changes = 0;
   targetDb.forEach(function(emp) {
     var src = sourceMap.get(emp.name + '|' + emp.branch);
@@ -484,12 +484,19 @@ function flushAdminInputsToStorage() {
       var val = parseInt(el.value, 10) || 0;
       var item = db.find(function (i) { return i.id === id; });
       if (!item) return;
-      var empName = item.name;
       if (type === 'booking') {
-        db.filter(function (i) { return i.name === empName; }).forEach(function (row) { row.evaluationsBooking = val; });
+        item.evaluationsBooking = val;
       } else if (type === 'google') {
-        db.filter(function (i) { return i.name === empName; }).forEach(function (row) { row.evaluationsGoogle = val; });
+        item.evaluationsGoogle = val;
       }
+    });
+    document.querySelectorAll('.monthly-contracts-input').forEach(function (el) {
+      var id = el.getAttribute('data-emp-id');
+      if (!id) return;
+      var val = Math.max(0, parseInt(el.value, 10) || 0);
+      var item = db.find(function (i) { return i.id === id; });
+      if (!item) return;
+      item._monthlyContracts = val;
     });
     if (typeof window !== 'undefined' && window.db && window.db.length > 0) {
       localStorage.setItem('adora_rewards_db', JSON.stringify(window.db));

@@ -48,6 +48,9 @@ if (typeof window !== 'undefined') {
 }
 const LOCAL_REWARDS_EDIT_TS_KEY = 'adora_rewards_last_local_edit_ts';
 const LOCAL_REWARDS_DIRTY_KEY = 'adora_rewards_local_dirty';
+/** حافز تحدي الظروف (بطل 26+ يوم): مبلغ ثابت بالريال بدل نسبة من الصافي. */
+var CHALLENGE_BONUS_RIYALS = 50;
+
 /** مساهمة شركاء النجاح: نسبة تُخصم من الإجمالي للصافي. تُقرأ ديناميكياً من إعدادات الأدمن (صندوق الدعم). */
 function getSupportFundRate() {
   var p = typeof getPricingConfig === 'function' ? getPricingConfig() : {};
@@ -190,6 +193,7 @@ var DEFAULT_REWARD_PRICING = {
   rateNight: 2,
   rateBooking: 1,
   rateContract: 200,
+  rateMonthlyContract: 200,
   rateVipByBranch: {},
   rateVipDefault: { reception: 0, booking: 0 },
   vipDescription: 'حجوزات VIP — تُسعّر من خانات VIP (استقبال/بوكينج لكل غرفة)',
@@ -246,6 +250,7 @@ function getPricingConfig() {
       rateNight: p.rateNight != null ? p.rateNight : DEFAULT_REWARD_PRICING.rateNight,
       rateBooking: p.rateBooking != null ? p.rateBooking : DEFAULT_REWARD_PRICING.rateBooking,
       rateContract: p.rateContract != null ? p.rateContract : DEFAULT_REWARD_PRICING.rateContract,
+      rateMonthlyContract: p.rateMonthlyContract != null ? p.rateMonthlyContract : (p.rateContract != null ? p.rateContract : DEFAULT_REWARD_PRICING.rateMonthlyContract),
       rateVipByBranch: _normalizeVipByBranch(p.rateVipByBranch),
       rateVipDefault: _normalizeVipDefault(p.rateVipDefault),
       vipDescription: p.vipDescription != null ? p.vipDescription : DEFAULT_REWARD_PRICING.vipDescription,
@@ -268,6 +273,7 @@ function getPricingConfig() {
         rateNight: p2.rateNight != null ? p2.rateNight : DEFAULT_REWARD_PRICING.rateNight,
         rateBooking: p2.rateBooking != null ? p2.rateBooking : DEFAULT_REWARD_PRICING.rateBooking,
         rateContract: p2.rateContract != null ? p2.rateContract : DEFAULT_REWARD_PRICING.rateContract,
+        rateMonthlyContract: p2.rateMonthlyContract != null ? p2.rateMonthlyContract : (p2.rateContract != null ? p2.rateContract : DEFAULT_REWARD_PRICING.rateMonthlyContract),
         rateVipByBranch: _normalizeVipByBranch(p2.rateVipByBranch),
         rateVipDefault: _normalizeVipDefault(p2.rateVipDefault),
         vipDescription: p2.vipDescription != null ? p2.vipDescription : DEFAULT_REWARD_PRICING.vipDescription,
@@ -351,6 +357,11 @@ function computeGrossFromBreakdown(emp, pricing) {
   var evBooking = emp.evaluationsBooking || 0, evGoogle = emp.evaluationsGoogle || 0;
   g += evBooking * (pricing.rateEvalBooking || 0) + evGoogle * (pricing.rateEvalGoogle || 0);
 
+  // العقود الشهرية (عدد × سعر العقد الشهري)
+  var monthlyContracts = emp._monthlyContracts || 0;
+  var rateMC = pricing.rateMonthlyContract != null ? pricing.rateMonthlyContract : (pricing.rateContract || 200);
+  g += monthlyContracts * rateMC;
+
   return g;
 }
 
@@ -387,8 +398,11 @@ function computeGrossBreakdown(emp, pricing) {
   var evB = emp.evaluationsBooking || 0, evG = emp.evaluationsGoogle || 0;
   evalBooking = evB * (pricing.rateEvalBooking || 0);
   evalGoogle = evG * (pricing.rateEvalGoogle || 0);
-  var total = reception + booking + vip + evalBooking + evalGoogle;
-  return { reception: reception, booking: booking, vip: vip, evalBooking: evalBooking, evalGoogle: evalGoogle, total: total };
+  var monthlyContracts = emp._monthlyContracts || 0;
+  var rateMC = pricing.rateMonthlyContract != null ? pricing.rateMonthlyContract : (pricing.rateContract || 200);
+  var monthlyContractsAmt = monthlyContracts * rateMC;
+  var total = reception + booking + vip + evalBooking + evalGoogle + monthlyContractsAmt;
+  return { reception: reception, booking: booking, vip: vip, evalBooking: evalBooking, evalGoogle: evalGoogle, monthlyContracts: monthlyContractsAmt, total: total };
 }
 
 /**
@@ -471,6 +485,7 @@ function _processAdoraTransferPayload(payload) {
       _vipRooms: row.vipRooms || {}, _vipTotal: row.vipTotal || 0,
       _vipBySource: row.vipBySource || {}, _vipMorning: row.vipMorning || 0,
       _vipEvening: row.vipEvening || 0, _vipNight: row.vipNight || 0,
+      _monthlyContracts: (oldEmp && oldEmp._monthlyContracts != null) ? oldEmp._monthlyContracts : (row._monthlyContracts != null ? row._monthlyContracts : 0),
       _alertCount: row.alertCount || 0, _alertTotal: row.alertTotal || 0,
       _mergedCount: row.mergedCount || 0
     };
@@ -498,6 +513,7 @@ function _processAdoraTransferPayload(payload) {
         _vipBySource: breakdownFields._vipBySource, _vipMorning: breakdownFields._vipMorning,
         _vipEvening: breakdownFields._vipEvening, _vipNight: breakdownFields._vipNight,
         _alertCount: breakdownFields._alertCount, _alertTotal: breakdownFields._alertTotal,
+        _monthlyContracts: breakdownFields._monthlyContracts,
         _mergedCount: breakdownFields._mergedCount
       });
     }
@@ -628,17 +644,18 @@ function toggleBreakdownColumns(showBreakdown) {
       var span3Book = '<th colspan="3" class="th-section-start text-center" style="background:rgba(6,182,212,0.08);border-left:2px solid rgba(6,182,212,0.3);"><span class="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-[11px] font-bold tracking-wide text-cyan-300" style="background:rgba(6,182,212,0.12);border:1px solid rgba(6,182,212,0.25);">الحجوزات</span></th>';
       var span3 = '<th colspan="3" class="th-section-start text-center" style="background:rgba(245,158,11,0.06);border-left:2px solid rgba(245,158,11,0.25);"><span class="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-[11px] font-bold tracking-wide text-amber-300" style="background:rgba(245,158,11,0.1);border:1px solid rgba(245,158,11,0.2);">الشفتات</span></th>';
       var spanVip = vipCount > 0 ? '<th colspan="' + vipCount + '" class="th-section-start text-center" style="background:rgba(139,92,246,0.06);border-left:2px solid rgba(139,92,246,0.25);"><span class="inline-flex items-center gap-1 px-3 py-1.5 rounded-lg text-[11px] font-bold tracking-wide text-violet-300" style="background:rgba(139,92,246,0.1);border:1px solid rgba(139,92,246,0.2);">VIP</span></th>' : '';
-      var span2 = '<th colspan="2" class="th-section-start text-center" style="background:rgba(239,68,68,0.06);border-left:2px solid rgba(239,68,68,0.25);"><span class="inline-flex items-center gap-1 px-3 py-1.5 rounded-lg text-[11px] font-bold tracking-wide text-red-300" style="background:rgba(239,68,68,0.1);border:1px solid rgba(239,68,68,0.2);">تنبيهات</span></th>';
+      var spanMonthly = '<th class="th-section-start th-section-end text-center col-breakdown col-monthly-contracts" style="background:rgba(20,184,166,0.06);border-left:2px solid rgba(20,184,166,0.65);border-right:2px solid rgba(255,255,255,0.5);"><span class="inline-flex items-center gap-1 px-2 py-1.5 rounded-lg text-[11px] font-bold tracking-wide text-teal-300" style="background:rgba(20,184,166,0.1);border:1px solid rgba(20,184,166,0.2);">العقود الشهرية</span></th>';
+      var span2 = '<th colspan="2" class="th-section-start th-section-end text-center" style="background:rgba(239,68,68,0.06);border-left:2px solid rgba(239,68,68,0.55);border-right:2px solid rgba(239,68,68,0.55);"><span class="inline-flex items-center gap-1 px-3 py-1.5 rounded-lg text-[11px] font-bold tracking-wide text-red-300" style="background:rgba(239,68,68,0.1);border:1px solid rgba(239,68,68,0.2);">تنبيهات</span></th>';
       // عدد الأعمدة = 3+3+3+N+2+1+1+2+1 = 16+N
       // بيانات الموظف(3) | حجوزات(3) | شفتات(3) | VIP(N) | تنبيهات(2) | حضور(1) | فئة-مخفي(1) | تقييمات(2) | مكافأة(1)
       var spanEmployee = '<th colspan="3" class="th-section-start text-center" style="background:rgba(255,255,255,0.04);border-left:2px solid rgba(255,255,255,0.15);"><span class="inline-flex items-center gap-1 px-3 py-1.5 rounded-lg text-[11px] font-bold tracking-wide text-slate-300" style="background:rgba(255,255,255,0.06);border:1px solid rgba(255,255,255,0.1);">بيانات الموظف</span></th>';
-      var spanAttendance = '<th class="th-section-start text-center" style="background:rgba(16,185,129,0.06);border-left:2px solid rgba(16,185,129,0.25);"><span class="inline-flex items-center gap-1 px-2 py-1.5 rounded-lg text-[11px] font-bold tracking-wide text-emerald-300" style="background:rgba(16,185,129,0.1);border:1px solid rgba(16,185,129,0.2);">الحضور</span></th>';
+      var spanAttendance = '<th class="th-section-start th-section-end text-center" style="background:rgba(16,185,129,0.06);border-left:2px solid rgba(16,185,129,0.55);border-right:2px solid rgba(16,185,129,0.55);"><span class="inline-flex items-center gap-1 px-2 py-1.5 rounded-lg text-[11px] font-bold tracking-wide text-emerald-300" style="background:rgba(16,185,129,0.1);border:1px solid rgba(16,185,129,0.2);">الحضور</span></th>';
       var spanRateHidden = '<th class="col-rate p-2" style="background:rgba(0,0,0,0.12);"></th>';
       var spanEvals = '<th colspan="2" class="th-section-start text-center" style="background:rgba(251,191,36,0.06);border-left:2px solid rgba(251,191,36,0.25);"><span class="inline-flex items-center gap-1 px-2 py-1.5 rounded-lg text-[11px] font-bold tracking-wide text-yellow-300" style="background:rgba(251,191,36,0.1);border:1px solid rgba(251,191,36,0.2);">التقييمات</span></th>';
       var spanReward = '<th class="th-section-start text-center" style="background:rgba(20,184,166,0.06);border-left:2px solid rgba(20,184,166,0.25);"><span class="inline-flex items-center gap-1 px-2 py-1.5 rounded-lg text-[11px] font-bold tracking-wide text-teal-300" style="background:rgba(20,184,166,0.1);border:1px solid rgba(20,184,166,0.2);">المكافأة</span></th>';
       groupRow.innerHTML =
         spanEmployee +
-        span3Book + span3 + spanVip + span2 +
+        span3Book + span3 + spanVip + spanMonthly + span2 +
         spanAttendance + spanRateHidden + spanEvals + spanReward;
       groupRow.style.display = '';
     } else {
@@ -2674,7 +2691,7 @@ function computeBranchWinnersAndLosers(dataDb, branchesSet) {
     const fund = gross * getSupportFundRate();
     let net = gross - fund;
     const attendance26Days = emp.attendance26Days === true;
-    net = net + (attendance26Days ? net * 0.25 : 0);
+    net = net + (attendance26Days ? CHALLENGE_BONUS_RIYALS : 0);
     const bw = branchWinners[emp.branch];
     const bl = branchLosers[emp.branch];
     if (!bw || !bl) return;
@@ -2737,33 +2754,25 @@ function getFooterTotals() {
       const allEmpBranches = db.filter(e => e.name === emp.name);
       statBookings += allEmpBranches.reduce((s, b) => s + (b.count || 0), 0);
       let empFund = 0, totalNetFromBranches = 0, hasExcellence = false, hasCommitment = false;
-      // For duplicates: determine which branch gets the 25% challenge bonus (same logic as calcStats)
-      let challengeRowId = null;
-      if (allEmpBranches.length > 1) {
-        let maxChallengeTotalAmount = -1;
-        allEmpBranches.forEach(e => {
-          const eGross = computeGrossFromBreakdown(e, _pricing);
-          const eFund = eGross * getSupportFundRate();
-          let eNet = eGross - eFund;
-          const eAtt = e.attendance26Days === true;
-          const eBonus = eAtt ? eNet * 0.25 : 0;
-          eNet = eNet + eBonus;
-          if (eAtt && eBonus > 0 && eNet > maxChallengeTotalAmount) {
-            maxChallengeTotalAmount = eNet;
-            challengeRowId = e.id;
-          }
-        });
-      }
+      // للمتكرر: الحوافز مرة واحدة في الفرع الأكثر صافي (قبل الحوافز)
+      let bestBranchId = allEmpBranches[0].id;
+      let maxNetBase = -1;
+      allEmpBranches.forEach(e => {
+        const g = computeGrossFromBreakdown(e, _pricing);
+        const netBase = g - g * getSupportFundRate();
+        if (netBase > maxNetBase) { maxNetBase = netBase; bestBranchId = e.id; }
+      });
+      const bestBranch = allEmpBranches.find(e => e.id === bestBranchId);
       allEmpBranches.forEach(branchEmp => {
         const gross = computeGrossFromBreakdown(branchEmp, _pricing);
         const fund = gross * getSupportFundRate();
         let branchNet = gross - fund;
         const attendance26Days = branchEmp.attendance26Days === true;
-        // For duplicates: only apply 25% to the selected branch; for singles: apply normally
-        const applyChallenge = allEmpBranches.length > 1 ? (challengeRowId === branchEmp.id && attendance26Days) : attendance26Days;
-        branchNet = branchNet + (applyChallenge ? branchNet * 0.25 : 0);
+        const applyChallenge = allEmpBranches.length > 1 ? (bestBranchId === branchEmp.id && attendance26Days) : attendance26Days;
+        branchNet = branchNet + (applyChallenge ? CHALLENGE_BONUS_RIYALS : 0);
         empFund += fund;
         totalNetFromBranches += branchNet;
+        if (branchEmp.id !== bestBranchId) return;
         const bw = branchWinners[branchEmp.branch];
         if (bw && bw.book.ids.includes(branchEmp.id) && bw.eval.ids.includes(branchEmp.id) && bw.book.val > 0 && bw.eval.val > 0) hasExcellence = true;
         if (bw && attendance26Days && (bw.eval.ids.includes(branchEmp.id) && bw.eval.val > 0 || bw.book.ids.includes(branchEmp.id) && bw.book.val > 0)) hasCommitment = true;
@@ -2790,7 +2799,7 @@ function getFooterTotals() {
       const fund = gross * getSupportFundRate();
       let net = gross - fund;
       const attendance26Days = emp.attendance26Days === true;
-      net = net + (attendance26Days ? net * 0.25 : 0);
+      net = net + (attendance26Days ? CHALLENGE_BONUS_RIYALS : 0);
       // Gross without evaluations for "net without eval" stat
       var grossNoEval = gross - (evBooking * (_pricingStats.rateEvalBooking || 0)) - (evGoogle * (_pricingStats.rateEvalGoogle || 0));
       totalNetNoEval += grossNoEval * 0.85;
@@ -2977,7 +2986,7 @@ function _isInsideTargetTable(node) {
 }
 function _isTableEditableTarget(node) {
   if (!node || !node.matches) return false;
-  return node.matches('.eval-input, .attendance-days-input, .attendance-toggle, .negative-ratings-input');
+  return node.matches('.eval-input, .attendance-days-input, .monthly-contracts-input, .attendance-toggle, .negative-ratings-input');
 }
 function _markPendingTableRefreshAfterEdit() {
   _pendingTableRefreshAfterEdit = true;
@@ -3130,8 +3139,8 @@ const commitmentBonus = hasCommitmentBonus ? 50 : 0;
 const gross = computeGrossFromBreakdown(item);
 const fund = gross * getSupportFundRate();
 let net = gross - fund;
-// Apply 25% bonus if employee completed 26 days, or 25% discount if not
-const attendanceBonus = checked ? net * 0.25 : 0; // 25% bonus only if user activated "تم"
+// Apply challenge bonus (50 riyals) if employee completed 26 days
+const attendanceBonus = checked ? CHALLENGE_BONUS_RIYALS : 0;
 net = net + attendanceBonus; // No discount - only bonus if activated
 // Update DOM
 row.dataset.fund = fund;
@@ -3296,7 +3305,7 @@ const fund = gross * getSupportFundRate();
 let net = gross - fund;
 // Apply attendance bonus/discount for accurate net calculation
 const attendance26Days = emp.attendance26Days === true; // Only true if user manually activated
-const attendanceBonus = attendance26Days ? net * 0.25 : 0; // 25% bonus only if user activated "تم"
+const attendanceBonus = attendance26Days ? CHALLENGE_BONUS_RIYALS : 0;
 net = net + attendanceBonus; // No discount - only bonus if activated
 if (net > viewWinners.net.val) { viewWinners.net.val = net; viewWinners.net.ids = [emp.id]; }
 else if (net === viewWinners.net.val) { viewWinners.net.ids.push(emp.id); }
@@ -3648,7 +3657,7 @@ const fund = gross * getSupportFundRate();
 let net = gross - fund;
 // CRITICAL: Apply attendance bonus/discount to match renderUI calculation
 const attendance26Days = emp.attendance26Days === true; // Only true if user manually activated
-const attendanceBonus = attendance26Days ? net * 0.25 : 0; // 25% bonus only if user activated "تم"
+const attendanceBonus = attendance26Days ? CHALLENGE_BONUS_RIYALS : 0;
 net = net + attendanceBonus; // No discount - only bonus if activated
 // "الأكثر تقييماً" = Booking فقط (NOT Google Maps)
 const ev = evBooking; // Use Booking evaluations only for "الأكثر تقييماً"
@@ -3722,7 +3731,7 @@ db.forEach(emp => {
     const fund = gross * getSupportFundRate();
     let branchNet = gross - fund;
     const attendance26Days = branchEmp.attendance26Days === true;
-    branchNet = branchNet + (attendance26Days ? branchNet * 0.25 : 0);
+    branchNet = branchNet + (attendance26Days ? CHALLENGE_BONUS_RIYALS : 0);
     totalNetFromBranches += branchNet;
     const bw = branchWinners[branchEmp.branch];
     if (bw && bw.book.ids.includes(branchEmp.id) && bw.eval.ids.includes(branchEmp.id) && bw.book.val > 0 && bw.eval.val > 0) hasExcellence = true;
@@ -4180,8 +4189,8 @@ const commitmentBonus = hasCommitmentBonus ? 50 : 0;
 const gross = computeGrossFromBreakdown(emp, _pricingRenderUI);
 const fund = gross * getSupportFundRate();
 let net = gross - fund;
-// Apply 25% bonus only if user manually activated "تم" (no discount)
-const attendanceBonus = attendance26Days ? net * 0.25 : 0; // 25% bonus only if user activated "تم"
+// Apply challenge bonus (50 ريال) only if user manually activated "تم"
+const attendanceBonus = attendance26Days ? CHALLENGE_BONUS_RIYALS : 0;
 net = net + attendanceBonus; // No discount - only bonus if activated
 return { 
 net, ev, count: emp.count, branch: emp.branch, name: emp.name, id: emp.id, fund, 
@@ -4266,7 +4275,7 @@ if (filter === 'الكل') {
       const fund = gross * getSupportFundRate();
       let branchNet = gross - fund;
       const attendance26Days = branchEmp.attendance26Days === true;
-      branchNet = branchNet + (attendance26Days ? branchNet * 0.25 : 0);
+      branchNet = branchNet + (attendance26Days ? CHALLENGE_BONUS_RIYALS : 0);
       totalNetFromBranches += branchNet;
       const bw = branchWinners[branchEmp.branch];
       if (bw && bw.book.ids.includes(branchEmp.id) && bw.eval.ids.includes(branchEmp.id) && bw.book.val > 0 && bw.eval.val > 0) hasExcellence = true;
@@ -4410,65 +4419,29 @@ let totalNetNoEval = 0;
 let totalExcellenceBonus = 0;
 let excellenceEmployees = []; // Employees with excellence bonus
 let lastEmpKey = ""; // Track last employee key (name + branch) instead of just name
-// Track which duplicate employees already got their bonus applied (to apply only once)
-// First pass: determine which row should get the bonus for each duplicate employee
+// الحوافز للمتكرر: مرة واحدة فقط في الفرع الذي فيه أعلى صافي (قبل الحوافز والخصومات)
 const bonusApplied = {}; // { empName: { excellenceRowId: null, commitmentRowId: null, challengeRowId: null } }
-// Pre-calculate which row gets bonus for duplicates
 filtered.forEach((emp) => {
 if (nameCounts[emp.name] > 1) {
 if (!bonusApplied[emp.name]) {
-const s = calcStats(emp);
 const allEmpRows = filtered.filter(e => e.name === emp.name);
-// Find row that achieved excellence bonus (has highest net, or first row if equal)
-let excellenceRowId = null;
-if (s.hasExcellenceBonus) {
-let maxNet = calcStats(allEmpRows[0]).net;
-excellenceRowId = allEmpRows[0].id;
+let bestRowId = allEmpRows[0].id;
+let maxNetBase = -1;
 allEmpRows.forEach(e => {
-const stats = calcStats(e);
-if (stats.net > maxNet) {
-maxNet = stats.net;
-excellenceRowId = e.id;
+const gross = computeGrossFromBreakdown(e, _pricingRenderUI);
+const fund = gross * getSupportFundRate();
+const netBase = gross - fund;
+if (netBase > maxNetBase) {
+maxNetBase = netBase;
+bestRowId = e.id;
 }
 });
-}
-// Find row that achieved commitment bonus (has highest total amount including commitment bonus)
-// First, check all branches to see if employee qualifies for commitment bonus in any branch
-let commitmentRowId = null;
-let maxTotalAmount = -1;
-allEmpRows.forEach(e => {
-const stats = calcStats(e);
-// Only consider branches where employee actually qualifies for commitment bonus
-if (stats.hasCommitmentBonus) {
-// Calculate total amount including commitment bonus for this branch
-const totalAmount = stats.net + stats.commitmentBonus;
-if (totalAmount > maxTotalAmount) {
-maxTotalAmount = totalAmount;
-commitmentRowId = e.id;
-}
-}
-});
-// Find row that should get challenge bonus (25%) - has highest total amount (net + attendanceBonus)
-// First, check all branches to see if employee qualifies for challenge bonus (attendance26Days = true) in any branch
-let challengeRowId = null;
-let maxChallengeTotalAmount = -1;
-allEmpRows.forEach(e => {
-const stats = calcStats(e);
-// Only consider branches where employee actually qualifies for challenge bonus (attendance26Days = true)
-if (stats.attendance26Days && stats.attendanceBonus > 0) {
-// Calculate total amount including challenge bonus for this branch
-// Note: stats.net already includes attendanceBonus, so we use it directly
-const totalAmount = stats.net;
-if (totalAmount > maxChallengeTotalAmount) {
-maxChallengeTotalAmount = totalAmount;
-challengeRowId = e.id;
-}
-}
-});
+const bestRow = allEmpRows.find(e => e.id === bestRowId);
+const bestStats = bestRow ? calcStats(bestRow) : null;
 bonusApplied[emp.name] = {
-excellenceRowId: excellenceRowId,
-commitmentRowId: commitmentRowId,
-challengeRowId: challengeRowId
+excellenceRowId: bestStats && bestStats.hasExcellenceBonus ? bestRowId : null,
+commitmentRowId: bestStats && bestStats.hasCommitmentBonus ? bestRowId : null,
+challengeRowId: bestStats && bestStats.attendance26Days && bestStats.attendanceBonus > 0 ? bestRowId : null
 };
 }
 }
@@ -4525,7 +4498,7 @@ let duplicateFinalNet = 0;
 if (filter === 'الكل' && s.isDuplicate) {
 // Get all branches for this employee
 const allEmpBranches = db.filter(e => e.name === emp.name);
-// حافز تحدي الظروف (25%): يُعطى مرة واحدة للمتكرر — الفرع الذي له أعلى صافي بعد الـ 25% (نفس منطق challengeRowId)
+// حافز تحدي الظروف (50 ريال): يُعطى مرة واحدة للمتكرر — الفرع الذي له أعلى صافي (نفس منطق challengeRowId)
 let challengeRowId = null;
 let maxChallengeTotalAmount = -1;
 allEmpBranches.forEach(branchEmp => {
@@ -4536,7 +4509,7 @@ allEmpBranches.forEach(branchEmp => {
   const branchFund = branchGross * getSupportFundRate();
   let eNet = branchGross - branchFund;
   const eAttendance26Days = branchEmp.attendance26Days === true;
-  const eAttendanceBonus = eAttendance26Days ? eNet * 0.25 : 0;
+  const eAttendanceBonus = eAttendance26Days ? CHALLENGE_BONUS_RIYALS : 0;
   eNet = eNet + eAttendanceBonus;
   if (eAttendance26Days && eAttendanceBonus > 0 && eNet > maxChallengeTotalAmount) {
     maxChallengeTotalAmount = eNet;
@@ -4548,7 +4521,7 @@ let totalFundFromBranches = 0;
 let hasExcellenceForEmployee = false;
 let hasCommitmentForEmployee = false;
 allEmpBranches.forEach(branchEmp => {
-// Calculate net for this branch (25% only for the branch that won challengeRowId)
+// Calculate net for this branch (50 ريال only for the branch that won challengeRowId)
 const branchRate = branchEmp.count > 100 ? 3 : (branchEmp.count > 50 ? 2 : 1);
 const branchEvBooking = branchEmp.evaluationsBooking || 0;
 const branchEvGoogle = branchEmp.evaluationsGoogle || 0;
@@ -4556,7 +4529,7 @@ const branchGross = computeGrossFromBreakdown(branchEmp);
 const branchFund = branchGross * getSupportFundRate();
 let branchNet = branchGross - branchFund;
 const branchAttendance26Days = branchEmp.attendance26Days === true;
-const branchAttendanceBonus = (branchAttendance26Days && challengeRowId === branchEmp.id) ? branchNet * 0.25 : 0;
+const branchAttendanceBonus = (branchAttendance26Days && challengeRowId === branchEmp.id) ? CHALLENGE_BONUS_RIYALS : 0;
 branchNet = branchNet + branchAttendanceBonus;
 totalNetFromBranches += branchNet;
 totalFundFromBranches += branchFund;
@@ -4879,11 +4852,19 @@ ${window.adoraTransferMode ? (function() {
       html += '<td class="col-breakdown p-2 text-center font-mono text-sm text-gray-500' + sectionClass + '">0</td>';
     }
   });
-  html += cell(alertCount, 'alert', 'text-red-300');
-  html += '<td class="col-breakdown td-section-start p-2 text-center font-mono text-sm">' + (alertTotal > 0 ? '<button onclick="openBreakdownDrilldown(\'' + empNameEsc + '\', \'' + empBranchEsc + '\', \'alertTotal\')" class="text-red-300 hover:underline cursor-pointer font-medium">' + Math.round(alertTotal).toLocaleString('en-SA') + '</button>' : '<span class="text-gray-500">—</span>') + '</td>';
+  var monthlyContracts = isDup ? allBranches.reduce(function(s, e) { return s + (e._monthlyContracts || 0); }, 0) : (bk._monthlyContracts || 0);
+  // الكل للعرض والتجميع — خانة العقود الشهرية display-only في الكل ؛ قسم مستقل بحدود على الجانبين
+  if (filter === 'الكل' || isDup) {
+    html += '<td class="col-breakdown col-monthly-contracts td-section-start td-section-end p-2 text-center font-mono text-sm text-teal-300">' + (monthlyContracts > 0 ? monthlyContracts : '—') + '</td>';
+  } else {
+    var empIdEsc = (typeof escAttr === 'function' ? escAttr(emp.id) : String(emp.id || '').replace(/'/g, "\\'"));
+    html += '<td class="col-breakdown col-monthly-contracts td-section-start td-section-end p-2 text-center"><input type="number" min="0" class="monthly-contracts-input w-12 text-center font-mono text-sm bg-white/5 border border-white/20 rounded px-1 py-0.5 text-teal-300" data-emp-id="' + emp.id + '" value="' + monthlyContracts + '" onfocus="this.select()" onchange="if(typeof updateMonthlyContracts===\'function\')updateMonthlyContracts(\'' + empIdEsc + '\', this.value, this)" title="عدد العقود الشهرية — كل عقد يضيف 200 ريال" /></td>';
+  }
+  html += cell(alertCount, 'alert', 'text-red-300 td-section-start');
+  html += '<td class="col-breakdown td-section-end p-2 text-center font-mono text-sm">' + (alertTotal > 0 ? '<button onclick="openBreakdownDrilldown(\'' + empNameEsc + '\', \'' + empBranchEsc + '\', \'alertTotal\')" class="text-red-300 hover:underline cursor-pointer font-medium">' + Math.round(alertTotal).toLocaleString('en-SA') + '</button>' : '<span class="text-gray-500">—</span>') + '</td>';
   return html;
 })() : ''}
-<td class="col-attendance td-section-start p-2 text-center${(() => { try { var r = localStorage.getItem('adora_current_role'); var submitted = typeof isAdminLinkSubmitted === 'function' && isAdminLinkSubmitted(); return (r === 'hr' && !submitted) ? ' admin-entry-zone admin-entry-hr' : ''; } catch(e) { return ''; } })()}">
+<td class="col-attendance td-section-start td-section-end p-2 text-center${(() => { try { var r = localStorage.getItem('adora_current_role'); var submitted = typeof isAdminLinkSubmitted === 'function' && isAdminLinkSubmitted(); return (r === 'hr' && !submitted) ? ' admin-entry-zone admin-entry-hr' : ''; } catch(e) { return ''; } })()}">
 <div class="flex flex-row items-center justify-center gap-1">
 <div class="attendance-readonly-accounting flex flex-col items-center gap-1" style="display:none;">${(() => { const allEb = db.filter(e => e.name === emp.name); const isDup = filter === 'الكل' && allEb.length > 1; let days = 0, totalDays = 0, branchDaysStr = (emp.attendanceDaysPerBranch && emp.attendanceDaysPerBranch[emp.branch]) || '0'; if (isDup && filter === 'الكل') { totalDays = allEb.reduce((s, eb) => s + (parseInt(eb.attendanceDaysPerBranch && eb.attendanceDaysPerBranch[eb.branch]) || 0), 0); days = totalDays; } else { days = parseInt(branchDaysStr) || 0; } const colorClass = days >= 26 ? 'text-green-400' : 'text-red-400'; const statusText = days >= 26 ? 'تم' : 'لم يتم'; const daysSpan = days < 26 ? '<span class="text-yellow-300 text-sm font-bold">' + days + ' يوم</span>' : ''; const totalSpan = (isDup && filter === 'الكل') ? '' : (!isDup ? '<span class="text-[9px] text-yellow-300">' + emp.branch + ': ' + branchDaysStr + '</span>' : ''); const statusWithTotal = (isDup && filter === 'الكل' && days >= 26) ? (statusText + ' ' + totalDays) : statusText;
 return '<span class="text-[9px] font-bold ' + colorClass + '">' + statusWithTotal + '</span>' + daysSpan + totalSpan; })()}</div>
@@ -5667,20 +5648,20 @@ function exportPdfTableAll() {
   var ROW_ALT = '#f5f5f5';
   var TOTAL_BG = '#f0f0f0';
   var TOTAL_BORDER = BLACK;
-  var MAX_MM = 287;
+  var MAX_MM = 292;
 
   function esc(s) {
     return String(s == null ? '' : s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
   }
-  var PDF_FONT_CELL = '11.25px';
-  var PDF_FONT_HEADER = '8px';
-  var PDF_FONT_NET = '18.75px';
-  var PDF_FONT_TOTAL = '17.5px';
-  var PDF_FONT_NAME = '12.15px';
-  var PDF_PADDING = '2.85px 4px';
-  var PDF_HEADER_PADDING = '3.3px 4px';
+  var PDF_FONT_CELL = '9.5px';
+  var PDF_FONT_HEADER = '7px';
+  var PDF_FONT_NET = '16px';
+  var PDF_FONT_TOTAL = '15px';
+  var PDF_FONT_NAME = '10.5px';
+  var PDF_PADDING = '1.5px 3px';
+  var PDF_HEADER_PADDING = '2px 3px';
   function tdNameCell(name) {
-    return '<td style="padding:2.7px 4px;border:1px solid ' + CELL_BORDER + ';text-align:right;font-size:' + PDF_FONT_NAME + ';color:#000000;background:transparent;font-weight:700;font-family:' + FONT + ';line-height:2.05;overflow:hidden;">' + esc(String(name)) + '</td>';
+    return '<td style="padding:' + PDF_PADDING + ';border:1px solid ' + CELL_BORDER + ';text-align:right;font-size:' + PDF_FONT_NAME + ';color:#000000;background:transparent;font-weight:700;font-family:' + FONT + ';line-height:1.6;overflow:hidden;">' + esc(String(name)) + '</td>';
   }
   function tdCell(val, align, isTotal, isNet) {
     var a = align || 'center';
@@ -5693,7 +5674,7 @@ function exportPdfTableAll() {
     if (isNet) fs = PDF_FONT_NET;
     else if (isTotal && val !== '' && String(val) !== 'الإجمالي' && !isNaN(parseFloat(String(val).replace(/[\s\u0660-\u0669,]/g, '')))) fs = PDF_FONT_TOTAL;
     var pad = isTotal ? PDF_HEADER_PADDING : PDF_PADDING;
-    return '<td style="padding:' + pad + ';border:1px solid ' + border + ';text-align:' + a + ';font-size:' + fs + ';color:' + color + ';background:' + bg + ';font-weight:' + fw + ';font-family:' + FONT + ';line-height:2.05;overflow:hidden;">' + esc(String(val)) + '</td>';
+    return '<td style="padding:' + pad + ';border:1px solid ' + border + ';text-align:' + a + ';font-size:' + fs + ';color:' + color + ';background:' + bg + ';font-weight:' + fw + ';font-family:' + FONT + ';line-height:1.5;overflow:hidden;">' + esc(String(val)) + '</td>';
   }
   function tdTotalLabel2() {
     return '<td colspan="2" style="padding:' + PDF_HEADER_PADDING + ';border:1px solid ' + HEADER_BORDER + ';text-align:right;font-size:12px;color:' + HEADER_TEXT + ';background:' + HEADER_BG + ' !important;font-weight:700;font-family:' + FONT + ';line-height:2.1;">' + esc('الإجمالي') + '</td>';
@@ -5723,15 +5704,15 @@ function exportPdfTableAll() {
   var nVip = vipRooms.length;
   var fundRate = typeof getSupportFundRate === 'function' ? getSupportFundRate() : 0.15;
   var pricing = typeof getPricingConfig === 'function' ? getPricingConfig() : {};
-  var totalCols = (hasBreakdown && nVip > 0) ? (14 + nVip) : 6;
-  var totals = { contracts: 0, reception: 0, booking: 0, morning: 0, evening: 0, night: 0, alertCount: 0, alertTotal: 0, evalBooking: 0, evalGoogle: 0, count: 0, net: 0 };
+  var totalCols = (hasBreakdown && nVip > 0) ? (15 + nVip) : 6;
+  var totals = { contracts: 0, reception: 0, booking: 0, morning: 0, evening: 0, night: 0, monthlyContracts: 0, alertCount: 0, alertTotal: 0, evalBooking: 0, evalGoogle: 0, count: 0, net: 0 };
 
   var thead = '';
   if (hasBreakdown && nVip > 0) {
-    thead += '<tr>' + th1('بيانات الموظف', 2) + th1('الحجوزات', 6) + th1('الشفتات', 3) + th1('VIP', nVip) + th1('التقييمات', 2) + th1('المكافأة', 1) + '</tr>';
+    thead += '<tr>' + th1('بيانات الموظف', 2) + th1('الحجوزات', 6) + th1('الشفتات', 3) + th1('VIP', nVip) + th1('الشهري', 1) + th1('التقييمات', 2) + th1('المكافأة', 1) + '</tr>';
     thead += '<tr>' + th2('م') + th2('الموظف') + th2('العقود') + th2('استقبال') + th2('بوكينج') + th2('صباح') + th2('مساء') + th2('ليل') + th2('صباح') + th2('مساء') + th2('ليل');
     for (var v = 0; v < nVip; v++) thead += th2(vipRooms[v]);
-    thead += th2('GOOGLE') + th2('BOOKING') + th2('الصافي') + '</tr>';
+    thead += th2('الشهري') + th2('GOOGLE') + th2('BOOKING') + th2('الصافي') + '</tr>';
   } else {
     thead += '<tr>' + th1('بيانات الموظف', 2) + th1('الحجوزات', 1) + th1('التقييمات', 2) + th1('المكافأة', 1) + '</tr>';
     thead += '<tr>' + th2('م') + th2('الموظف') + th2('عدد الحجوزات') + th2('GOOGLE') + th2('BOOKING') + th2('الصافي') + '</tr>';
@@ -5740,7 +5721,7 @@ function exportPdfTableAll() {
   var tbody = '';
   uniqueNames.forEach(function (name, idx) {
     var allEmpBranches = db.filter(function (e) { return e.name === name; });
-    var agg = { count: 0, reception: 0, booking: 0, morning: 0, evening: 0, night: 0, alertCount: 0, alertTotal: 0, evalBooking: 0, evalGoogle: 0, attendanceDone: false, vipRooms: {} };
+    var agg = { count: 0, reception: 0, booking: 0, morning: 0, evening: 0, night: 0, monthlyContracts: 0, alertCount: 0, alertTotal: 0, evalBooking: 0, evalGoogle: 0, attendanceDone: false, vipRooms: {} };
     allEmpBranches.forEach(function (e) {
       agg.count += e.count || 0;
       agg.reception += e._reception || 0;
@@ -5748,6 +5729,7 @@ function exportPdfTableAll() {
       agg.morning += e._morning || 0;
       agg.evening += e._evening || 0;
       agg.night += e._night || 0;
+      agg.monthlyContracts += e._monthlyContracts || 0;
       agg.alertCount += e._alertCount || 0;
       agg.alertTotal += e._alertTotal || 0;
       agg.evalBooking += e.evaluationsBooking || 0;
@@ -5762,16 +5744,18 @@ function exportPdfTableAll() {
     var netStr = Number(netNum).toFixed(2);
     var attendanceStr = agg.attendanceDone ? 'تم' : 'لم يتم';
 
-    var bd = { reception: 0, booking: 0, vip: 0, evalBooking: 0, evalGoogle: 0 };
+    var bd = { reception: 0, booking: 0, vip: 0, monthlyContracts: 0, evalBooking: 0, evalGoogle: 0 };
+    var rateMC = (pricing && typeof pricing.rateMonthlyContract === 'number') ? pricing.rateMonthlyContract : 200;
     allEmpBranches.forEach(function (e) {
-      var c = typeof computeGrossBreakdown === 'function' ? computeGrossBreakdown(e, pricing) : { reception: 0, booking: 0, vip: 0, evalBooking: 0, evalGoogle: 0 };
+      var c = typeof computeGrossBreakdown === 'function' ? computeGrossBreakdown(e, pricing) : { reception: 0, booking: 0, vip: 0, monthlyContracts: 0, evalBooking: 0, evalGoogle: 0 };
       bd.reception += c.reception || 0;
       bd.booking += c.booking || 0;
       bd.vip += c.vip || 0;
+      bd.monthlyContracts += c.monthlyContracts || 0;
       bd.evalBooking += c.evalBooking || 0;
       bd.evalGoogle += c.evalGoogle || 0;
     });
-    var gross = bd.reception + bd.booking + bd.vip + bd.evalBooking + bd.evalGoogle;
+    var gross = bd.reception + bd.booking + bd.vip + bd.monthlyContracts + bd.evalBooking + bd.evalGoogle;
     var fund = gross * fundRate;
     var diff = netNum - (gross - fund);
     var pct = (fundRate * 100).toFixed(0);
@@ -5781,7 +5765,8 @@ function exportPdfTableAll() {
     var incomePartsHtml = [];
     if (bd.reception > 0) incomePartsHtml.push(esc('حجوزات استقبال ') + numSpan(bd.reception) + esc(' ريال'));
     if (bd.booking > 0) incomePartsHtml.push(esc('بوكينج ') + numSpan(bd.booking) + esc(' ريال'));
-    if (bd.vip > 0) incomePartsHtml.push(esc('غرف VIP ') + numSpan(bd.vip) + esc(' ريال '));
+    if (bd.vip > 0) incomePartsHtml.push(esc('غرف VIP ') + numSpan(bd.vip) + esc(' ريال'));
+    if (bd.monthlyContracts > 0) incomePartsHtml.push(esc('عقود شهرية ') + numSpan(bd.monthlyContracts) + esc(' ريال'));
     if (bd.evalBooking > 0) incomePartsHtml.push(esc('تقييم بوكينج ') + numSpan(bd.evalBooking) + esc(' ريال'));
     if (bd.evalGoogle > 0) incomePartsHtml.push(esc('تقييم جوجل ') + numSpan(bd.evalGoogle) + esc(' ريال'));
     var incomeHtml = incomePartsHtml.join(' — ');
@@ -5789,7 +5774,7 @@ function exportPdfTableAll() {
     if (diff > 0) deductText += ' — حوافز إضافية ' + Number(diff).toFixed(2) + ' ريال';
     if (diff < 0) deductText += ' — خصومات ' + Number(-diff).toFixed(2) + ' ريال';
     var resultText = 'النتيجة النهائية (صافي المستحق) ' + netStr + ' ريال';
-    var explainHtml = '<div style="font-family:' + FONT + ';font-size:8px;line-height:2.34;padding:3.8px 6px;text-align:right;direction:rtl;color:' + BLACK + ';max-width:100%;overflow:hidden;box-sizing:border-box;word-spacing:1px;">' +
+    var explainHtml = '<div style="font-family:' + FONT + ';font-size:7px;line-height:1.8;padding:2px 4px;text-align:right;direction:rtl;color:' + BLACK + ';max-width:100%;overflow:hidden;box-sizing:border-box;word-spacing:1px;">' +
       '<span style="white-space:normal;word-break:break-word;">' +
       '<span style="color:' + BLACK + ';font-weight:500;">' + incomeHtml + '</span>' +
       ' <span style="color:' + BLACK + ';">|</span> ' +
@@ -5809,12 +5794,13 @@ function exportPdfTableAll() {
       totals.night += agg.night;
       totals.alertCount += agg.alertCount;
       totals.alertTotal += agg.alertTotal;
+      totals.monthlyContracts += agg.monthlyContracts;
       totals.evalGoogle += agg.evalGoogle;
       totals.evalBooking += agg.evalBooking;
       totals.net += netNum;
       tbody += '<tr style="background:' + rowBg + '">' + tdCell(idx + 1) + tdNameCell(name) + tdCell(contracts) + tdCell(agg.reception) + tdCell(agg.booking) + tdCell(agg.morning) + tdCell(agg.evening) + tdCell(agg.night) + tdCell(agg.morning) + tdCell(agg.evening) + tdCell(agg.night);
       vipRooms.forEach(function (num) { tbody += tdCell(agg.vipRooms[num] || 0); });
-      tbody += tdCell(agg.evalGoogle) + tdCell(agg.evalBooking) + tdCell(netStr, 'center', false, true) + '</tr>' + explainRow;
+      tbody += tdCell(agg.monthlyContracts) + tdCell(agg.evalGoogle) + tdCell(agg.evalBooking) + tdCell(netStr, 'center', false, true) + '</tr>' + explainRow;
     } else {
       totals.count += agg.count;
       totals.evalGoogle += agg.evalGoogle;
@@ -5840,7 +5826,7 @@ function exportPdfTableAll() {
   if (hasBreakdown && nVip > 0) {
     tfoot += tdTotalLabel2() + tdCell(totals.contracts, null, true) + tdCell(totals.reception, null, true) + tdCell(totals.booking, null, true) + tdCell(totals.morning, null, true) + tdCell(totals.evening, null, true) + tdCell(totals.night, null, true) + tdCell(totals.morning, null, true) + tdCell(totals.evening, null, true) + tdCell(totals.night, null, true);
     vipRooms.forEach(function () { tfoot += tdCell('', null, true); });
-    tfoot += tdCell(totals.evalGoogle, null, true) + tdCell(totals.evalBooking, null, true) + tdCell(totalNetStr, 'center', true, true);
+    tfoot += tdCell(totals.monthlyContracts, null, true) + tdCell(totals.evalGoogle, null, true) + tdCell(totals.evalBooking, null, true) + tdCell(totalNetStr, 'center', true, true);
   } else {
     tfoot += tdTotalLabel2() + tdCell(totals.count, null, true) + tdCell(totals.evalGoogle, null, true) + tdCell(totals.evalBooking, null, true) + tdCell(totalNetStr, 'center', true, true);
   }
@@ -5856,26 +5842,26 @@ function exportPdfTableAll() {
     '<td style="padding:' + PDF_HEADER_PADDING + ';border:1px solid ' + HEADER_BORDER + ';text-align:center;font-size:' + PDF_FONT_TOTAL + ';font-weight:700;background:' + HEADER_BG + ' !important;color:' + HEADER_TEXT + ';font-family:' + FONT + ';">' + esc(totalDisplay) + ' ريال</td>' +
     '</tr>';
 
-  var approvalHtml = '<div style="margin-top:6px;font-family:' + FONT + ';"><table style="width:100%;max-width:100%;table-layout:fixed;border-collapse:separate;border-spacing:0;border:2px solid ' + BLACK + ';border-radius:6px;background:#f5f5f5;"><tr>' +
-    '<td style="width:22%;min-width:0;border:1px solid ' + BLACK + ';padding:6px 8px 10px 8px;text-align:center;vertical-align:top;background:#fff;"><div style="font-weight:700;font-size:8.8px;color:' + BLACK + ';">اعتماد المشرف</div><div style="font-size:7.7px;color:' + BLACK + ';margin-top:18px;">التوقيع / الختم</div></td>' +
-    '<td style="width:22%;min-width:0;border:1px solid ' + BLACK + ';padding:6px 8px 10px 8px;text-align:center;vertical-align:top;background:#fff;"><div style="font-weight:700;font-size:8.8px;color:' + BLACK + ';">اعتماد مدير التشغيل</div><div style="font-size:7.7px;color:' + BLACK + ';margin-top:18px;">التوقيع / الختم</div></td>' +
-    '<td style="width:56%;min-width:0;border:1px solid ' + BLACK + ';padding:6px 8px 10px 8px;text-align:center;vertical-align:top;background:#fff;"><div style="font-weight:700;font-size:8.8px;color:' + BLACK + ';margin-bottom:3px;">اعتماد الحسابات</div><div style="font-size:7.7px;color:' + BLACK + ';margin-top:18px;">التوقيع / الختم</div></td></tr></table></div>';
+  var approvalHtml = '<div style="margin-top:8px;font-family:' + FONT + ';"><table style="width:100%;max-width:100%;table-layout:fixed;border-collapse:separate;border-spacing:0;border:2px solid ' + BLACK + ';border-radius:6px;background:#f5f5f5;"><tr>' +
+    '<td style="width:22%;min-width:0;border:1px solid ' + BLACK + ';padding:14px 10px;min-height:28mm;text-align:center;vertical-align:top;background:#fff;"><div style="font-weight:700;font-size:12px;color:' + BLACK + ';">اعتماد المشرف</div><div style="font-size:10px;color:' + BLACK + ';margin-top:12px;">التوقيع / الختم</div></td>' +
+    '<td style="width:22%;min-width:0;border:1px solid ' + BLACK + ';padding:14px 10px;min-height:28mm;text-align:center;vertical-align:top;background:#fff;"><div style="font-weight:700;font-size:12px;color:' + BLACK + ';">اعتماد مدير التشغيل</div><div style="font-size:10px;color:' + BLACK + ';margin-top:12px;">التوقيع / الختم</div></td>' +
+    '<td style="width:56%;min-width:0;border:1px solid ' + BLACK + ';padding:14px 10px;min-height:28mm;text-align:center;vertical-align:top;background:#fff;"><div style="font-weight:700;font-size:12px;color:' + BLACK + ';">اعتماد الحسابات</div><div style="font-size:10px;color:' + BLACK + ';margin-top:12px;">التوقيع / الختم</div></td></tr></table></div>';
 
   var colgroup = '';
   if (hasBreakdown && nVip > 0) {
-    colgroup = '<colgroup><col style="width:3%"><col style="width:22%"><col style="width:5%"><col style="width:5%"><col style="width:5%"><col style="width:4%"><col style="width:4%"><col style="width:4%"><col style="width:4%"><col style="width:4%"><col style="width:4%">';
-    for (var v = 0; v < nVip; v++) colgroup += '<col style="width:2%">';
-    colgroup += '<col style="width:4%"><col style="width:4%"><col style="width:14%"></colgroup>';
+    colgroup = '<colgroup><col style="width:2.5%"><col style="width:18%"><col style="width:4%"><col style="width:4%"><col style="width:4%"><col style="width:3%"><col style="width:3%"><col style="width:3%"><col style="width:3%"><col style="width:3%"><col style="width:3%">';
+    for (var v = 0; v < nVip; v++) colgroup += '<col style="width:1.5%">';
+    colgroup += '<col style="width:3%"><col style="width:3%"><col style="width:3%"><col style="width:12%"></colgroup>';
   } else {
     colgroup = '<colgroup><col style="width:4%"><col style="width:28%"><col style="width:12%"><col style="width:12%"><col style="width:12%"><col style="width:32%"></colgroup>';
   }
   var tableHtml = '<div style="border:1px solid ' + CELL_BORDER + ';border-radius:4px;overflow:hidden;margin-top:0;"><table dir="rtl" style="width:100%;max-width:100%;table-layout:fixed;border-collapse:collapse;font-family:' + FONT + ';font-size:' + PDF_FONT_CELL + ';background:#fff;">' +
     colgroup + '<thead>' + thead + '</thead><tbody>' + tbody + '</tbody><tfoot>' + tfoot + '</tfoot></table></div>';
-  var headerHtml = '<header style="padding-bottom:0;margin-bottom:0;border-bottom:1px solid ' + BLACK + ';display:flex;align-items:center;justify-content:space-between;gap:4px;flex-wrap:wrap;">' +
-    '<div style="text-align:right;flex:1;min-width:0;"><h1 style="margin:0;font-size:12px;font-weight:600;color:' + BLACK + ';font-family:' + FONT + ';">تقرير مكافآت فنادق إليت</h1>' +
-    '<p style="margin:0;font-size:8px;color:' + BLACK + ';font-family:' + FONT + ';">الفترة: ' + esc(periodText) + ' — تاريخ التصدير: ' + esc(reportDate) + '</p></div>' +
-    '<img src="unnamed.png" alt="إليت" style="height:28px;width:auto;object-fit:contain;" onerror="this.style.display=\'none\'"></header>';
-  var fullHtml = '<div dir="rtl" lang="ar" style="width:100%;max-width:' + MAX_MM + 'mm;margin:0 auto;box-sizing:border-box;padding:2px;background:#fff;color:' + BLACK + ';font-family:' + FONT + ';">' + headerHtml + tableHtml + approvalHtml + '</div>';
+  var headerHtml = '<header style="padding-bottom:6px;margin-bottom:6px;border-bottom:2px solid ' + BLACK + ';display:flex;align-items:center;justify-content:space-between;gap:6px;flex-wrap:wrap;">' +
+    '<div style="text-align:right;flex:1;min-width:0;"><h1 style="margin:0;font-size:16px;font-weight:700;color:' + BLACK + ';font-family:' + FONT + ';">تقرير مكافآت فنادق إليت</h1>' +
+    '<p style="margin:4px 0 0 0;font-size:11px;color:' + BLACK + ';font-family:' + FONT + ';">الفترة: ' + esc(periodText) + ' — تاريخ التصدير: ' + esc(reportDate) + '</p></div>' +
+    '<img src="unnamed.png" alt="إليت" style="height:36px;width:auto;object-fit:contain;" onerror="this.style.display=\'none\'"></header>';
+  var fullHtml = '<div dir="rtl" lang="ar" style="width:100%;max-width:' + MAX_MM + 'mm;margin:0 auto;box-sizing:border-box;padding:1px;background:#fff;color:' + BLACK + ';font-family:' + FONT + ';">' + headerHtml + tableHtml + approvalHtml + '</div>';
 
   var fileName = 'تقرير-مكافآت-الكل-' + (periodText.replace(/\s/g, '-').replace(/[^\w\u0600-\u06FF\-]/g, '').substring(0, 28)) + '.pdf';
   if (fileName.length > 55) fileName = fileName.substring(0, 55);
@@ -5897,15 +5883,16 @@ function exportPdfTableAll() {
     var wrap = document.createElement('div');
     wrap.setAttribute('dir', 'rtl');
     wrap.setAttribute('lang', 'ar');
-    wrap.style.cssText = 'width:' + MAX_MM + 'mm;max-width:100%;max-height:208mm;overflow:hidden;margin:0 auto;padding:0;background:#fff;color:#000;font-family:' + FONT + ';box-sizing:border-box;';
+    wrap.style.cssText = 'width:' + MAX_MM + 'mm;max-width:100%;max-height:205mm;overflow:hidden;margin:0 auto;padding:0;background:#fff;color:#000;font-family:' + FONT + ';box-sizing:border-box;';
     var scaleInner = document.createElement('div');
-    scaleInner.style.cssText = 'transform:scale(0.78);transform-origin:top right;width:' + (100 / 0.78) + '%;';
+    var scaleVal = 0.98;
+    scaleInner.style.cssText = 'transform:scale(' + scaleVal + ');transform-origin:top right;width:' + (100 / scaleVal) + '%;';
     scaleInner.innerHTML = fullHtml;
     wrap.appendChild(scaleInner);
     document.body.appendChild(wrap);
     function runPdf() {
       var opt = {
-        margin: [1, 3, 1, 3],
+        margin: [3, 4, 3, 4],
         filename: fileName,
         image: { type: 'png', quality: 1 },
         html2canvas: { scale: 6, useCORS: true, logging: false, allowTaint: true, letterRendering: true },
@@ -6091,7 +6078,7 @@ const commitmentBonus = hasCommitmentBonus ? 50 : 0;
 const gross = computeGrossFromBreakdown(emp, _pricingRenderUI);
 const fund = gross * getSupportFundRate();
 let net = gross - fund;
-const attendanceBonus = attendance26Days ? net * 0.25 : 0;
+const attendanceBonus = attendance26Days ? CHALLENGE_BONUS_RIYALS : 0;
 net = net + attendanceBonus;
 return { net, ev, count: emp.count, branch: emp.branch, name: emp.name, id: emp.id, fund, 
 excellenceBonus, hasExcellenceBonus, commitmentBonus, hasCommitmentBonus, 
@@ -6148,59 +6135,69 @@ challengeRowId: challengeRowId
 }
 }
 });
+// Apply same exclusions as جدول الكل: minBookingThreshold + excluded branches
+let printDb = [...db];
+const minThreshold = (typeof window !== 'undefined' && window.minBookingThreshold != null) ? window.minBookingThreshold : 0;
+let excludedBranches = new Set();
+try {
+  const cfg = (typeof window !== 'undefined' && window.adoraConfig) ? window.adoraConfig : (typeof localStorage !== 'undefined' ? JSON.parse(localStorage.getItem('adora_rewards_config') || '{}') : {});
+  if (cfg && cfg.branches && typeof cfg.branches === 'object') {
+    Object.keys(cfg.branches).forEach(function(b) { if (cfg.branches[b] && cfg.branches[b].excluded === true) excludedBranches.add(b); });
+  }
+} catch (_) {}
+if (excludedBranches.size > 0) printDb = printDb.filter(e => !excludedBranches.has(e.branch));
+if (minThreshold > 0) {
+  if (filter === 'الكل') {
+    const nameToAggCount = {};
+    printDb.forEach(e => { nameToAggCount[e.name] = (nameToAggCount[e.name] || 0) + (e.count || 0); });
+    const namesBelow = new Set(Object.keys(nameToAggCount).filter(n => (nameToAggCount[n] || 0) < minThreshold));
+    printDb = printDb.filter(e => !namesBelow.has(e.name));
+  } else {
+    printDb = printDb.filter(e => (e.count || 0) >= minThreshold);
+  }
+}
 // Process employees for print — عند "طباعة الكل" نُجمّع المتكررين في صف واحد مثل عرض "الكل"
 const printRows = [];
 if (filter === 'الكل' && !onlySelected) {
   // One row per unique employee name (aggregated like "الكل" view)
-  const uniqueNames = [...new Set(db.map(e => e.name))];
+  const uniqueNames = [...new Set(printDb.map(e => e.name))];
   uniqueNames.sort((a, b) => a.localeCompare(b, 'ar'));
   uniqueNames.forEach(name => {
-    const allEmpBranches = db.filter(e => e.name === name);
+    const allEmpBranches = printDb.filter(e => e.name === name);
     const firstEmp = allEmpBranches[0];
     const aggregatedCount = allEmpBranches.reduce((sum, e) => sum + (e.count || 0), 0);
     const aggregatedStaffCount = allEmpBranches.reduce((sum, e) => sum + (e._staffCount != null ? e._staffCount : (e.count || 0)), 0);
     const aggregatedEvalBooking = allEmpBranches.reduce((sum, e) => sum + (e.evaluationsBooking || 0), 0);
     const aggregatedEvalGoogle = allEmpBranches.reduce((sum, e) => sum + (e.evaluationsGoogle || 0), 0);
+    const aggregatedMonthlyContracts = allEmpBranches.reduce((sum, e) => sum + (e._monthlyContracts || 0), 0);
     let aggregatedDays = 0;
     if (firstEmp && firstEmp.attendanceDaysPerBranch) {
       aggregatedDays = Object.values(firstEmp.attendanceDaysPerBranch).reduce((sum, d) => sum + (parseInt(d) || 0), 0);
     } else {
       aggregatedDays = firstEmp?.totalAttendanceDays || (firstEmp?.attendance26Days === true ? 26 : 0);
     }
-    // حافز تحدي الظروف (25%): مرة واحدة للمتكرر — الفرع الذي له أعلى صافي بعد الـ 25%
-    let challengeRowId = null;
-    let maxChallengeTotalAmount = -1;
+    // الحوافز للمتكرر: مرة واحدة في الفرع الأكثر صافي (قبل الحوافز)
+    let bestBranchIdPrint = allEmpBranches[0].id;
+    let maxNetBasePrint = -1;
     allEmpBranches.forEach(branchEmp => {
-      const branchRate = branchEmp.count > 100 ? 3 : (branchEmp.count > 50 ? 2 : 1);
-      const branchEvBooking = branchEmp.evaluationsBooking || 0;
-      const branchEvGoogle = branchEmp.evaluationsGoogle || 0;
       const branchGross = computeGrossFromBreakdown(branchEmp);
-      const branchFund = branchGross * getSupportFundRate();
-      let eNet = branchGross - branchFund;
-      const eAttendance26Days = branchEmp.attendance26Days === true;
-      const eAttendanceBonus = eAttendance26Days ? eNet * 0.25 : 0;
-      eNet = eNet + eAttendanceBonus;
-      if (eAttendance26Days && eAttendanceBonus > 0 && eNet > maxChallengeTotalAmount) {
-        maxChallengeTotalAmount = eNet;
-        challengeRowId = branchEmp.id;
-      }
+      const netBase = branchGross - branchGross * getSupportFundRate();
+      if (netBase > maxNetBasePrint) { maxNetBasePrint = netBase; bestBranchIdPrint = branchEmp.id; }
     });
     let totalNetFromBranches = 0;
     let totalFundFromBranches = 0;
     let hasExcellenceForEmployee = false;
     let hasCommitmentForEmployee = false;
     allEmpBranches.forEach(branchEmp => {
-      const branchRate = branchEmp.count > 100 ? 3 : (branchEmp.count > 50 ? 2 : 1);
-      const branchEvBooking = branchEmp.evaluationsBooking || 0;
-      const branchEvGoogle = branchEmp.evaluationsGoogle || 0;
       const branchGross = computeGrossFromBreakdown(branchEmp);
       const branchFund = branchGross * getSupportFundRate();
       let branchNet = branchGross - branchFund;
       const branchAttendance26Days = branchEmp.attendance26Days === true;
-      const branchAttendanceBonus = (branchAttendance26Days && challengeRowId === branchEmp.id) ? branchNet * 0.25 : 0;
+      const branchAttendanceBonus = (branchAttendance26Days && bestBranchIdPrint === branchEmp.id) ? CHALLENGE_BONUS_RIYALS : 0;
       branchNet = branchNet + branchAttendanceBonus;
       totalNetFromBranches += branchNet;
       totalFundFromBranches += branchFund;
+      if (branchEmp.id !== bestBranchIdPrint) return;
       const bw = branchWinners[branchEmp.branch];
       if (bw && bw.book.ids.includes(branchEmp.id) && bw.eval.ids.includes(branchEmp.id) && bw.book.val > 0 && bw.eval.val > 0) hasExcellenceForEmployee = true;
       if (bw && branchAttendance26Days && ((bw.eval.ids.includes(branchEmp.id) && bw.eval.val > 0) || (bw.book.ids.includes(branchEmp.id) && bw.book.val > 0))) hasCommitmentForEmployee = true;
@@ -6220,8 +6217,8 @@ if (filter === 'الكل' && !onlySelected) {
     }
     const rate = getDisplayRate(aggregatedCount);
     // Build a virtual emp for gross calculation using aggregated breakdown fields
-    var _aggEmp = { _reception: 0, _booking: 0, _morning: 0, _evening: 0, _night: 0, _receptionMorning: 0, _receptionEvening: 0, _receptionNight: 0, _bookingRegular: 0, _vipRooms: {}, _vipBySource: {}, _vipMorning: 0, _vipEvening: 0, _vipNight: 0, evaluationsBooking: aggregatedEvalBooking, evaluationsGoogle: aggregatedEvalGoogle };
-    allEmpBranches.forEach(function(be) { _aggEmp._reception += be._reception || 0; _aggEmp._booking += be._booking || 0; _aggEmp._morning += be._morning || 0; _aggEmp._evening += be._evening || 0; _aggEmp._night += be._night || 0; _aggEmp._receptionMorning += be._receptionMorning || 0; _aggEmp._receptionEvening += be._receptionEvening || 0; _aggEmp._receptionNight += be._receptionNight || 0; _aggEmp._bookingRegular += be._bookingRegular || 0; _aggEmp._vipMorning += be._vipMorning || 0; _aggEmp._vipEvening += be._vipEvening || 0; _aggEmp._vipNight += be._vipNight || 0; if (be._vipRooms) Object.keys(be._vipRooms).forEach(function(k) { _aggEmp._vipRooms[k] = (_aggEmp._vipRooms[k] || 0) + (be._vipRooms[k] || 0); }); if (be._vipBySource) Object.keys(be._vipBySource).forEach(function(k) { if (!_aggEmp._vipBySource[k]) _aggEmp._vipBySource[k] = { reception: 0, booking: 0 }; _aggEmp._vipBySource[k].reception += (be._vipBySource[k].reception || 0); _aggEmp._vipBySource[k].booking += (be._vipBySource[k].booking || 0); }); });
+    var _aggEmp = { _reception: 0, _booking: 0, _morning: 0, _evening: 0, _night: 0, _monthlyContracts: 0, _receptionMorning: 0, _receptionEvening: 0, _receptionNight: 0, _bookingRegular: 0, _vipRooms: {}, _vipBySource: {}, _vipMorning: 0, _vipEvening: 0, _vipNight: 0, evaluationsBooking: aggregatedEvalBooking, evaluationsGoogle: aggregatedEvalGoogle };
+    allEmpBranches.forEach(function(be) { _aggEmp._reception += be._reception || 0; _aggEmp._booking += be._booking || 0; _aggEmp._morning += be._morning || 0; _aggEmp._evening += be._evening || 0; _aggEmp._night += be._night || 0; _aggEmp._monthlyContracts += be._monthlyContracts || 0; _aggEmp._receptionMorning += be._receptionMorning || 0; _aggEmp._receptionEvening += be._receptionEvening || 0; _aggEmp._receptionNight += be._receptionNight || 0; _aggEmp._bookingRegular += be._bookingRegular || 0; _aggEmp._vipMorning += be._vipMorning || 0; _aggEmp._vipEvening += be._vipEvening || 0; _aggEmp._vipNight += be._vipNight || 0; if (be._vipRooms) Object.keys(be._vipRooms).forEach(function(k) { _aggEmp._vipRooms[k] = (_aggEmp._vipRooms[k] || 0) + (be._vipRooms[k] || 0); }); if (be._vipBySource) Object.keys(be._vipBySource).forEach(function(k) { if (!_aggEmp._vipBySource[k]) _aggEmp._vipBySource[k] = { reception: 0, booking: 0 }; _aggEmp._vipBySource[k].reception += (be._vipBySource[k].reception || 0); _aggEmp._vipBySource[k].booking += (be._vipBySource[k].booking || 0); }); });
     const gross = computeGrossFromBreakdown(_aggEmp);
     const fund = totalFundFromBranches;
     const badges = [];
@@ -6251,6 +6248,7 @@ if (filter === 'الكل' && !onlySelected) {
       branch: 'جميع الفروع',
       count: aggregatedCount,
       staffCount: aggregatedStaffCount,
+      monthlyContracts: aggregatedMonthlyContracts,
       totalDiscountAmount: totalDiscountAmount,
       discountDetails: discountDetails,
       rate: rate,
@@ -6265,7 +6263,8 @@ if (filter === 'الكل' && !onlySelected) {
       finalNet: finalNet,
       badges: badges,
       attendance26Days: attendance26Days,
-      explanation: explanationText
+      explanation: explanationText,
+      _emp: _aggEmp
     });
   });
 } else {
@@ -6320,7 +6319,7 @@ if (filter === 'الكل' && !onlySelected) {
     totalCommitmentBonus += finalCommitmentBonus;
     const explanations = [];
     if (finalAttendanceBonus > 0) {
-      explanations.push(`حافز تحدي الظروف (25%): +${finalAttendanceBonus.toFixed(2)} ريال`);
+      explanations.push(`حافز تحدي الظروف (50 ريال): +${finalAttendanceBonus.toFixed(2)} ريال`);
     }
     if (finalExcellenceBonus > 0) {
       const isMostEval = branchWinners[s.branch]?.eval.ids.includes(s.id) && branchWinners[s.branch].eval.val > 0;
@@ -6343,6 +6342,7 @@ if (filter === 'الكل' && !onlySelected) {
       branch: s.branch,
       count: s.count,
       staffCount: rowStaffCount,
+      monthlyContracts: emp._monthlyContracts || 0,
       totalDiscountAmount: totalDiscountAmount,
       discountDetails: discountDetails,
       rate: s.count > 100 ? 3 : (s.count > 50 ? 2 : 1),
@@ -6357,7 +6357,8 @@ if (filter === 'الكل' && !onlySelected) {
       finalNet: finalNet,
       badges: badges,
       attendance26Days: finalAttendance26Days,
-      explanation: explanationText
+      explanation: explanationText,
+      _emp: emp
     });
   });
 }
@@ -6368,6 +6369,7 @@ return;
 }
 
 const totalStaffCount = printRows.reduce((sum, r) => sum + (r.staffCount != null ? r.staffCount : r.count), 0);
+const totalMonthlyContracts = printRows.reduce((sum, r) => sum + (r.monthlyContracts || 0), 0);
 
 // Generate HTML — عند طباعة الكل تكون الصفحة بالعرض (landscape) وتقرير محاسبي بصفوف ضيقة بدون أيقونات — كل البيانات من جدول الكل (عدة العقود من _staffCount أو count)
 const printWindow = window.open('', '_blank');
@@ -6375,7 +6377,7 @@ const reportTitle = filter === 'الكل' ? 'جميع الفروع' : filter;
 const useLandscape = !onlySelected && filter === 'الكل';
 const accountingStyle = !onlySelected && filter === 'الكل';
 const printContent = generatePrintHTML(reportTitle, periodText, reportDate, printRows, {
-totalFund, totalNet, totalEval, totalBookings, totalNetNoEval, totalStaffCount,
+totalFund, totalNet, totalEval, totalBookings, totalNetNoEval, totalStaffCount, totalMonthlyContracts,
 totalExcellenceBonus, totalCommitmentBonus
 }, useLandscape, accountingStyle);
 printWindow.document.write(printContent);
@@ -6396,7 +6398,7 @@ return `<!DOCTYPE html>
 <style>
 @page {
   size: A4 ${pageOrientation};
-  margin: ${compact ? '6mm' : '10mm'};
+  margin: ${compact ? '5mm' : '8mm'};
 }
 * { margin: 0; padding: 0; box-sizing: border-box; }
 body {
@@ -6404,21 +6406,21 @@ body {
   direction: rtl;
   background: #fff;
   color: #111;
-  padding: ${compact ? '2mm' : '4mm'};
-  font-size: ${compact ? '8px' : '10px'};
+  padding: ${compact ? '1mm' : '3mm'};
+  font-size: ${compact ? '12px' : '15px'};
   line-height: ${compact ? '1.2' : '1.35'};
 }
 .header {
   border-bottom: 2px solid #0d9488;
-  padding-bottom: ${compact ? '4px' : '8px'};
-  margin-bottom: ${compact ? '4px' : '8px'};
+  padding-bottom: ${compact ? '3px' : '6px'};
+  margin-bottom: ${compact ? '3px' : '6px'};
   text-align: center;
   page-break-after: avoid;
 }
-.header h1 { font-size: ${compact ? '14px' : '16px'}; font-weight: 900; margin-bottom: 2px; color: #111; }
-.header h2 { font-size: ${compact ? '10px' : '12px'}; font-weight: 700; color: #333; margin-bottom: 2px; }
+.header h1 { font-size: ${compact ? '21px' : '24px'}; font-weight: 900; margin-bottom: 2px; color: #111; }
+.header h2 { font-size: ${compact ? '15px' : '18px'}; font-weight: 700; color: #333; margin-bottom: 2px; }
 .header .info {
-  font-size: ${compact ? '8px' : '10px'};
+  font-size: ${compact ? '12px' : '15px'};
   color: #444;
   margin-top: 4px;
   display: flex;
@@ -6429,9 +6431,10 @@ body {
 }
 table {
   width: 100%;
+  max-width: 100%;
   border-collapse: collapse;
-  margin: ${compact ? '2px 0' : '6px 0'};
-  font-size: ${compact ? '7px' : '9px'};
+  margin: ${compact ? '1px 0' : '4px 0'};
+  font-size: ${compact ? '11px' : '14px'};
   page-break-inside: auto;
 }
 thead { display: table-header-group; background: #f0fdfa; border-bottom: 2px solid #0d9488; }
@@ -6439,7 +6442,7 @@ thead th {
   padding: ${compact ? '2px 1px' : '5px 3px'};
   text-align: center;
   font-weight: 800;
-  font-size: ${compact ? '7px' : '9px'};
+  font-size: ${compact ? '11px' : '14px'};
   color: #0f766e;
   border: 1px solid #99f6e4;
   background: #ccfbf1;
@@ -6450,12 +6453,12 @@ tbody td {
   padding: ${compact ? '2px 1px' : '4px 3px'};
   text-align: center;
   border: 1px solid #e2e8f0;
-  font-size: ${compact ? '7px' : '9px'};
+  font-size: ${compact ? '11px' : '14px'};
   vertical-align: middle;
 }
 td.name-col { text-align: right; font-weight: 700; padding-right: ${compact ? '3px' : '6px'}; color: #111; }
-td.branch-col { text-align: center; color: #475569; font-size: ${compact ? '6.5px' : '8.5px'}; }
-td.badge-col { text-align: right; padding-right: ${compact ? '2px' : '6px'}; font-size: ${compact ? '6px' : '8px'}; }
+td.branch-col { text-align: center; color: #475569; font-size: ${compact ? '10px' : '13px'}; }
+td.badge-col { text-align: right; padding-right: ${compact ? '2px' : '6px'}; font-size: ${compact ? '9px' : '12px'}; }
 td.badge-col span {
   display: inline-block;
   background: #e0f2fe;
@@ -6466,12 +6469,12 @@ td.badge-col span {
   font-weight: 600;
 }
 td.number-col { font-weight: 700; font-family: 'IBM Plex Sans Arabic', 'Courier New', monospace; }
-td.bonus-col { color: #047857; font-weight: 800; font-size: ${compact ? '6px' : 'inherit'}; }
+td.bonus-col { color: #047857; font-weight: 800; font-size: ${compact ? '9px' : 'inherit'}; }
 tfoot { background: #f0fdfa; border-top: 2px solid #0d9488; }
 tfoot tr.summary-row { background: #ccfbf1; font-weight: 800; }
 tfoot td {
   padding: ${compact ? '3px 2px' : '5px 4px'};
-  font-size: ${compact ? '8px' : '10px'};
+  font-size: ${compact ? '12px' : '15px'};
   font-weight: 900;
   border: 1px solid #0d9488;
   text-align: center;
@@ -6479,11 +6482,11 @@ tfoot td {
 }
 tfoot td.label-col { text-align: right; padding-right: ${compact ? '4px' : '8px'}; }
 .footer {
-  margin-top: ${compact ? '4px' : '10px'};
-  padding-top: ${compact ? '3px' : '6px'};
+  margin-top: ${compact ? '3px' : '8px'};
+  padding-top: ${compact ? '2px' : '5px'};
   border-top: 1px solid #cbd5e1;
   text-align: center;
-  font-size: ${compact ? '7px' : '9px'};
+  font-size: ${compact ? '11px' : '14px'};
   color: #64748b;
 }
 .approval-stamp-inline {
@@ -6498,9 +6501,9 @@ tfoot td.label-col { text-align: right; padding-right: ${compact ? '4px' : '8px'
   background: #fef2f2;
   text-align: center;
 }
-.approval-stamp-inline .checkmark { display: block; color: #047857; font-size: 12px; font-weight: 900; }
-.approval-stamp-inline .dept { display: block; color: #991b1b; font-size: 7px; font-weight: 700; }
-.approval-stamp-inline .approv { display: block; color: #991b1b; font-size: 8px; font-weight: 800; }
+.approval-stamp-inline .checkmark { display: block; color: #047857; font-size: 18px; font-weight: 900; }
+.approval-stamp-inline .dept { display: block; color: #991b1b; font-size: 11px; font-weight: 700; }
+.approval-stamp-inline .approv { display: block; color: #991b1b; font-size: 12px; font-weight: 800; }
 @media print { body { margin: 0; padding: 0; } }
 </style>
 </head>
@@ -6517,88 +6520,58 @@ tfoot td.label-col { text-align: right; padding-right: ${compact ? '4px' : '8px'
 <table>
 <thead>
 <tr>
-<th style="width: 4%;">#</th>
-<th style="width: 16%;">اسم الموظف</th>
-<th style="width: 9%;">الفرع</th>
+<th style="width: 5%;">#</th>
+<th style="width: 18%;">اسم الموظف</th>
+<th style="width: 10%;">الفرع</th>
 <th style="width: 7%;" class="group-divider-subtle">العقود</th>
-<th style="width: 7%;">التقييمات</th>
-<th style="width: 9%;" class="group-divider-subtle">الإجمالي</th>
-<th style="width: 9%;">مساهمة شركاء النجاح</th>
-<th style="width: 9%;">الصافي</th>
-<th style="width: 10%;" class="group-divider-subtle">الحوافز</th>
-<th style="width: 10%;">الإجمالي النهائي</th>
-<th style="width: 10%;" class="group-divider-subtle">الملاحظات</th>
+<th style="width: 7%;">الشهري</th>
+<th style="width: 8%;">التقييمات</th>
+<th style="width: 10%;" class="group-divider-subtle">الإجمالي</th>
+<th style="width: 10%;">مساهمة شركاء النجاح</th>
+<th style="width: 10%;">الصافي</th>
 </tr>
 </thead>
 <tbody>
 ${rows.map((row, index) => {
-const badgesHtml = row.badges.length > 0 
-? row.badges.map(b => `<span>${b}</span>`).join('')
-: '-';
-const bonuses = [];
-if (row.attendanceBonus > 0) bonuses.push(`+${row.attendanceBonus.toFixed(2)} (25%)`);
-if (row.excellenceBonus > 0) bonuses.push(`+${row.excellenceBonus.toFixed(2)}`);
-if (row.commitmentBonus > 0) bonuses.push(`+${row.commitmentBonus.toFixed(2)}`);
-if (row.totalDiscountAmount > 0 && row.discountDetails) {
-  row.discountDetails.forEach(d => {
-    var appliedByLabel = d.appliedBy && d.appliedBy.trim() ? d.appliedBy : 'الأدمن';
-    if (d.isHotelRating && d.amount != null) {
-      bonuses.push(`-${Number(d.amount).toFixed(2)} (${d.discountType})`);
-    } else {
-      bonuses.push(`-${(row.finalNet / (1 - d.discountPercentage / 100) * (d.discountPercentage / 100)).toFixed(2)} (${d.discountPercentage}% ${d.discountType} - مطبق من ${appliedByLabel})`);
-    }
-  });
-}
-const bonusesText = bonuses.length > 0 ? bonuses.join('<br>') : '-';
 return `<tr>
 <td class="number-col">${index + 1}</td>
 <td class="name-col">${row.name}</td>
 <td class="branch-col">${row.branch}</td>
 <td class="number-col group-divider-subtle">${row.staffCount != null ? row.staffCount : row.count}</td>
+<td class="number-col">${row.monthlyContracts != null ? row.monthlyContracts : 0}</td>
 <td class="number-col">${row.evBooking + row.evGoogle}</td>
 <td class="number-col group-divider-subtle">${row.gross.toFixed(2)}</td>
 <td class="number-col">${row.fund.toFixed(2)}</td>
-<td class="number-col">${row.net.toFixed(2)}</td>
-<td class="bonus-col group-divider-subtle" style="font-size: 8px;">${bonusesText}</td>
-<td class="number-col" style="color: #006400; font-size: 11px;">${row.finalNet.toFixed(2)}</td>
-<td class="badge-col group-divider-subtle">${badgesHtml}</td>
+<td class="number-col" style="color: #006400; font-size: 17px;">${row.finalNet.toFixed(2)}</td>
 </tr>`;
 }).join('')}
 </tbody>
 <tfoot>
 <tr class="summary-row">
-<td colspan="6" class="label-col">الإجماليات:</td>
+<td colspan="7" class="label-col">الإجماليات:</td>
 <td class="number-col">${totals.totalFund.toFixed(2)}</td>
-<td class="number-col">${(totals.totalNet - totals.totalExcellenceBonus - totals.totalCommitmentBonus).toFixed(2)}</td>
-<td class="number-col">${(totals.totalExcellenceBonus + totals.totalCommitmentBonus).toFixed(2)}</td>
-<td class="number-col" style="color: #006400; font-size: 12px;">${totals.totalNet.toFixed(2)}</td>
-<td></td>
+<td class="number-col" style="color: #006400; font-size: 18px;">${totals.totalNet.toFixed(2)}</td>
 </tr>
 <tr>
 <td colspan="3" class="label-col">إجمالي العقود:</td>
-<td class="number-col" colspan="2">${totals.totalStaffCount != null ? totals.totalStaffCount : totals.totalBookings}</td>
-<td colspan="6"></td>
+<td class="number-col">${totals.totalStaffCount != null ? totals.totalStaffCount : totals.totalBookings}</td>
+<td class="number-col">${totals.totalMonthlyContracts != null ? totals.totalMonthlyContracts : 0}</td>
+<td class="number-col">${totals.totalEval}</td>
+<td colspan="4"></td>
 </tr>
 <tr>
-<td colspan="3" class="label-col">إجمالي التقييمات:</td>
-<td class="number-col" colspan="2">${totals.totalEval}</td>
-<td colspan="6"></td>
-</tr>
-<tr>
-<td colspan="3" class="label-col">مساهمة شركاء النجاح (إجمالي):</td>
-<td class="number-col" colspan="2">${totals.totalFund.toFixed(2)}</td>
-<td colspan="6"></td>
+<td colspan="6" class="label-col">مساهمة شركاء النجاح (إجمالي):</td>
+<td class="number-col" colspan="3">${totals.totalFund.toFixed(2)}</td>
 </tr>
 <tr class="summary-row" style="background: #d4edda; border-top: 3px solid #40E0D0;">
-<td colspan="9" class="label-col" style="font-size: 14px; color: #000; font-weight: 900; text-align: right; padding-right: 20px;">الإجمالي الكلي (عمال + موظفين):</td>
-<td class="number-col" style="font-size: 16px; color: #006400; font-weight: 900; text-align: center;">${(totals.totalFund + totals.totalNet).toFixed(2)}</td>
-<td></td>
+<td colspan="8" class="label-col" style="font-size: 21px; color: #000; font-weight: 900; text-align: right; padding-right: 20px;">الإجمالي الكلي (عمال + موظفين):</td>
+<td class="number-col" style="font-size: 24px; color: #006400; font-weight: 900; text-align: center;">${(totals.totalFund + totals.totalNet).toFixed(2)}</td>
 </tr>
 </tfoot>
 </table>
-<div class="explanations-section" style="margin-top: 25px; padding-top: 15px; padding-bottom: 80px; border-top: 2px solid #ddd; position: relative; z-index: 10;">
-<h3 style="font-size: 13px; font-weight: 800; color: #000; margin-bottom: 12px; text-align: right;">شرح المبالغ المستحقة:</h3>
-<div style="font-size: 9px; line-height: 2; color: #555; font-weight: 300; position: relative; z-index: 10; padding-right: 150px;">
+<div class="explanations-section" style="margin-top: 12px; padding-top: 10px; padding-bottom: 60px; border-top: 2px solid #ddd; position: relative; z-index: 10;">
+<h3 style="font-size: 20px; font-weight: 800; color: #000; margin-bottom: 12px; text-align: right;">شرح المبالغ المستحقة:</h3>
+<div style="font-size: 14px; line-height: 2; color: #555; font-weight: 300; position: relative; z-index: 10; padding-right: 150px;">
 ${rows.map((row, index) => {
 // Build detailed explanation
 // Start with name and final net
@@ -6632,11 +6605,14 @@ Object.keys(_exVipBySource).forEach(function(roomNum) {
 });
 if (evBooking > 0) baseParts.push(`${evBooking} تقييم بوكينج × ${_pe.rateEvalBooking}`);
 if (evGoogle > 0) baseParts.push(`${evGoogle} تقييم جوجل × ${_pe.rateEvalGoogle}`);
+var _exMonthly = (_exEmp._monthlyContracts || 0);
+var _peRateMC = (_pe && typeof _pe.rateMonthlyContract === 'number') ? _pe.rateMonthlyContract : 200;
+if (_exMonthly > 0) baseParts.push(`${_exMonthly} عقود شهرية × ${_peRateMC}`);
 
 if (baseParts.length > 0) {
   explanation += baseParts.join(' + ');
   // Use actual gross from row data or recalculate
-  var _empForExpl = row._emp || { count: count, _reception: 0, _booking: 0, _morning: 0, _evening: 0, _night: 0, _vipRooms: {}, _vipBySource: {}, _vipMorning: 0, _vipEvening: 0, _vipNight: 0, evaluationsBooking: evBooking, evaluationsGoogle: evGoogle };
+  var _empForExpl = row._emp || { count: count, _reception: 0, _booking: 0, _morning: 0, _evening: 0, _night: 0, _monthlyContracts: 0, _vipRooms: {}, _vipBySource: {}, _vipMorning: 0, _vipEvening: 0, _vipNight: 0, evaluationsBooking: evBooking, evaluationsGoogle: evGoogle };
   const grossAmount = computeGrossFromBreakdown(_empForExpl, _pe);
   explanation += ` = ${grossAmount.toFixed(2)} ريال`;
 } else {
@@ -6653,7 +6629,7 @@ if (fund > 0) {
 const attendanceBonus = row.attendanceBonus || 0;
 if (attendanceBonus > 0) {
   const attendance26Days = row.attendance26Days || false;
-  explanation += ` + حافز تحدي الظروف ${attendanceBonus.toFixed(2)} ريال (25% بسبب ${attendance26Days ? '26 يوم' : 'الحضور'})`;
+  explanation += ` + حافز تحدي الظروف ${attendanceBonus.toFixed(2)} ريال (50 ريال بسبب ${attendance26Days ? '26 يوم' : 'الحضور'})`;
 }
 
 // Add excellence bonus
@@ -6684,7 +6660,7 @@ if (totalDiscountAmount > 0 && row.discountDetails && Array.isArray(row.discount
   });
 }
 
-return `<div style="margin-bottom: 8px; padding: 6px 10px; border-right: 2px solid #e0e0e0; text-align: right; font-size: 9px; line-height: 1.5; background: ${index % 2 === 0 ? '#f9f9f9' : '#ffffff'};">
+return `<div style="margin-bottom: 8px; padding: 6px 10px; border-right: 2px solid #e0e0e0; text-align: right; font-size: 14px; line-height: 1.5; background: ${index % 2 === 0 ? '#f9f9f9' : '#ffffff'};">
 ${explanation}
 </div>`;
 }).join('')}
@@ -7648,7 +7624,7 @@ let actualAttendanceDays = attendance26Days ? 26 : 0;
 if (empNameCount > 1) {
 actualAttendanceDays = emp.totalAttendanceDays || (attendance26Days ? 26 : 0);
 }
-// For duplicate employees: check if this branch should get challenge bonus (25%)
+// For duplicate employees: check if this branch should get challenge bonus (50 ريال)
 let attendanceBonus = 0;
 let finalAttendance26Days = attendance26Days;
 if (empNameCount > 1) {
@@ -7664,7 +7640,7 @@ const eGross = computeGrossFromBreakdown(e);
 const eFund = eGross * getSupportFundRate();
 let eNet = eGross - eFund;
 const eAttendance26Days = e.attendance26Days === true;
-const eAttendanceBonus = eAttendance26Days ? eNet * 0.25 : 0;
+const eAttendanceBonus = eAttendance26Days ? CHALLENGE_BONUS_RIYALS : 0;
 eNet = eNet + eAttendanceBonus;
 // Only consider branches where employee actually qualifies for challenge bonus
 if (eAttendance26Days && eAttendanceBonus > 0) {
@@ -7676,7 +7652,7 @@ challengeRowId = e.id;
 });
 // Only apply challenge bonus if this is the selected branch
 if (challengeRowId === emp.id && attendance26Days) {
-attendanceBonus = net * 0.25;
+attendanceBonus = CHALLENGE_BONUS_RIYALS;
 net = net + attendanceBonus;
 } else {
 // Don't apply challenge bonus in this branch
@@ -7685,7 +7661,7 @@ finalAttendance26Days = false;
 }
 } else {
 // Non-duplicate: apply challenge bonus normally
-attendanceBonus = attendance26Days ? net * 0.25 : 0;
+attendanceBonus = attendance26Days ? CHALLENGE_BONUS_RIYALS : 0;
 net = net + attendanceBonus;
 }
 // Check bonuses
@@ -7795,38 +7771,28 @@ function calculateAggregatedEmployeeReport(empName) {
   let hasExcellenceForEmployee = false;
   let hasCommitmentForEmployee = false;
   const branchWinners = typeof computeBranchWinnersAndLosers === 'function' ? computeBranchWinnersAndLosers(db, branches).branchWinners : {};
-  // For duplicates: determine which branch gets the 25% challenge bonus (same logic as calcStats)
-  let challengeRowIdAgg = null;
-  {
-    let maxChallengeTotalAgg = -1;
-    allEmpBranches.forEach(function (e) {
-      const eGross = computeGrossFromBreakdown(e);
-      const eFund = eGross * getSupportFundRate();
-      let eNet = eGross - eFund;
-      const eAtt = e.attendance26Days === true;
-      const eBonus = eAtt ? eNet * 0.25 : 0;
-      eNet = eNet + eBonus;
-      if (eAtt && eBonus > 0 && eNet > maxChallengeTotalAgg) {
-        maxChallengeTotalAgg = eNet;
-        challengeRowIdAgg = e.id;
-      }
-    });
-  }
+  // الحوافز للمتكرر: مرة واحدة في الفرع الأكثر صافي (قبل الحوافز)
+  let bestBranchIdAgg = allEmpBranches[0].id;
+  let maxNetBaseAgg = -1;
+  allEmpBranches.forEach(function (e) {
+    const eGross = computeGrossFromBreakdown(e);
+    const netBase = eGross - eGross * getSupportFundRate();
+    if (netBase > maxNetBaseAgg) { maxNetBaseAgg = netBase; bestBranchIdAgg = e.id; }
+  });
   allEmpBranches.forEach(function (branchEmp) {
     const branchGross = computeGrossFromBreakdown(branchEmp);
     const branchFund = branchGross * getSupportFundRate();
     let branchNet = branchGross - branchFund;
     const branchAttendance26Days = branchEmp.attendance26Days === true;
-    // Only apply 25% to the selected branch (challengeRowId)
-    const applyChallenge = challengeRowIdAgg === branchEmp.id && branchAttendance26Days;
-    const branchAttendanceBonus = applyChallenge ? branchNet * 0.25 : 0;
+    const applyChallenge = bestBranchIdAgg === branchEmp.id && branchAttendance26Days;
+    const branchAttendanceBonus = applyChallenge ? CHALLENGE_BONUS_RIYALS : 0;
     branchNet = branchNet + branchAttendanceBonus;
     totalNetFromBranches += branchNet;
+    if (branchEmp.id !== bestBranchIdAgg) return;
     const bw = branchWinners[branchEmp.branch];
     if (bw && bw.book && bw.book.ids && bw.book.ids.includes(branchEmp.id) && bw.eval && bw.eval.ids && bw.eval.ids.includes(branchEmp.id) && bw.book.val > 0 && bw.eval.val > 0) hasExcellenceForEmployee = true;
     if (bw && branchAttendance26Days && ((bw.eval && bw.eval.ids && bw.eval.ids.includes(branchEmp.id) && bw.eval.val > 0) || (bw.book && bw.book.ids && bw.book.ids.includes(branchEmp.id) && bw.book.val > 0))) hasCommitmentForEmployee = true;
   });
-  // الصافي = مرآة لمجموع صافي الفرعين (حافز 25% مرة واحدة، حوافز 50 مرة واحدة، خصم مرة واحدة).
   var totalFundFromBranches = 0;
   branchReports.forEach(function (r) {
     totalFundFromBranches += (r.fund != null ? r.fund : 0);
@@ -7835,19 +7801,17 @@ function calculateAggregatedEmployeeReport(empName) {
   if (typeof getTotalDiscountForEmployee === 'function') {
     totalDiscountAmount = getTotalDiscountForEmployee(empName) || 0;
   }
-  // استخدام totalNetFromBranches (25% مرة واحدة) + حوافز مرة واحدة − خصم مرة واحدة = نفس رقم الجدول
   let finalNet = totalNetFromBranches + (hasExcellenceForEmployee ? 50 : 0) + (hasCommitmentForEmployee ? 50 : 0);
   finalNet = Math.max(0, finalNet - totalDiscountAmount);
   let fund = totalFundFromBranches;
   const attendance26Days = totalDays >= 26;
-  // حافز تحدي الظروف يُضاف مرة واحدة (من الفرع الذي حقق فيه أعلى صافي)
   let attendanceBonus = 0;
-  if (challengeRowIdAgg && attendance26Days) {
-    const challBranch = allEmpBranches.find(function (e) { return e.id === challengeRowIdAgg; });
+  if (bestBranchIdAgg && attendance26Days) {
+    const challBranch = allEmpBranches.find(function (e) { return e.id === bestBranchIdAgg; });
     if (challBranch) {
       const challGross = computeGrossFromBreakdown(challBranch);
       const challNet = challGross - challGross * getSupportFundRate();
-      attendanceBonus = challNet * 0.25;
+      attendanceBonus = CHALLENGE_BONUS_RIYALS;
     }
   }
   const netBeforeAttendanceBonus = totalNetFromBranches - attendanceBonus;
@@ -8063,7 +8027,9 @@ if(bdV>0){
     vipRoomLines.push('<div class="flex justify-between items-center py-0.5"><span class="text-gray-400">غرفة '+rn+': '+cnt+' '+w(cnt)+explain+'</span><span class="font-bold text-violet-400">= '+roomAmt.toFixed(2)+' '+unit+'</span></div>');
   });
 }
-var gbOnly=shiftAmt+bookingAmt+vipAmt;
+var rateMC=_rp.rateMonthlyContract!=null?_rp.rateMonthlyContract:(_rp.rateContract||200);
+var monthlyContractsAmt=((emp._monthlyContracts||0)*rateMC);
+var gbOnly=shiftAmt+bookingAmt+vipAmt+monthlyContractsAmt;
 var recCount,bkCount,refCount=emp.count||0;
 if(useNew){
   recCount=(recM||0)+(recE||0)+(recN||0); bkCount=bkReg||0;
@@ -8075,8 +8041,9 @@ var amtM=(useNew?recM*_rp.rateMorning:regM*_rp.rateMorning),amtE=(useNew?recE*_r
 var sec1='<div class="text-emerald-400/95 font-semibold text-sm mb-1">🟢 أولاً: حجوزات الشفتات (الاستقبال العادي)</div><div class="text-xs text-gray-400 mb-2">الحجوزات بعد استبعاد الـ VIP والبوكينج</div><div class="flex justify-between items-center py-0.5"><span class="text-gray-400">الشفت الصباحي: '+nM+' '+w(nM)+' × '+_rp.rateMorning+' '+unit+'</span><span class="font-bold text-blue-300">= '+amtM.toFixed(2)+' '+unit+'</span></div><div class="flex justify-between items-center py-0.5"><span class="text-gray-400">الشفت المسائي: '+nE+' '+w(nE)+' × '+_rp.rateEvening+' '+unit+'</span><span class="font-bold text-blue-300">= '+amtE.toFixed(2)+' '+unit+'</span></div><div class="flex justify-between items-center py-0.5"><span class="text-gray-400">الشفت الليلي: '+nN+' '+w(nN)+' × '+_rp.rateNight+' '+unit+'</span><span class="font-bold text-blue-300">= '+amtN.toFixed(2)+' '+unit+'</span></div>';
 var sec2=bkCount>0?'<div class="text-orange-400/95 font-semibold text-sm mb-1 mt-3">🟠 ثانياً: حجوزات العمولة الثابتة (بوكينج)</div><div class="flex justify-between items-center py-0.5"><span class="text-gray-400">بوكينج عادي: '+bkCount+' '+w(bkCount)+' × '+(_rp.rateBooking||0)+' '+unit+'</span><span class="font-bold text-orange-300">= '+bookingAmt.toFixed(2)+' '+unit+'</span></div>':'';
 var sec3=vipRoomLines.length>0?'<div class="text-violet-400/95 font-semibold text-sm mb-1 mt-3">👑 ثالثاً: حجوزات الـ VIP (سعر الغرفة)</div>'+vipRoomLines.join(''):'';
+var sec4=monthlyContractsAmt>0?'<div class="text-teal-400/95 font-semibold text-sm mb-1 mt-3">📋 رابعاً: العقود الشهرية</div><div class="flex justify-between items-center py-0.5"><span class="text-gray-400">العقود الشهرية: '+(emp._monthlyContracts||0)+' عقد × '+rateMC+' '+unit+'</span><span class="font-bold text-teal-300">= '+monthlyContractsAmt.toFixed(2)+' '+unit+'</span></div>':'';
 var footer='<div class="flex justify-between items-center pt-3 mt-2 border-t border-white/10"><span class="font-bold text-green-400">💰 المجموع النهائي للمكافأة:</span><span class="font-bold text-blue-400">'+gbOnly.toFixed(2)+' '+unit+'</span></div><div class="text-xs text-gray-400 mt-1">(إجمالي الحجوزات: '+refCount+' حجز)</div>';
-return '<div class="bg-blue-500/10 p-3 rounded-lg border border-blue-500/30"><h5 class="text-sm font-bold text-blue-400 mb-1 flex items-center gap-1"><span>📊</span><span>مكافآت الحجوزات</span></h5>'+sec1+sec2+sec3+footer+'</div></div>';
+return '<div class="bg-blue-500/10 p-3 rounded-lg border border-blue-500/30"><h5 class="text-sm font-bold text-blue-400 mb-1 flex items-center gap-1"><span>📊</span><span>مكافآت الحجوزات</span></h5>'+sec1+sec2+sec3+sec4+footer+'</div></div>';
 })() + '<div class="bg-yellow-500/10 p-3 rounded-lg border border-yellow-500/30"><h5 class="text-sm font-bold text-yellow-400 mb-1 flex items-center gap-1"><span>⭐</span><span>مكافآت التقييمات</span></h5><div class="space-y-1 text-xs text-gray-300"><div class="flex justify-between items-center"><span>تقييمات Booking: ' + evBooking + ' × ' + _rp.rateEvalBooking + ' ' + unit + '/تقييم</span><span class="font-bold text-yellow-400">' + (evBooking * _rp.rateEvalBooking).toFixed(2) + ' ' + unit + '</span></div><div class="flex justify-between items-center"><span>تقييمات Google Maps: ' + evGoogle + ' × ' + _rp.rateEvalGoogle + ' ' + unit + '/تقييم</span><span class="font-bold text-yellow-400">' + (evGoogle * _rp.rateEvalGoogle).toFixed(2) + ' ' + unit + '</span></div><div class="flex justify-between items-center pt-1 border-t border-yellow-500/30 mt-1"><span class="font-bold text-green-400">إجمالي مكافآت التقييمات:</span><span class="font-bold text-yellow-400 text-sm">' + ((evBooking * _rp.rateEvalBooking) + (evGoogle * _rp.rateEvalGoogle)).toFixed(2) + ' ' + unit + '</span></div></div></div><div class="bg-purple-500/10 p-3 rounded-lg border border-purple-500/30"><h5 class="text-sm font-bold text-purple-400 mb-1">الإجمالي قبل مساهمة شركاء النجاح</h5><div class="flex justify-between items-center text-xs"><span class="text-gray-300">إجمالي المكافآت (حجوزات + تقييمات):</span><span class="font-bold text-white text-sm">' + gross.toFixed(2) + ' ' + unit + '</span></div></div><div class="bg-orange-500/10 p-3 rounded-lg border border-orange-500/30"><h5 class="text-sm font-bold text-orange-400 mb-1">' + (pointsMode ? 'مساهمة شركاء النجاح في نقاطك' : 'مساهمة شركاء النجاح') + '</h5><div class="space-y-1 text-xs text-gray-300"><div class="flex justify-between items-center"><span>' + fundLabel + '</span><span class="font-bold text-orange-400">' + fundSign + fund.toFixed(2) + ' ' + unit + '</span></div><p class="text-[10px] text-orange-300/60 mt-1">⚠️ هذه النسبة تُخصم من المبلغ المالي فقط ولا تؤثر على تقييم الأداء أو رصيد النقاط التراكمي.</p></div><div class="bg-turquoise/10 p-3 rounded-lg border border-turquoise/30"><h5 class="text-sm font-bold text-turquoise mb-1">الحوافز الإضافية</h5><div class="space-y-2 text-xs">' + (attendance26Days ? '<div class="bg-green-500/10 p-3 rounded-lg border border-green-500/30"><div class="flex justify-between items-center mb-1"><span class="text-gray-300">✓ حافز تحدي الظروف (25%):</span><span class="font-bold text-green-400">+' + attendanceBonus.toFixed(2) + ' ' + unit + '</span></div><p class="text-xs text-gray-400 mt-1">تم إتمام ' + actualAttendanceDays + ' يوماً وأكثر من العطاء</p></div>' : '') + (hasExcellenceBonus ? '<div class="bg-turquoise/20 p-3 rounded-lg border border-turquoise/50"><div class="flex justify-between items-center mb-1"><span class="text-gray-300">✨ حافز الأفضل تقييماً + الأكثر حجوزات:</span><span class="font-bold text-turquoise">+' + excellenceBonus.toFixed(2) + ' ' + unit + '</span></div><p class="text-xs text-gray-400 mt-1">الأعلى تقييماً بـ ' + maxEvalCount + ' تقييم والأكثر حجوزات ' + maxBookCount + ' حجز في ' + esc(emp.branch) + '</p></div>' : '') + (hasCommitmentBonus ? '<div class="bg-purple-500/20 p-3 rounded-lg border border-purple-500/50"><div class="flex justify-between items-center mb-1"><span class="text-gray-300">✓ حافز الجمع بين الحضور والأكثر تميز:</span><span class="font-bold text-purple-400">+' + commitmentBonus.toFixed(2) + ' ' + unit + '</span></div>' + (commitmentExplain ? '<p class="text-xs text-gray-400 mt-1">' + commitmentExplain + '</p>' : '') + '</div>' : '') + (!attendance26Days && !hasExcellenceBonus && !hasCommitmentBonus ? '<p class="text-gray-400 text-center py-2">لا توجد حوافز إضافية</p>' : '') + '</div></div>' + (function(){var nbf=gross-fund;var lines='<div class="bg-gradient-to-r from-slate-800/50 to-slate-900/50 p-3 rounded-lg border border-white/10"><h5 class="text-sm font-bold text-white mb-1">ملخص الحساب</h5><div class="space-y-1 text-xs"><div class="flex justify-between items-center text-gray-300"><span>إجمالي المكافآت:</span><span class="font-bold text-white">'+gross.toFixed(2)+' '+unit+'</span></div><div class="flex justify-between items-center text-gray-300"><span>'+fundLabel+'</span><span class="font-bold text-orange-400">'+fundSign+fund.toFixed(2)+' '+unit+'</span></div><div class="flex justify-between items-center text-gray-300"><span>الصافي قبل الحوافز:</span><span class="font-bold text-white">'+nbf.toFixed(2)+' '+unit+'</span></div>';if(attendanceBonus>0)lines+='<div class="flex justify-between items-center text-green-400"><span>+ حافز تحدي الظروف (25%):</span><span class="font-bold">+'+attendanceBonus.toFixed(2)+' '+unit+'</span></div>';if(excellenceBonus>0)lines+='<div class="flex justify-between items-center text-turquoise"><span>+ حافز التفوق:</span><span class="font-bold">+'+excellenceBonus.toFixed(2)+' '+unit+'</span></div>';if(commitmentBonus>0)lines+='<div class="flex justify-between items-center text-purple-400"><span>+ حافز الالتزام:</span><span class="font-bold">+'+commitmentBonus.toFixed(2)+' '+unit+'</span></div>';if(totalDiscountAmount>0)lines+='<div class="flex justify-between items-center text-red-400"><span>− الخصومات:</span><span class="font-bold">-'+totalDiscountAmount.toFixed(2)+' '+unit+'</span></div>';lines+='<div class="flex justify-between items-center pt-1 border-t border-white/10"><span class="font-bold text-turquoise text-sm">'+summaryTitle+':</span><span class="font-bold text-white text-base">'+mainTotal.toFixed(2)+' '+unit+'</span></div></div></div>';return lines;})() + '</div></div>');
 }
 
@@ -8204,10 +8171,14 @@ function buildEmployeeReportModalHTMLMultiBranch(report, opts) {
     var sec1 = '<div class="text-emerald-400/95 font-semibold text-sm mb-1">🟢 أولاً: حجوزات الشفتات (الاستقبال العادي)</div><div class="text-xs text-gray-400 mb-2">الحجوزات بعد استبعاد الـ VIP والبوكينج</div><div class="flex justify-between items-center py-0.5"><span class="text-gray-400">الشفت الصباحي: ' + nM + ' ' + wBranch(nM) + ' × ' + _rp.rateMorning + ' ' + unit + '</span><span class="font-bold text-blue-300">= ' + amtM.toFixed(2) + ' ' + unit + '</span></div><div class="flex justify-between items-center py-0.5"><span class="text-gray-400">الشفت المسائي: ' + nE + ' ' + wBranch(nE) + ' × ' + _rp.rateEvening + ' ' + unit + '</span><span class="font-bold text-blue-300">= ' + amtE.toFixed(2) + ' ' + unit + '</span></div><div class="flex justify-between items-center py-0.5"><span class="text-gray-400">الشفت الليلي: ' + nN + ' ' + wBranch(nN) + ' × ' + _rp.rateNight + ' ' + unit + '</span><span class="font-bold text-blue-300">= ' + amtN.toFixed(2) + ' ' + unit + '</span></div>';
     var sec2 = bkCount > 0 ? '<div class="text-orange-400/95 font-semibold text-sm mb-1 mt-3">🟠 ثانياً: حجوزات العمولة الثابتة (بوكينج)</div><div class="flex justify-between items-center py-0.5"><span class="text-gray-400">بوكينج عادي: ' + bkCount + ' ' + wBranch(bkCount) + ' × ' + (_rp.rateBooking || 0) + ' ' + unit + '</span><span class="font-bold text-orange-300">= ' + bookingAmt.toFixed(2) + ' ' + unit + '</span></div>' : '';
     var sec3 = vipRoomLines.length > 0 ? '<div class="text-violet-400/95 font-semibold text-sm mb-1 mt-3">👑 ثالثاً: حجوزات الـ VIP (سعر الغرفة)</div>' + vipRoomLines.join('') : '';
-    var footer = '<div class="flex justify-between items-center pt-2 border-t border-white/10"><span class="font-bold text-green-400">💰 المجموع النهائي للمكافأة:</span><span class="font-bold text-blue-400">' + (shiftAmt + bookingAmt + vipAmtSum).toFixed(2) + ' ' + unit + '</span></div><div class="text-xs text-gray-400 mt-1">(إجمالي الحجوزات: ' + bc + ' حجز)</div>';
+    var rateMC = _rp.rateMonthlyContract != null ? _rp.rateMonthlyContract : (_rp.rateContract || 200);
+    var branchMonthly = be._monthlyContracts || 0;
+    var branchMonthlyAmt = branchMonthly * rateMC;
+    var sec4 = branchMonthlyAmt > 0 ? '<div class="text-teal-400/95 font-semibold text-sm mb-1 mt-3">📋 رابعاً: العقود الشهرية</div><div class="flex justify-between items-center py-0.5"><span class="text-gray-400">العقود الشهرية: ' + branchMonthly + ' عقد × ' + rateMC + ' ' + unit + '</span><span class="font-bold text-teal-300">= ' + branchMonthlyAmt.toFixed(2) + ' ' + unit + '</span></div>' : '';
+    var footer = '<div class="flex justify-between items-center pt-2 border-t border-white/10"><span class="font-bold text-green-400">💰 المجموع النهائي للمكافأة:</span><span class="font-bold text-blue-400">' + (shiftAmt + bookingAmt + vipAmtSum + branchMonthlyAmt).toFixed(2) + ' ' + unit + '</span></div><div class="text-xs text-gray-400 mt-1">(إجمالي الحجوزات: ' + bc + ' حجز)</div>';
     var rbBookOnly = computeGrossFromBreakdown(be, _rp) - ((r.evBooking || 0) * (_rp.rateEvalBooking || 0) + (r.evGoogle || 0) * (_rp.rateEvalGoogle || 0));
     _sumBranchBookOnly += rbBookOnly;
-    bookingsSection += '<div class="p-3 rounded-lg border border-blue-500/20 bg-blue-500/5"><p class="font-bold text-blue-300 mb-2">' + esc(be.branch) + '</p><div class="space-y-2 text-sm text-gray-300">' + sec1 + sec2 + sec3 + footer + '</div></div>';
+    bookingsSection += '<div class="p-3 rounded-lg border border-blue-500/20 bg-blue-500/5"><p class="font-bold text-blue-300 mb-2">' + esc(be.branch) + '</p><div class="space-y-2 text-sm text-gray-300">' + sec1 + sec2 + sec3 + sec4 + footer + '</div></div>';
   });
   var aggBookOnly = _sumBranchBookOnly;
   bookingsSection += '<div class="p-3 rounded-lg border-2 border-blue-400/40 bg-blue-500/10 mt-2"><p class="font-bold text-blue-200 mb-2">الإجمالي (كل الفروع)</p><div class="space-y-2 text-sm text-gray-300"><div class="flex justify-between items-center"><span>💰 المجموع النهائي للمكافأة:</span><span class="font-bold text-blue-400">' + aggBookOnly.toFixed(2) + ' ' + unit + '</span></div><div class="text-xs text-gray-400 mt-1">(إجمالي الحجوزات: ' + (emp.count || 0) + ' حجز)</div></div></div></div></div>';
@@ -8599,8 +8570,8 @@ ${attendanceBonus > 0 || excellenceBonus > 0 || commitmentBonus > 0 ? `
 ${attendance26Days ? `
 <div class="row" style="border-bottom: 1px solid #e5e7eb; padding-bottom: 2px; margin-bottom: 2px;">
 <div style="flex: 1;">
-<span>✓ حافز تحدي الظروف (25%):</span>
-<span style="display: block; font-size: 8px; color: #666; margin-top: 1px; margin-right: 10px;">تم إتمام ${actualAttendanceDays} يوماً وأكثر من العطاء (الصافي قبل الحافز: ${netBeforeAttendanceBonus.toFixed(2)} ${unit} × 25% = ${attendanceBonus.toFixed(2)} ${unit})</span>
+<span>✓ حافز تحدي الظروف (50 ريال):</span>
+<span style="display: block; font-size: 8px; color: #666; margin-top: 1px; margin-right: 10px;">تم إتمام ${actualAttendanceDays} يوماً وأكثر من العطاء (مبلغ ثابت: ${attendanceBonus.toFixed(2)} ${unit})</span>
 </div>
 <span><strong style="color: #10b981;">+${attendanceBonus.toFixed(2)} ${unit}</strong></span>
 </div>
@@ -8665,7 +8636,7 @@ ${discountDetails.map(discount => {
 </div>
 ${attendanceBonus > 0 ? `
 <div class="row">
-<span>حافز تحدي الظروف (25%):</span>
+<span>حافز تحدي الظروف (50 ريال):</span>
 <span><strong style="color: #10b981;">+${attendanceBonus.toFixed(2)} ${unit}</strong></span>
 </div>
 ` : ''}
@@ -8807,7 +8778,7 @@ function buildEmployeeReportBodyContentMultiBranch(report, periodText, reportDat
   evalsSection += '<div class="row total-row"><span>إجمالي مكافآت التقييمات</span><span><strong>' + evalTotal.toFixed(2) + ' ' + unit + '</strong></span></div></div>';
   var rest = '<div class="detail-section section-fund"><h3>الإجمالي ومساهمة شركاء النجاح</h3><div class="row"><span>إجمالي المكافآت (حجوزات + تقييمات)</span><span><strong>' + gross.toFixed(2) + ' ' + unit + '</strong></span></div><div class="row"><span>' + fundLabel + '</span><span><strong style="color: #ef4444;">' + fundSign + fund.toFixed(2) + ' ' + unit + '</strong></span></div><p class="fund-note">⚠️ النسبة تُخصم من المبلغ المالي فقط ولا تؤثر على تقييم الأداء أو رصيد النقاط التراكمي.</p></div>';
   rest += '<div class="detail-section section-bonuses"><h3>🏆 الحوافز الإضافية</h3>';
-  if (attendance26Days && attendanceBonus > 0) rest += '<div class="row"><span>✓ حافز تحدي الظروف (25%)</span><span><strong style="color: #10b981;">+' + attendanceBonus.toFixed(2) + ' ' + unit + '</strong></span></div>';
+  if (attendance26Days && attendanceBonus > 0) rest += '<div class="row"><span>✓ حافز تحدي الظروف (50 ريال)</span><span><strong style="color: #10b981;">+' + attendanceBonus.toFixed(2) + ' ' + unit + '</strong></span></div>';
   if (hasExcellenceBonus) rest += '<div class="row"><span>✨ خبير إرضاء العميل في الفرع</span><span><strong style="color: #14b8a6;">+' + excellenceBonus.toFixed(2) + ' ' + unit + '</strong></span></div>';
   if (hasCommitmentBonus) rest += '<div class="row"><span>✓ حافز الالتزام والانجاز</span><span><strong style="color: #a855f7;">+' + commitmentBonus.toFixed(2) + ' ' + unit + '</strong></span></div>';
   if (!attendance26Days && !hasExcellenceBonus && !hasCommitmentBonus) rest += '<div class="row"><span>لا توجد حوافز إضافية</span><span>—</span></div>';

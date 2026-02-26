@@ -21,10 +21,16 @@ echo(
 echo Before upload: check app\PRE-DEPLOY-STEPS.md (API key + test).
 echo(
 echo [1/3] Sync + Build + Firebase deploy (from app)...
+set "LOGFILE=%ROOT%deploy.log"
+echo (المخرجات تُسجّل في deploy.log)
 cd /d "%APP%"
-call npm run deploy
+call npm run deploy > "%LOGFILE%" 2>&1
 if errorlevel 1 (
-  echo ERROR: Deploy failed. Check: firebase login or FIREBASE_TOKEN, and npm run build.
+  echo.
+  echo ========== فشل النشر - راجع deploy.log ==========
+  echo.
+  type "%ROOT%deploy.log" 2>nul
+  echo.
   pause
   exit /b 1
 )

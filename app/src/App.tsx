@@ -133,7 +133,6 @@ import {
   type MergedRoomRule,
   loadConfig,
   saveConfig,
-  hasLocalConfig,
   ensureBranchConfig,
   getDefaultConfig,
   saveDefaultConfig,
@@ -627,16 +626,15 @@ export default function App() {
   const fileInputRef = useRef<HTMLInputElement>(null);
   const attendanceInputRef = useRef<HTMLInputElement>(null);
 
-  // On first load: if no local config (new device), try fetching from Firebase
+  // On first load: try fetching config from Firebase (source of truth across devices)
   useEffect(() => {
-    if (hasLocalConfig()) return; // Already has local settings — skip
     import('./firebase').then(({ loadConfigFromFirebase }) => {
       loadConfigFromFirebase({ forceFetch: true }).then((fbConfig) => {
         if (fbConfig) {
           setConfig(fbConfig);
           saveConfig(fbConfig); // Cache locally so next load is instant
         }
-      }).catch(() => {/* Firebase unavailable — use defaults */});
+      }).catch(() => {/* Firebase unavailable — keep local config */});
     }).catch(() => {/* dynamic import failed */});
   }, []);
 
@@ -860,6 +858,7 @@ export default function App() {
     if (mergedConfig !== config) {
       setConfig(mergedConfig);
       saveConfig(mergedConfig);
+      import('./firebase').then(({ saveConfigToFirebase }) => saveConfigToFirebase(mergedConfig).catch(() => {}));
     }
     setFileSlots(newSlots);
     setUnknownFiles(newUnknown);
@@ -2688,7 +2687,7 @@ function RatingExplanationPopup({ config, onClose }: { config: AppConfig; onClos
             <ul className="space-y-2 list-none">
               <li className="flex items-start gap-2"><span className="text-[var(--adora-accent)] font-bold">•</span><span><strong className="text-[var(--adora-text)]">عدد الحجوزات:</strong> كلما كان عدد حجوزاتك أقرب إلى أعلى موظف في الفريق، زادت نقاطك في هذا الجزء.</span></li>
               <li className="flex items-start gap-2"><span className="text-[var(--adora-accent)] font-bold">•</span><span><strong className="text-[var(--adora-text)]">التقييمات (Booking و Google):</strong> كلما كان إجمالي تقييماتك أقرب إلى أعلى موظف، زادت نقاطك.</span></li>
-              <li className="flex items-start gap-2"><span className="text-[var(--adora-accent)] font-bold">•</span><span><strong className="text-[var(--adora-text)]">الحضور 26 يوم وأكثر:</strong> إذا أتممت 26 يوماً وأكثر من العطاء (بطل تحدي الظروف)، يُضاف لك <strong className="text-[var(--adora-success)]">+0.15</strong> على النتيجة النهائية كمكافأة التزام.</span></li>
+              <li className="flex items-start gap-2"><span className="text-[var(--adora-accent)] font-bold">•</span><span><strong className="text-[var(--adora-text)]">الحضور 26 يوم وأكثر:</strong> إذا أتممت 26 يوماً وأكثر من العطاء (بطل تحدي الظروف)، يُضاف لك <strong className="text-[var(--adora-success)]">50 ريال</strong> حافز تحدي الظروف في جدول المكافآت، ويُحسّن ترتيبك في مستوى الأداء.</span></li>
               <li className="flex items-start gap-2"><span className="text-[var(--adora-error)] font-bold">•</span><span><strong className="text-[var(--adora-text)]">الخصم الإداري:</strong> إذا كان عليك خصم إداري بأي قيمة، يتم <strong className="text-[var(--adora-error)]">تخفيض التقييم بمقدار 0.25</strong> ليعكس تأثير التقصير على الأداء.</span></li>
               <li className="flex items-start gap-2"><span className="text-[var(--adora-error)] font-bold">•</span><span><strong className="text-[var(--adora-text)]">خصم تقييم الفندق (تقييمات سلبية) وفقدان فرص حجز (مكالمات لم يُرد عليها):</strong> إذا سجّل الفرع تقييمات سلبية (أقل من تقييم الفندق) أو فقدان فرص حجز نتيجة المكالمات التي لم يتم الرد عليها، يُخصم <strong className="text-[var(--adora-error)]">10 ريال × عدد التقييمات السلبية للفرع</strong> من صافي كل موظف في ذلك الفرع، ويُنقص نقاط التقييم.</span></li>
             </ul>
@@ -3125,6 +3124,28 @@ interface DrilldownInfo {
   title: string;
   filterType?: string;
   bookings: DrilldownBooking[];
+}
+
+/** صافي المكافأة لصف ملخص (نفس معادلة Rewards: إجمالي − صندوق الدعم) — لاختيار الفرع الأعلى صافي للموظف المتكرر */
+export function computeNetForRewardRow(
+  row: { branch: string; receptionMorning: number; receptionEvening: number; receptionNight: number; bookingRegular: number; vipBySource: Record<string, { reception: number; booking: number }> },
+  pricing: AppConfig['rewardPricing']
+): number {
+  const pct = (pricing.supportFundPercent ?? 15) / 100;
+  let gross = 0;
+  gross += (row.receptionMorning || 0) * (pricing.rateMorning || 0);
+  gross += (row.receptionEvening || 0) * (pricing.rateEvening || 0);
+  gross += (row.receptionNight || 0) * (pricing.rateNight || 0);
+  gross += (row.bookingRegular || 0) * (pricing.rateBooking || 0);
+  const vipDefault = pricing.rateVipDefault ?? { reception: 0, booking: 0 };
+  const branchVip = (pricing.rateVipByBranch && row.branch) ? (pricing.rateVipByBranch[row.branch] ?? {}) : {};
+  for (const roomNum of Object.keys(row.vipBySource || {})) {
+    const src = row.vipBySource[roomNum];
+    const rates = branchVip[String(roomNum)] ?? vipDefault;
+    gross += (src.reception || 0) * (rates.reception ?? 0);
+    gross += (src.booking || 0) * (rates.booking ?? 0);
+  }
+  return gross * (1 - pct);
 }
 
 function EmployeeBreakdown({ staffList, data, config, dateRange, logCreationShiftCounts }: {

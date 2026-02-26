@@ -15,19 +15,72 @@ if (!fs.existsSync(outDir)) {
 }
 
 const textExtensions = new Set(['.html', '.js', '.css', '.json', '.rules']);
+const EBUSY_RETRIES = 12;
+const EBUSY_DELAY_MS = 120;
+
 function isTextFile(name) {
   const ext = path.extname(name).toLowerCase();
   return textExtensions.has(ext);
 }
 
+function sleepSync(ms) {
+  const end = Date.now() + ms;
+  while (Date.now() < end) {}
+}
+
+function isEBUSY(e) {
+  return e && (e.code === 'EBUSY' || e.errno === -4082);
+}
+
 function copyWithLF(srcPath, destPath) {
-  const content = fs.readFileSync(srcPath, 'utf8');
+  let content;
+  for (let i = 0; i < EBUSY_RETRIES; i++) {
+    try {
+      content = fs.readFileSync(srcPath, 'utf8');
+      break;
+    } catch (e) {
+      if (isEBUSY(e) && i < EBUSY_RETRIES - 1) {
+        sleepSync(EBUSY_DELAY_MS);
+      } else {
+        throw e;
+      }
+    }
+  }
+  if (content == null) return;
   const normalized = content.replace(/\r\n/g, '\n').replace(/\r/g, '\n');
-  fs.writeFileSync(destPath, normalized, 'utf8');
+  for (let i = 0; i < EBUSY_RETRIES; i++) {
+    try {
+      fs.writeFileSync(destPath, normalized, 'utf8');
+      return;
+    } catch (e) {
+      if (isEBUSY(e) && i < EBUSY_RETRIES - 1) {
+        sleepSync(EBUSY_DELAY_MS);
+      } else if (isEBUSY(e)) {
+        console.warn('[prepare-deploy] EBUSY skip (retry later):', destPath);
+        return;
+      } else {
+        throw e;
+      }
+    }
+  }
 }
 
 function copyBinary(srcPath, destPath) {
-  fs.copyFileSync(srcPath, destPath);
+  for (let i = 0; i < EBUSY_RETRIES; i++) {
+    try {
+      fs.copyFileSync(srcPath, destPath);
+      return;
+    } catch (e) {
+      if (isEBUSY(e) && i < EBUSY_RETRIES - 1) {
+        sleepSync(EBUSY_DELAY_MS);
+      } else if (isEBUSY(e)) {
+        console.warn('[prepare-deploy] EBUSY skip (retry later):', destPath);
+        return;
+      } else {
+        throw e;
+      }
+    }
+  }
 }
 
 // ملفات الجذر

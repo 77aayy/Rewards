@@ -321,11 +321,13 @@
                                 <th class="col-breakdown th-section-start text-center text-gray-300 text-sm font-semibold cursor-pointer hover:bg-white/10 transition-colors select-none" style="display:none;" data-sort-key="night" title="فرز حسب ليل">ليل</th>
                                 <!-- VIP: يُحقن ديناميكياً مع class th-section-start لأول عمود -->
                                 <th class="col-breakdown col-breakdown-vip-placeholder text-center text-amber-300 text-sm font-semibold" style="display:none;" id="vipColumnsPlaceholder"></th>
-                                <!-- قسم التنبيهات — border-left على آخر عمود (نقص SAR = أيسر بصرياً) -->
-                                <th class="col-breakdown text-center text-red-300 text-sm font-semibold cursor-pointer hover:bg-white/10 transition-colors select-none" style="display:none;" data-sort-key="alertCount" title="فرز حسب تنبيه">تنبيه</th>
-                                <th class="col-breakdown th-section-start text-center text-red-300 text-sm font-semibold cursor-pointer hover:bg-white/10 transition-colors select-none" style="display:none;" data-sort-key="alertTotal" title="فرز حسب نقص SAR">نقص SAR</th>
-                                <!-- بداية قسم الحضور والتقييمات -->
-                                <th class="col-attendance th-section-start text-center cursor-pointer hover:bg-white/10 transition-colors select-none" data-sort-key="attendance26Days" title="فرز حسب بطل تحدي الظروف"><span class="block text-xs">بطل تحدي الظروف</span><span class="text-[12px] font-normal text-gray-400">(26+ يوم)</span></th>
+                                <!-- العقود الشهرية — قسم مستقل: حد يسار (بعد VIP) + حد يمين (قبل تنبيهات) -->
+                                <th class="col-breakdown col-monthly-contracts th-section-start th-section-end text-center text-teal-300 text-sm font-semibold" style="display:none;" title="عدد العقود الشهرية — كل عقد يضيف 200 ريال">العقود الشهرية</th>
+                                <!-- قسم التنبيهات — حد يسار (بعد العقود) + حد يمين (قبل الحضور) -->
+                                <th class="col-breakdown th-section-start text-center text-red-300 text-sm font-semibold cursor-pointer hover:bg-white/10 transition-colors select-none" style="display:none;" data-sort-key="alertCount" title="فرز حسب تنبيه">تنبيه</th>
+                                <th class="col-breakdown th-section-end text-center text-red-300 text-sm font-semibold cursor-pointer hover:bg-white/10 transition-colors select-none" style="display:none;" data-sort-key="alertTotal" title="فرز حسب نقص SAR">نقص SAR</th>
+                                <!-- قسم الحضور — حد يسار (بعد التنبيهات) + حد يمين (قبل التقييمات) -->
+                                <th class="col-attendance th-section-start th-section-end text-center cursor-pointer hover:bg-white/10 transition-colors select-none" data-sort-key="attendance26Days" title="فرز حسب بطل تحدي الظروف"><span class="block text-xs">بطل تحدي الظروف</span><span class="text-[12px] font-normal text-gray-400">(26+ يوم)</span></th>
                                 <th class="col-rate text-center">الفئة</th>
                                 <th class="col-eval-booking text-center text-turquoise cursor-pointer hover:bg-white/10 transition-colors select-none" data-sort-key="evaluationsBooking" title="فرز حسب BOOKING">
                                     <div class="flex flex-col items-center justify-center gap-0">
@@ -391,9 +393,10 @@
                                 <td id="footEvening" class="col-breakdown p-1 text-center font-mono text-sm text-indigo-300 font-medium" style="display:none">0</td>
                                 <td id="footNight" class="col-breakdown p-1 text-center font-mono text-sm text-gray-300 font-medium" style="display:none">0</td>
                                 <td id="footVipRooms" class="col-breakdown p-1 text-center font-mono text-sm text-amber-300 font-semibold" style="display:none" colspan="1">0</td>
-                                <td id="footAlertCount" class="col-breakdown p-1 text-center font-mono text-sm text-red-300 font-medium" style="display:none">0</td>
-                                <td id="footAlertTotal" class="col-breakdown p-1 text-center font-mono text-sm text-red-300 font-medium" style="display:none">0</td>
-                                <td class="col-attendance p-2"></td>
+                                <td id="footMonthlyContracts" class="col-breakdown col-monthly-contracts td-section-start td-section-end p-1 text-center font-mono text-sm text-teal-300 font-medium" style="display:none">0</td>
+                                <td id="footAlertCount" class="col-breakdown td-section-start p-1 text-center font-mono text-sm text-red-300 font-medium" style="display:none">0</td>
+                                <td id="footAlertTotal" class="col-breakdown td-section-end p-1 text-center font-mono text-sm text-red-300 font-medium" style="display:none">0</td>
+                                <td class="col-attendance td-section-start td-section-end p-2"></td>
                                 <td class="col-rate p-2"></td>
                                 <td id="footEvalCount" class="p-2 text-center text-yellow-400 text-base border-x border-white/10 number-display font-black">0</td>
                                 <td class="col-fund p-2 text-center text-gray-500 text-base border-x border-white/10">-</td>

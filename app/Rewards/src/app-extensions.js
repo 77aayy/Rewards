@@ -1686,7 +1686,7 @@ function populateArchivedReportsGrid() {
       const gross = (emp.count * rate) + (evBooking * 20) + (evGoogle * 10);
       const fund = gross * getSupportFundRatio();
       let net = gross - fund;
-      const attendanceBonus = emp.attendance26Days === true ? net * 0.25 : 0;
+      const attendanceBonus = emp.attendance26Days === true ? 50 : 0;
       net = net + attendanceBonus;
       totalCount += emp.count;
       totalNet += net;
@@ -2086,7 +2086,7 @@ function getDiscountForEmployeeInBranch(employeeName, branchNet) {
   return discountAmount;
 }
 
-// خصم تقييم الفندق: 10 ريال × عدد التقييمات السلبية (أقل من تقييم الفرع). للمتكرر: مرة واحدة من الفرع الذي فيه أعلى صافي للموظف (قبل خصم التقييم السلبي).
+// خصم تقييم الفندق: 10 ريال × عدد التقييمات السلبية. للمتكرر: مرة واحدة من الفرع الذي فيه أعلى صافي (نفس getBranchWithMaxNegativeRatingsForEmployee).
 function getHotelRatingDeductionForEmployee(employeeName) {
   const counts = (typeof window !== 'undefined' && window.branchNegativeRatingsCount) ? window.branchNegativeRatingsCount : {};
   if (typeof db === 'undefined' || !db.length) return 0;
@@ -2097,22 +2097,19 @@ function getHotelRatingDeductionForEmployee(employeeName) {
     const n = parseInt(counts[branch], 10) || 0;
     return n * 10;
   }
-  // متكرر: الفرع الأكثر تقييمات سلبية فقط
-  let maxCount = 0;
-  allEmpBranches.forEach(emp => {
-    const n = parseInt(counts[emp.branch], 10) || 0;
-    if (n > maxCount) maxCount = n;
-  });
-  return maxCount * 10;
+  const branchWithMaxNet = typeof getBranchWithMaxNegativeRatingsForEmployee === 'function' ? getBranchWithMaxNegativeRatingsForEmployee(employeeName) : null;
+  const branch = branchWithMaxNet || (allEmpBranches[0] && allEmpBranches[0].branch);
+  const n = branch ? (parseInt(counts[branch], 10) || 0) : 0;
+  return n * 10;
 }
 
-/** الفرع الذي يُطبَّق فيه خصم التقييم السلبي للموظف المتكرر: الفرع الذي فيه أعلى صافي للموظف (قبل خصم التقييم السلبي)، حتى لا يُخصم من الفرع الضعيف. غير متكرر: فرعه الوحيد. */
+/** الفرع الأكثر صافي للمتكرر = إجمالي − صندوق الدعم فقط (قبل الحوافز والخصومات)، مطابق لمعيار الحوافز. */
 function getBranchWithMaxNegativeRatingsForEmployee(employeeName) {
   if (typeof db === 'undefined' || !db.length) return null;
   const allEmpBranches = db.filter(e => e.name === employeeName);
   if (allEmpBranches.length === 0) return null;
   if (allEmpBranches.length === 1) return allEmpBranches[0].branch;
-  let maxNet = -Infinity;
+  let maxNetBase = -Infinity;
   let branchWithMaxNet = null;
   allEmpBranches.forEach(emp => {
     const rate = emp.count > 100 ? 3 : (emp.count > 50 ? 2 : 1);
@@ -2120,11 +2117,8 @@ function getBranchWithMaxNegativeRatingsForEmployee(employeeName) {
     const evGoogle = emp.evaluationsGoogle || 0;
     const gross = (emp.count * rate) + (evBooking * 20) + (evGoogle * 10);
     const fund = gross * getSupportFundRatio();
-    let branchNet = gross - fund;
-    const attendance26Days = emp.attendance26Days === true;
-    const attendanceBonus = attendance26Days ? branchNet * 0.25 : 0;
-    branchNet = branchNet + attendanceBonus;
-    if (branchNet > maxNet) { maxNet = branchNet; branchWithMaxNet = emp.branch; }
+    const netBase = gross - fund;
+    if (netBase > maxNetBase) { maxNetBase = netBase; branchWithMaxNet = emp.branch; }
   });
   return branchWithMaxNet || (allEmpBranches[0] && allEmpBranches[0].branch);
 }
@@ -2151,7 +2145,7 @@ function getTotalDiscountForEmployee(employeeName, netBeforeDiscounts = null) {
           const fund = gross * getSupportFundRatio();
           let branchNet = gross - fund;
           const attendance26Days = emp.attendance26Days === true;
-          const attendanceBonus = attendance26Days ? branchNet * 0.25 : 0;
+          const attendanceBonus = attendance26Days ? 50 : 0;
           branchNet = branchNet + attendanceBonus;
           const branchDiscount = employeeDiscounts.reduce((sum, discount) => {
             return sum + (branchNet * (discount.discountPercentage / 100));
@@ -2267,7 +2261,7 @@ function calculateAggregatedNetForEmployee(employeeName) {
   } else {
     totalDays = firstEmp?.totalAttendanceDays || (firstEmp?.attendance26Days === true ? 26 : 0);
   }
-  const aggregatedAttendanceBonus = totalDays >= 26 && firstEmp?.attendance26Days === true ? baseNet * 0.25 : 0;
+  const aggregatedAttendanceBonus = totalDays >= 26 && firstEmp?.attendance26Days === true ? 50 : 0;
   baseNet = baseNet + aggregatedAttendanceBonus;
   
   // Calculate excellence and commitment bonuses (need to recalculate branch winners)
@@ -2285,7 +2279,7 @@ function calculateAggregatedNetForEmployee(employeeName) {
     const fund = gross * getSupportFundRatio();
     let net = gross - fund;
     const attendance26Days = emp.attendance26Days === true;
-    const attendanceBonus = attendance26Days ? net * 0.25 : 0;
+    const attendanceBonus = attendance26Days ? 50 : 0;
     net = net + attendanceBonus;
     
     const bw = branchWinners[emp.branch];
@@ -3302,18 +3296,14 @@ function getEmployeePointsBalanceForPeriodDb(db) {
     var hasExcellence = false;
     var hasCommitment = false;
     var isDuplicatePb = employees.length > 1;
-    // challengeRowId for duplicates
-    var challengeRowIdPb = null;
-    if (isDuplicatePb) {
-      var maxChTot = -1;
+    // الحوافز للمتكرر: مرة واحدة في الفرع الأكثر صافي (قبل الحوافز)
+    var bestBranchIdPb = employees[0] ? employees[0].id : null;
+    if (isDuplicatePb && employees.length > 0) {
+      var maxNetBasePb = -1;
       employees.forEach(function (e) {
         var eGross = typeof computeGrossFromBreakdown === 'function' ? computeGrossFromBreakdown(e) : ((e.count > 100 ? 3 : (e.count > 50 ? 2 : 1)) * e.count + (e.evaluationsBooking || 0) * 20 + (e.evaluationsGoogle || 0) * 10);
-        var eFund = eGross * getSupportFundRatio();
-        var eNet = eGross - eFund;
-        var eAtt = e.attendance26Days === true;
-        var eBonus = eAtt ? eNet * 0.25 : 0;
-        eNet = eNet + eBonus;
-        if (eAtt && eBonus > 0 && eNet > maxChTot) { maxChTot = eNet; challengeRowIdPb = e.id; }
+        var netBase = eGross - eGross * getSupportFundRatio();
+        if (netBase > maxNetBasePb) { maxNetBasePb = netBase; bestBranchIdPb = e.id; }
       });
     }
     employees.forEach(function (emp) {
@@ -3322,13 +3312,14 @@ function getEmployeePointsBalanceForPeriodDb(db) {
       const fund = gross * getSupportFundRatio();
       var branchNet = gross - fund;
       const attendance26Days = emp.attendance26Days === true;
-      var applyChallenge = isDuplicatePb ? (challengeRowIdPb === emp.id && attendance26Days) : attendance26Days;
-      branchNet = branchNet + (applyChallenge ? branchNet * 0.25 : 0);
+      var applyChallenge = isDuplicatePb ? (bestBranchIdPb === emp.id && attendance26Days) : attendance26Days;
+      branchNet = branchNet + (applyChallenge ? 50 : 0);
       totalNetFromBranches += branchNet;
       if (branchNet > maxBranchNetPb) {
         maxBranchNetPb = branchNet;
         grossOfBranchWithMaxNetPb = gross;
       }
+      if (isDuplicatePb && emp.id !== bestBranchIdPb) return;
       const bw = branchWinners[emp.branch];
       if (bw && bw.book.ids.indexOf(emp.id) >= 0 && bw.eval.ids.indexOf(emp.id) >= 0 && bw.book.val > 0 && bw.eval.val > 0) hasExcellence = true;
       if (bw && attendance26Days && bw.attendance.ids.indexOf(emp.id) >= 0 && ((bw.eval.ids.indexOf(emp.id) >= 0 && bw.eval.val > 0) || (bw.book.ids.indexOf(emp.id) >= 0 && bw.book.val > 0))) hasCommitment = true;
@@ -4284,7 +4275,7 @@ function populateArchivedEmployeePerformanceTableForPeriod(employees, periodId, 
     const fund = gross * getSupportFundRatio();
     let net = gross - fund;
     const attendance26Days = emp.attendance26Days === true;
-    net = net + (attendance26Days ? net * 0.25 : 0);
+    net = net + (attendance26Days ? 50 : 0);
     const bw = branchWinners[emp.branch];
     if (!bw) return;
     if (net > bw.net.val) { bw.net.val = net; bw.net.ids = [emp.id]; }
@@ -4345,7 +4336,7 @@ function populateArchivedEmployeePerformanceTableForPeriod(employees, periodId, 
       const fund = gross * getSupportFundRatio();
       let branchNet = gross - fund;
       const attendance26Days = emp.attendance26Days === true;
-      branchNet = branchNet + (attendance26Days ? branchNet * 0.25 : 0);
+      branchNet = branchNet + (attendance26Days ? 50 : 0);
       totalNetFromBranches += branchNet;
       if (branchNet > maxBranchNetArchived) {
         maxBranchNetArchived = branchNet;
@@ -4574,7 +4565,7 @@ function calculatePeriodStats(employees) {
     
     // Add attendance bonus
     if (emp.attendance26Days === true) {
-      net = net + (net * 0.25);
+      net = net + 50;
     }
     
     totalNet += net;
@@ -4637,7 +4628,7 @@ function populateArchivedEmployeePerformanceTable(employees) {
       let net = gross - fund;
       
       if (emp.attendance26Days === true) {
-        net = net + (net * 0.25);
+        net = net + 50;
       }
       
       totalNet += net;

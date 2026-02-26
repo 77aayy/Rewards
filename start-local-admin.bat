@@ -1,35 +1,40 @@
 @echo off
-REM Start local Vite server and open admin page. Run from project root only.
 chcp 65001 >nul
 cd /d "%~dp0"
 
-if not exist "app\package.json" (
-  echo ERROR: app\package.json not found. Run this script from the project root.
+where node >nul 2>nul || (
+  echo ERROR: Node.js not found. Install Node and add it to PATH.
   pause
   exit /b 1
 )
 
-set "APP=%~dp0app"
-set "REWARDS=%APP%\Rewards"
-cd /d "%APP%"
+if not exist "app\package.json" (
+  echo ERROR: app\package.json not found. Run this script from project root.
+  echo Current dir: %CD%
+  pause
+  exit /b 1
+)
 
 echo ========================================
-echo   Local server + Admin page
+echo   Local server + Admin
 echo ========================================
-echo/
+echo.
 
-REM Run Rewards watcher (auto-sync shared/ and Rewards/src → public/rewards)
-start "Rewards Watch" cmd /k "cd /d \"%REWARDS%\" && node scripts/watch-and-predeploy.js"
+set "REWARDS=%~dp0app\Rewards"
+if exist "%REWARDS%\scripts\watch-and-predeploy.js" (
+  pushd "%REWARDS%"
+  start /b "Watcher" node scripts\watch-and-predeploy.js
+  popd
+  echo Watcher started.
+)
 
-REM Run Vite Dev Server
-start "Vite Dev Server" cmd /k "cd /d \"%APP%\" && npm run dev"
+start /b cmd /c "ping -n 9 127.0.0.1 >nul & start http://localhost:5180/?admin=ayman5255"
 
-echo Waiting for server on port 5180...
-timeout /t 6 /nobreak >nul
+cd /d "%~dp0app"
 
-start "" "http://localhost:5180/?admin=ayman5255"
+echo If port 5180 is in use, close the other server window then run this again.
+echo.
+npm run dev
 
-echo/
-echo Browser opened. Close the server window to stop.
-echo/
+echo.
 pause
