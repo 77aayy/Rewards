@@ -4,6 +4,7 @@ import tailwindcss from '@tailwindcss/vite'
 import path from 'path'
 import fs from 'fs'
 import { fileURLToPath } from 'url'
+import type { IncomingMessage, ServerResponse } from 'http'
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url))
 const appRoot = path.resolve(__dirname)
@@ -11,7 +12,7 @@ const rewardsRoot = path.join(appRoot, 'Rewards')
 const appSharedRoot = path.join(appRoot, 'shared')
 
 // في التطوير: خدمة /rewards/* من مصدر Rewards مباشرة حتى يظهر أي تعديل فوراً بدون تشغيل sync:rewards
-function serveRewardsFromSource(req: any, res: any, next: () => void) {
+function serveRewardsFromSource(req: IncomingMessage, res: ServerResponse, next: () => void) {
   const url = req.url || ''
   if (!url.startsWith('/rewards')) return next()
   const pathname = url.split('?')[0]
