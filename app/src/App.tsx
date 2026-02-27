@@ -2837,8 +2837,7 @@ function ConditionsPopup({ config, onClose }: { config: AppConfig; onClose: () =
 
   useEffect(() => {
     let cancelled = false;
-    setLoading(true);
-    setError(null);
+    queueMicrotask(() => { if (!cancelled) { setLoading(true); setError(null); } });
     fetch(getConditionsSchemaUrl())
       .then((r) => (r.ok ? r.json() : Promise.reject(new Error('Not ok'))))
       .then((data: ConditionsSchema) => {
