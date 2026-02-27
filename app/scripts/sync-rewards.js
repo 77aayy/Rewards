@@ -32,12 +32,59 @@ if (!fs.existsSync(rewardsPublic)) {
 }
 
 // 2) حذف الوجهة ثم نسخ كامل (تجنب ملفات قديمة)
+// على Windows: maxRetries + retryDelay تجنب ENOTEMPTY عند تعارض مع Watcher أو عمليات أخرى
 if (fs.existsSync(appRewardsPublic)) {
-  fs.rmSync(appRewardsPublic, { recursive: true });
+  try {
+    fs.rmSync(appRewardsPublic, { recursive: true, maxRetries: 5, retryDelay: 150 });
+  } catch (err) {
+    if (err.code === 'ENOTEMPTY' || err.code === 'EBUSY') {
+      // بديل: تفريغ المحتوى دون حذف المجلد نفسه (أقل حساسية لقفل الملفات)
+      for (const name of fs.readdirSync(appRewardsPublic)) {
+        const p = path.join(appRewardsPublic, name);
+        fs.rmSync(p, { recursive: true, maxRetries: 3, retryDelay: 100 });
+      }
+    } else {
+      throw err;
+    }
+  }
 }
 fs.mkdirSync(appRewardsPublic, { recursive: true });
 
+function sleep(ms) {
+  const end = Date.now() + ms;
+  while (Date.now() < end) {}
+}
+
+function copyFileWithRetry(src, dest, retries = 5, delayMs = 120) {
+  for (let i = 0; i < retries; i++) {
+    try {
+      if (!fs.existsSync(src)) {
+        if (i < retries - 1) {
+          sleep(delayMs);
+          continue;
+        }
+        console.warn('[sync-rewards] تخطّي (غير موجود):', path.relative(rewardsPublic, src));
+        return;
+      }
+      fs.copyFileSync(src, dest);
+      return;
+    } catch (err) {
+      if ((err.code === 'EBUSY' || err.code === 'EPERM') && i < retries - 1) {
+        sleep(delayMs);
+      } else if (err.code === 'ENOENT' && i < retries - 1) {
+        sleep(delayMs);
+      } else if (err.code === 'ENOENT') {
+        console.warn('[sync-rewards] تخطّي (اختُفى أثناء النسخ):', path.relative(rewardsPublic, src));
+        return;
+      } else {
+        throw err;
+      }
+    }
+  }
+}
+
 function copyRecursive(src, dest) {
+  if (!fs.existsSync(src)) return; // تخطّي لو الملف اختفى أثناء التداخل مع Watcher
   const stat = fs.statSync(src);
   if (stat.isDirectory()) {
     fs.mkdirSync(dest, { recursive: true });
@@ -45,7 +92,7 @@ function copyRecursive(src, dest) {
       copyRecursive(path.join(src, name), path.join(dest, name));
     }
   } else {
-    fs.copyFileSync(src, dest);
+    copyFileWithRetry(src, dest);
   }
 }
 

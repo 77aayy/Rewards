@@ -1114,6 +1114,47 @@ display: table-cell !important;
 #targetTable tr.breakdown-group-row th:not([colspan="2"]):not([colspan="1"]) {
   border-left: 2px solid rgba(255, 255, 255, 0.12);
 }
+/* عمود العقود الشهرية — حدود واضحة بين VIP وتنبيهات (رأس الجدول + صفوف البيانات) */
+#targetTable tr.breakdown-group-row th.col-monthly-contracts {
+  border-left: 2px solid rgba(20, 184, 166, 0.65) !important;
+  border-right: 2px solid rgba(255, 255, 255, 0.5) !important;
+  box-shadow: inset -2px 0 0 rgba(255, 255, 255, 0.15);
+}
+#targetTable td.col-monthly-contracts.td-section-end {
+  border-right: 2px solid rgba(255, 255, 255, 0.5) !important;
+  box-shadow: inset -2px 0 0 rgba(255, 255, 255, 0.12);
+}
+/* حد بداية تنبيهات — أوضح بين العقود الشهرية وتنبيهات (الخانة التي تلي العقود الشهرية) */
+#targetTable td.col-monthly-contracts.td-section-end + td.td-section-start {
+  border-left: 2px solid rgba(255, 255, 255, 0.5) !important;
+  box-shadow: inset 2px 0 0 rgba(255, 255, 255, 0.12);
+}
+/* main-header-row: الحد بين العقود الشهرية وتنبيهات — على يمين العقود وعلى يسار تنبيه */
+/* العقود الشهرية: حد يسار (بعد VIP) + حد يمين (قبل تنبيهات) */
+#targetTable tr.main-header-row th.col-monthly-contracts.th-section-start {
+  border-left: 2px solid rgba(20, 184, 166, 0.55) !important;
+}
+#targetTable tr.main-header-row th.col-monthly-contracts.th-section-end {
+  border-right: 2px solid rgba(255, 255, 255, 0.5) !important;
+}
+#targetTable tr.main-header-row th[data-sort-key="alertCount"].th-section-start {
+  border-left: 2px solid rgba(255, 255, 255, 0.5) !important;
+}
+/* تنبيهات: حد يمين (قبل الحضور) — main-header */
+/* تنبيهات: حد يمين في صفوف البيانات (خانة نقص SAR) */
+#targetTable td.td-section-end:has(+ td.col-attendance) {
+  border-right: 2px solid rgba(255, 255, 255, 0.5) !important;
+}
+#targetTable tr.main-header-row th[data-sort-key="alertTotal"].th-section-end {
+  border-right: 2px solid rgba(255, 255, 255, 0.5) !important;
+}
+/* الحضور: حد يمين (قبل التقييمات) — main-header + صفوف البيانات */
+#targetTable tr.main-header-row th.col-attendance.th-section-end {
+  border-right: 2px solid rgba(16, 185, 129, 0.55) !important;
+}
+#targetTable td.col-attendance.td-section-end {
+  border-right: 2px solid rgba(16, 185, 129, 0.55) !important;
+}
 /* ترويسة الجدول: خلفية وفاصل موحّد */
 .table-head-theme {
   background: linear-gradient(135deg, rgba(255,255,255,0.07) 0%, rgba(255,255,255,0.03) 100%);
@@ -2290,6 +2331,18 @@ body.role-manager #statisticsReportsContent {
 body.role-manager #currentPeriodStatsBlock { order: 1; }
 body.role-manager #cumulativePointsSection { order: 2; }
 body.role-manager #archivedPeriodsSection { order: 3; display: block !important; }
+
+/* جدول تقييم الموظفين: إظهاره دائماً مع الإحصائيات (صافي + صندوق شركاء النجاح = نقاط) */
+#currentPeriodStatsTableWrap {
+  display: block !important;
+  visibility: visible !important;
+  opacity: 1 !important;
+}
+body.role-manager #currentPeriodStatsTableWrap {
+  display: block !important;
+  visibility: visible !important;
+  opacity: 1 !important;
+}
 
 /* المشرف: إخفاء الحضور + التقارير + الطباعة + إغلاق الفترة (نسخة CSS احتياطية) */
 body.role-supervisor .attendance-toggle,

@@ -26,6 +26,9 @@ import type {
   StaffFileStats,
   LogFileStats,
   ReportFileStats,
+  AttendanceDayStatus,
+  AttendanceDayResult,
+  AttendanceFileResult,
 } from './types';
 import type { AppConfig, MergedRoomRule } from './config';
 import { getMinPriceFromConfig } from './config';
@@ -246,7 +249,7 @@ export function getStaffBranches(buffer: ArrayBuffer): string[] {
 
 export interface FileDetectionResult {
   slotKey: string;   // e.g. 'report-الكورنيش', 'staff'
-  baseType: 'staff' | 'log' | 'report' | 'units' | 'unknown';
+  baseType: 'staff' | 'log' | 'report' | 'units' | 'actualDates' | 'unknown';
   branch: string;    // Arabic branch name, '' for staff/unknown
 }
 
@@ -256,6 +259,7 @@ export function getFileTypeLabel(baseType: string, branch: string): string {
     log: 'سجل حركات النظام',
     report: 'تقرير حجوزات العملاء',
     units: 'تقرير وحدات الحجوزات',
+    actualDates: 'تقرير التواريخ الفعلية للحجوزات',
     unknown: 'ملف غير معروف',
   };
   const base = typeLabels[baseType] || 'ملف';
@@ -268,6 +272,7 @@ export function getFileTypeIcon(baseType: string): { color: string; bg: string }
     log: { color: 'text-teal-400', bg: 'bg-teal-500/20' },
     report: { color: 'text-sky-400', bg: 'bg-sky-500/20' },
     units: { color: 'text-amber-400', bg: 'bg-amber-500/20' },
+    actualDates: { color: 'text-violet-400', bg: 'bg-violet-500/20' },
     unknown: { color: 'text-[var(--adora-error)]', bg: 'bg-adora-error-subtle' },
   };
   return icons[baseType] || icons.unknown;
@@ -283,12 +288,13 @@ export function detectFileType(buffer: ArrayBuffer): FileDetectionResult {
   }) as unknown[][];
 
   const sn = sheetName.toLowerCase();
-  let baseType: 'staff' | 'log' | 'report' | 'units' | 'unknown' = 'unknown';
+  let baseType: 'staff' | 'log' | 'report' | 'units' | 'actualDates' | 'unknown' = 'unknown';
 
   if (sn.includes('userstatisticsreport')) baseType = 'staff';
   else if (sn.includes('activitylog')) baseType = 'log';
   else if (sn.includes('resesrvationsunits') || sn.includes('reservationsunits')) baseType = 'units';
   else if (sn.includes('guestsstatistical')) baseType = 'report';
+  else if (sn.includes('actualdates') || sn.includes('resesrvationactual') || sn.includes('resesrvatinactual')) baseType = 'actualDates';
   else {
     for (let r = 0; r < Math.min(20, rows.length); r++) {
       const row = rows[r];
@@ -298,6 +304,7 @@ export function detectFileType(buffer: ArrayBuffer): FileDetectionResult {
       if (rowText.includes('تقرير سجل الحركات') || rowText.includes('إنشاء حجز جديد')) { baseType = 'log'; break; }
       if (rowText.includes('تقرير وحدات الحجوزات')) { baseType = 'units'; break; }
       if (rowText.includes('تقرير حجوزات العملاء') || rowText.includes('مصدر الحجز')) { baseType = 'report'; break; }
+      if (rowText.includes('الدخول والخروج الفعلي للحجوزات') || rowText.includes('تقرير تسجيل الدخول والخروج الفعلي')) { baseType = 'actualDates'; break; }
     }
   }
 
@@ -496,6 +503,20 @@ export function getUnitsFileStats(buffer: ArrayBuffer): { bookings: number; unit
   return { bookings, units };
 }
 
+/** تقرير التواريخ الفعلية — عدد صفوف البيانات (الهيدر في الصف 15، البيانات من 16) */
+export function getActualDatesFileStats(buffer: ArrayBuffer): { rows: number } {
+  const rows = readSheet(buffer);
+  const headerRow = 15;
+  let count = 0;
+  for (let r = headerRow + 1; r < rows.length; r++) {
+    const row = rows[r];
+    if (!row) continue;
+    const user = String(row[1] ?? '').trim();
+    if (user && user !== 'المستخدم') count++;
+  }
+  return { rows: count };
+}
+
 // ===================================================================
 // 6. Full Parsers (with column discovery)
 // ===================================================================
@@ -540,7 +561,7 @@ export function parseStaffFile(buffer: ArrayBuffer, config: AppConfig): StaffRec
 
 // --- Change Log Parser ---
 
-interface LogBooking {
+export interface LogBooking {
   employeeName: string;
   bookingNumber: string;
   creationDateTime: string;
@@ -555,6 +576,8 @@ interface LogBooking {
   priceSAR: number;
   shift: ShiftType;
   branch: string;
+  /** حركة إنشاء حجز جديد (من تفاصيل الحركة في السجل) */
+  isCreation: boolean;
 }
 
 function parseChangeText(text: string): {
@@ -596,6 +619,7 @@ export function parseChangeLog(buffer: ArrayBuffer, branchName: string): LogBook
 
     const numMatch = bookingInfo.match(/رقم الحجز[:\s]*(\d+)/);
     const bookingNumber = numMatch ? numMatch[1] : '';
+    const isCreation = /إنشاء\s*حجز|حجز\s*جديد|إضافة\s*حجز|تم\s*إنشاء/i.test(changeText);
     const parsed = parseChangeText(changeText);
     const creationDate = parseDateTime(dateTimeStr);
     const shift: ShiftType = creationDate ? getShiftFromTime(creationDate) : 'صباح';
@@ -622,6 +646,7 @@ export function parseChangeLog(buffer: ArrayBuffer, branchName: string): LogBook
       priceSAR: parsed.price,
       shift,
       branch: branchName,
+      isCreation,
     });
   }
   return bookings;
@@ -791,6 +816,31 @@ export function buildLogLookup(logBookings: LogBooking[]): Map<string, string> {
     }
   }
   return map;
+}
+
+/**
+ * توزيع الشفتات من سجل النشاط — حركات "إنشاء حجز" فقط، مع فلتر الفترة.
+ * يُستخدم للمطابقة مع المرجع عندما السجل يعطي عددًا كافيًا (لا توزيع عشوائي).
+ */
+export function getLogCreationShiftCounts(
+  logBookings: LogBooking[],
+  dateRange: { from: Date; to: Date } | null,
+): Record<string, { صباح: number; مساء: number; ليل: number; total: number }> {
+  const out: Record<string, { صباح: number; مساء: number; ليل: number; total: number }> = {};
+  for (const b of logBookings) {
+    if (!b.isCreation) continue;
+    if (dateRange) {
+      const d = parseDateOnly(b.creationDateTime);
+      if (!d || d < dateRange.from || d > dateRange.to) continue;
+    }
+    const key = `${b.branch}|${b.employeeName}`;
+    if (!out[key]) out[key] = { صباح: 0, مساء: 0, ليل: 0, total: 0 };
+    out[key].total++;
+    if (b.shift === 'صباح') out[key].صباح++;
+    else if (b.shift === 'مساء') out[key].مساء++;
+    else out[key].ليل++;
+  }
+  return out;
 }
 
 export function buildUnitsLookup(
@@ -982,6 +1032,13 @@ export function aggregateData(
       const unitsData = unitsLookup.get(`${b.bookingNumber}|${b.branch}`);
       const effectivePrice = (unitsData && unitsData.totalRent > 0) ? unitsData.totalRent : b.priceSAR;
 
+      // ========== معادلات التنبيهات ونقص SAR (مراجعة) ==========
+      // • المتوقع = حد الأدنى لليلة (من الإعدادات) × عدد الليالي
+      // • النقص = المتوقع − الإيجار الفعلي  (فقط إذا النقص > 0)
+      // • الإعفاءات: حجوزات بوكينج (مصدر الحجز = بوكينج) + نقل نزيل بين غرف (isRoomTransfer) → لا يُحتسب تنبيه
+      // • حد الأدنى: من config (priceRules أو mergedRules) حسب نوع الوحدة وعدد الليالي (شهري ≥ 28 ليلة)
+      // • تنبيه (عمود) = عدد حجوزات فيها priceShortfall > 0  |  نقص SAR = مجموع priceShortfall لتلك الحجوزات
+      // ============================================================
       // Pricing (config-based)
       let minPrice = 0;
       let roomTypeLabel = '';
@@ -1066,4 +1123,317 @@ export function aggregateData(
   }
 
   return result;
+}
+
+// ===================================================================
+// Attendance (TeamAttendanceReport) — Logic Engine
+// ===================================================================
+//
+// 1. Group By Day: كل البصمات بين (6 صباحاً اليوم) و (5:59 فجر اليوم التالي) → حزمة يوم عمل واحد.
+//    تطبيق: toWorkDate(rowDate, hour) — لو hour < 6 نرجع تاريخ اليوم السابق، وإلا نفس اليوم.
+// 2. Pairing: داخل الحزمة نأخذ (أول بصمة دخول) و (آخر بصمة خروج) = min(entryMins), max(exitMins).
+//
+
+const TIME_RE = /\d{1,2}:\d{2}(:\d{2})?/;
+const STAMP_SEP = ' -- ';
+const MAX_SHIFT_HOURS = 12;
+/** البصمة غير المكتملة (دخول فقط أو خروج فقط): 8 ساعات ثابتة، لا نطبق min(., 12) */
+const INCOMPLETE_PRESENCE_DEFAULT_HOURS = 8;
+const MIN_VALID_DURATION_HOURS = 4;
+const DOUBLE_PUNCH_MIN_MINUTES = 5;
+
+function hasTime(s: string): boolean {
+  return TIME_RE.test(s);
+}
+
+/** Group By Day: بصمة قبل 6 ص → يوم العمل = اليوم السابق؛ من 6 ص فما بعد → يوم العمل = نفس اليوم. */
+function toWorkDate(date: Date, timeHour: number): string {
+  const d = new Date(date);
+  if (timeHour < 6) d.setDate(d.getDate() - 1);
+  return d.toISOString().slice(0, 10);
+}
+
+/** Parse stamp "07:04:00 -- 23:03:00" or "23:00 -- " into entry/exit minutes-from-midnight; double-punch filter < 5 min. */
+function parseStamp(stamp: unknown): { entryMins: number | null; exitMins: number | null } {
+  const s = String(stamp ?? '');
+  if (!hasTime(s)) return { entryMins: null, exitMins: null };
+  const i = s.indexOf(STAMP_SEP);
+  const left = i >= 0 ? s.slice(0, i).trim() : s.trim();
+  const right = i >= 0 ? s.slice(i + STAMP_SEP.length).trim() : '';
+  const toMins = (str: string): number | null => {
+    const m = str.match(/(\d{1,2}):(\d{2})/);
+    if (!m) return null;
+    return parseInt(m[1], 10) * 60 + parseInt(m[2], 10);
+  };
+  const leftM = left && hasTime(left) ? toMins(left.match(TIME_RE)?.[0] ?? left) : null;
+  const rightM = right && hasTime(right) ? toMins(right.match(TIME_RE)?.[0] ?? right) : null;
+  if (leftM != null && rightM != null && Math.abs(rightM - leftM) < DOUBLE_PUNCH_MIN_MINUTES) {
+    return { entryMins: leftM, exitMins: null };
+  }
+  return { entryMins: leftM ?? null, exitMins: rightM ?? null };
+}
+
+/** صافي الساعات: يُطبّق فقط عند وجود بصمتين (دخول + خروج). min(المدة، 12) لمنع ساعات وهمية. */
+function netHoursCapped(entryMins: number, exitMins: number): number {
+  let diff = (exitMins - entryMins) / 60;
+  if (diff < 0) diff += 24;
+  return Math.min(diff, MAX_SHIFT_HOURS);
+}
+
+/** آخر يوم في الشهر بصيغة YYYY-MM-DD */
+function lastDayOfMonth(ym: string): string {
+  const [y, m] = ym.split('-').map(Number);
+  const last = new Date(y, m, 0);
+  const d = last.getDate();
+  return `${y}-${String(m).padStart(2, '0')}-${String(d).padStart(2, '0')}`;
+}
+
+/** عدد الأيام التقويمية بين تاريخين YYYY-MM-DD (شامل البداية والنهاية) */
+function calendarDaysInRange(start: string, end: string): number {
+  const a = new Date(start);
+  const b = new Date(end);
+  if (isNaN(a.getTime()) || isNaN(b.getTime()) || a > b) return 0;
+  const ms = b.getTime() - a.getTime();
+  return Math.round(ms / (24 * 60 * 60 * 1000)) + 1;
+}
+
+/** استخراج بداية ونهاية الفترة من نص مثل "01-01-2026 -- 31-01-2026" (DD-MM-YYYY) أو YYYY-MM-DD. يرجع [start, end] بصيغة YYYY-MM-DD أو null لو فشل. */
+function parsePeriodRange(period: string): [string, string] | null {
+  const s = period.trim();
+  if (!s) return null;
+  // فصل بين تاريخين فقط: -- (مع أو بدون مسافات) أو " - " أو "إلى"/to، وليس داخل التاريخ
+  const parts = s.split(/\s*--\s*|\s+-\s+|\s+إلى\s+|\s+to\s+/i).map((p) => p.trim()).filter(Boolean);
+  if (parts.length < 2) return null;
+  const toYmd = (str: string): string | null => {
+    const dash = str.includes('-');
+    const sep = dash ? '-' : '/';
+    const m = str.match(new RegExp(`(\\d{1,4})${sep}(\\d{1,2})${sep}(\\d{1,4})`));
+    if (!m) return null;
+    const a = parseInt(m[1], 10);
+    const b = parseInt(m[2], 10);
+    const c = parseInt(m[3], 10);
+    if (a >= 1000 && a <= 9999) return `${a}-${String(b).padStart(2, '0')}-${String(c).padStart(2, '0')}`;
+    if (c >= 1000 && c <= 9999) return `${c}-${String(b).padStart(2, '0')}-${String(a).padStart(2, '0')}`;
+    return null;
+  };
+  const start = toYmd(parts[0]);
+  const end = toYmd(parts[parts.length - 1]);
+  if (!start || !end) return null;
+  return [start, end];
+}
+
+/** استنتاج نطاق الفترة من مصفوفة الأيام: الشهر الذي فيه أكبر عدد أيام يُعتبر شهر التقرير (حتى لا يتجاوز 31 يومًا في يناير). */
+function inferPeriodFromDays(days: { workDateStr: string }[]): [string, string] | null {
+  if (days.length === 0) return null;
+  const byMonth = new Map<string, number>();
+  for (const d of days) {
+    const ym = d.workDateStr.slice(0, 7);
+    byMonth.set(ym, (byMonth.get(ym) ?? 0) + 1);
+  }
+  let bestYm = '';
+  let bestCount = 0;
+  for (const [ym, count] of byMonth) {
+    if (count > bestCount) {
+      bestCount = count;
+      bestYm = ym;
+    }
+  }
+  if (!bestYm) return null;
+  const periodStart = `${bestYm}-01`;
+  const periodEnd = lastDayOfMonth(bestYm);
+  return [periodStart, periodEnd];
+}
+
+export function parseAttendanceReport(buffer: ArrayBuffer, fileName: string): AttendanceFileResult {
+  assertFileSize(buffer);
+  const XLSX = getXLSX();
+  const wb = XLSX.read(buffer, { type: 'array', cellDates: true });
+  let employeeName = 'موظف';
+  let period = '';
+  const sheet1 = wb.Sheets['Sheet1'];
+  if (sheet1) {
+    const rows1 = XLSX.utils.sheet_to_json<unknown[]>(sheet1, { header: 1, defval: '' }) as unknown[][];
+    for (const row of rows1) {
+      const r = (row || []) as unknown[];
+      for (let i = 0; i < r.length; i++) {
+        const v = String(r[i] ?? '').trim();
+        if (v.indexOf('اسم الموظف') !== -1 && r[i + 1]) employeeName = String(r[i + 1]).replace(/^\s*\d+\s*-\s*\(?/, '').replace(/\)?\s*-\s*\d+\s*$/, '').trim();
+        if (v.indexOf('تقرير عن') !== -1 && r[i + 1]) period = String(r[i + 1] ?? '').trim();
+      }
+    }
+  }
+
+  const sheet3 = wb.Sheets['Sheet3'];
+  if (!sheet3) return { fileName, employeeName, period, totalDaysInPeriod: 0, totalWorkDays: 0, validDays: 0, incompleteDays: 0, absentDays: 0, permittedAbsence: 0, reviewRequiredDays: 0, totalNetHours: 0, fingerprintAccuracy: 0, days: [] };
+
+  const rows3 = XLSX.utils.sheet_to_json<unknown[]>(sheet3, { header: 1, defval: '' }) as unknown[][];
+  const header = (rows3[0] || []) as unknown[];
+  const colDate = header.findIndex((c) => String(c ?? '').trim().indexOf('التاريخ') !== -1);
+  const colStamp = header.findIndex((c) => String(c ?? '').trim().indexOf('الطابع الزمني') !== -1);
+  const colStatus = header.findIndex((c) => String(c ?? '').trim().indexOf('الحالة') !== -1);
+  const dateCol = colDate >= 0 ? colDate : 1;
+  const stampCol = colStamp >= 0 ? colStamp : 5;
+  const statusCol = colStatus >= 0 ? colStatus : header.length - 1;
+
+  type Punch = { workDateStr: string; entryMins: number | null; exitMins: number | null; isOrphan: boolean };
+  const punchesByWorkDate = new Map<string, Punch[]>();
+
+  for (let i = 1; i < rows3.length; i++) {
+    const row = (rows3[i] || []) as unknown[];
+    const status = String(row[statusCol] ?? '').trim();
+    if (status === 'الغياب المسموح') continue;
+
+    const rawDate = row[dateCol];
+    const dateObj = rawDate instanceof Date ? rawDate : typeof rawDate === 'string' ? new Date(rawDate) : null;
+    const rowDate = dateObj && !isNaN(dateObj.getTime()) ? dateObj : null;
+    if (!rowDate) continue;
+
+    const stamp = row[stampCol];
+    const { entryMins, exitMins } = parseStamp(stamp);
+
+    if (entryMins == null && exitMins == null) {
+      const workDateStr = rowDate.toISOString().slice(0, 10);
+      if (!punchesByWorkDate.has(workDateStr)) punchesByWorkDate.set(workDateStr, []);
+      continue;
+    }
+
+    const primaryHour = entryMins != null ? Math.floor(entryMins / 60) : exitMins != null ? Math.floor(exitMins! / 60) : -1;
+    const workDateStr = toWorkDate(rowDate, primaryHour >= 0 ? primaryHour : 0); // Group By Day: 6 ص اليوم → 5:59 فجر الغد
+    const isOrphan = (entryMins != null && exitMins == null) || (entryMins == null && exitMins != null);
+    if (!punchesByWorkDate.has(workDateStr)) punchesByWorkDate.set(workDateStr, []);
+    punchesByWorkDate.get(workDateStr)!.push({ workDateStr, entryMins, exitMins, isOrphan });
+  }
+
+  const sortedDates = Array.from(punchesByWorkDate.keys()).sort();
+  const days: AttendanceDayResult[] = [];
+  let validDays = 0, incompleteDays = 0, absentDays = 0, permittedAbsence = 0, reviewRequiredDays = 0;
+
+  const rowDatesSet = new Set<string>();
+  for (let i = 1; i < rows3.length; i++) {
+    const row = (rows3[i] || []) as unknown[];
+    const rawDate = row[dateCol];
+    const dateObj = rawDate instanceof Date ? rawDate : typeof rawDate === 'string' ? new Date(rawDate) : null;
+    if (dateObj && !isNaN(dateObj.getTime())) rowDatesSet.add(dateObj.toISOString().slice(0, 10));
+  }
+
+  for (const workDateStr of sortedDates) {
+    const punches = punchesByWorkDate.get(workDateStr)!;
+    const entryPunches = punches.filter((p) => p.entryMins != null);
+    const exitPunches = punches.filter((p) => p.exitMins != null);
+    const n = punches.length;
+    const hasEntry = entryPunches.length > 0;
+    const hasExit = exitPunches.length > 0;
+
+    let status: AttendanceDayStatus = 'absent';
+    let netHours = 0;
+    let isOrphan = false;
+
+    // زوج كامل: إما عدة بصمات (أول دخول + آخر خروج) أو بصمة واحدة فيها دخول وخروج (صف واحد "07:00 -- 17:00")
+    const hasPair = hasEntry && hasExit && (n >= 2 || (n === 1 && punches[0].entryMins != null && punches[0].exitMins != null));
+    if (hasPair) {
+      const entryMins = Math.min(...entryPunches.map((p) => p.entryMins!));
+      const exitMins = Math.max(...exitPunches.map((p) => p.exitMins!));
+      netHours = netHoursCapped(entryMins, exitMins);
+      status = netHours >= MIN_VALID_DURATION_HOURS ? 'valid' : 'incomplete';
+      if (status === 'valid') validDays++; else incompleteDays++;
+      days.push({ workDateStr, status, netHours, isOrphan });
+      continue;
+    }
+
+    if (n === 1) {
+      const p = punches[0];
+      const hour = p.entryMins != null ? Math.floor(p.entryMins / 60) : p.exitMins != null ? Math.floor(p.exitMins! / 60) : -1;
+      let orphanNightExit = false;
+      if (p.entryMins != null && p.exitMins == null) {
+        status = 'incomplete';
+        isOrphan = true;
+        incompleteDays++;
+        netHours = INCOMPLETE_PRESENCE_DEFAULT_HOURS; // بصمة دخول فقط
+      } else if (p.entryMins == null && p.exitMins != null) {
+        if (hour >= 5 && hour <= 10) continue; // خروج شفت ليلي، لا يُحسب يوم جديد
+        if (hour >= 21 || hour <= 1) {
+          status = 'incomplete';
+          isOrphan = true;
+          orphanNightExit = true;
+          incompleteDays++;
+          netHours = INCOMPLETE_PRESENCE_DEFAULT_HOURS;
+        } else {
+          status = 'review_required';
+          isOrphan = true;
+          reviewRequiredDays++;
+        }
+      }
+      days.push({ workDateStr, status, netHours, isOrphan, orphanNightExit });
+      continue;
+    }
+
+    // n === 0: صف موجود للتاريخ لكن بدون أي بصمة → غياب
+    if (n === 0) absentDays++;
+    days.push({ workDateStr, status, netHours, isOrphan });
+  }
+
+  for (const d of rowDatesSet) {
+    if (punchesByWorkDate.has(d)) continue;
+    const idx = rows3.findIndex((r, i) => i > 0 && String((r as unknown[])?.[statusCol] ?? '').trim() === 'الغياب المسموح' && new Date((r as unknown[])?.[dateCol] as string).toISOString().slice(0, 10) === d);
+    if (idx > 0) permittedAbsence++;
+    else absentDays++;
+    days.push({ workDateStr: d, status: idx > 0 ? 'permitted_absence' : 'absent', netHours: 0, isOrphan: false });
+  }
+
+  days.sort((a, b) => a.workDateStr.localeCompare(b.workDateStr));
+
+  // تصفية الأيام بفترة التقرير فقط (مثلاً يناير = 31 يوم) لتفادي احتساب يوم من شهر آخر (مثل 31 ديسمبر من بصمة فجر 1 يناير)
+  let daysInScope = days;
+  let periodStart: string | null = null;
+  let periodEnd: string | null = null;
+  const range = parsePeriodRange(period);
+  if (range) {
+    [periodStart, periodEnd] = range;
+  }
+  // بديل 1: إن لم يُستخرج النطاق من نص الفترة، نستنتج الشهر الغالب من الأيام (الأكثر ظهورًا) حتى لا يتجاوز أيام الشهر 28–31
+  if ((!periodStart || !periodEnd) && days.length > 0) {
+    const inferred = inferPeriodFromDays(days);
+    if (inferred) {
+      [periodStart, periodEnd] = inferred;
+    }
+  }
+  // بديل 2: إن لم نستنتج شهرًا، نستخدم أصغر وأكبر تاريخ في صفوف التقرير
+  if ((!periodStart || !periodEnd) && rowDatesSet.size > 0) {
+    const sortedRowDates = Array.from(rowDatesSet).sort();
+    periodStart = periodStart ?? sortedRowDates[0];
+    periodEnd = periodEnd ?? sortedRowDates[sortedRowDates.length - 1];
+  }
+  if (periodStart && periodEnd) {
+    daysInScope = days.filter((d) => d.workDateStr >= periodStart! && d.workDateStr <= periodEnd!);
+    validDays = daysInScope.filter((d) => d.status === 'valid').length;
+    incompleteDays = daysInScope.filter((d) => d.status === 'incomplete').length;
+    absentDays = daysInScope.filter((d) => d.status === 'absent').length;
+    permittedAbsence = daysInScope.filter((d) => d.status === 'permitted_absence').length;
+    reviewRequiredDays = daysInScope.filter((d) => d.status === 'review_required').length;
+  }
+
+  const totalWorkDays = validDays + incompleteDays;
+  // أيام العمل = طول الفترة التقويمية (مثلاً 31 في يناير) وليس مجموع الصفوف، حتى يتسق مع غياب وإجازة وبصمة غير مكتملة
+  const totalDaysInPeriod =
+    periodStart && periodEnd
+      ? calendarDaysInRange(periodStart, periodEnd)
+      : validDays + incompleteDays + absentDays + permittedAbsence + reviewRequiredDays;
+  const totalNetHours = daysInScope.reduce((s, d) => s + d.netHours, 0);
+  const fingerprintAccuracy = totalWorkDays > 0 ? Math.round((validDays / totalWorkDays) * 100) : 0;
+
+  return {
+    fileName,
+    employeeName,
+    period,
+    totalDaysInPeriod,
+    totalWorkDays,
+    validDays,
+    incompleteDays,
+    absentDays,
+    permittedAbsence,
+    reviewRequiredDays,
+    totalNetHours,
+    fingerprintAccuracy,
+    days: daysInScope,
+  };
 }

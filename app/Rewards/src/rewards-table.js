@@ -72,7 +72,7 @@ function updateBreakdownFooterTotals() {
   }
 
   var processedNames = {};
-  var totals = { staffCount: 0, counted: 0, reception: 0, booking: 0, morning: 0, evening: 0, night: 0, alertCount: 0, alertTotal: 0, vipRooms: {} };
+  var totals = { staffCount: 0, counted: 0, reception: 0, booking: 0, morning: 0, evening: 0, night: 0, monthlyContracts: 0, alertCount: 0, alertTotal: 0, vipRooms: {} };
 
   filtered.forEach(function(emp) {
     if (currentFilter === 'الكل') {
@@ -87,6 +87,7 @@ function updateBreakdownFooterTotals() {
         totals.morning += e._morning || 0;
         totals.evening += e._evening || 0;
         totals.night += e._night || 0;
+        totals.monthlyContracts += e._monthlyContracts || 0;
         totals.alertCount += e._alertCount || 0;
         totals.alertTotal += e._alertTotal || 0;
         if (e._vipRooms) {
@@ -103,6 +104,7 @@ function updateBreakdownFooterTotals() {
       totals.morning += emp._morning || 0;
       totals.evening += emp._evening || 0;
       totals.night += emp._night || 0;
+      totals.monthlyContracts += emp._monthlyContracts || 0;
       totals.alertCount += emp._alertCount || 0;
       totals.alertTotal += emp._alertTotal || 0;
       if (emp._vipRooms) {
@@ -120,6 +122,7 @@ function updateBreakdownFooterTotals() {
   el = document.getElementById('footMorning'); if (el) el.innerText = totals.morning;
   el = document.getElementById('footEvening'); if (el) el.innerText = totals.evening;
   el = document.getElementById('footNight'); if (el) el.innerText = totals.night;
+  el = document.getElementById('footMonthlyContracts'); if (el) el.innerText = totals.monthlyContracts;
   el = document.getElementById('footAlertCount'); if (el) el.innerText = totals.alertCount;
   el = document.getElementById('footAlertTotal'); if (el) el.innerText = totals.alertTotal > 0 ? Math.round(totals.alertTotal).toLocaleString('en-SA') : '—';
 
@@ -127,7 +130,7 @@ function updateBreakdownFooterTotals() {
   Object.values(totals.vipRooms).forEach(function(v) { vipTotal += v; });
   el = document.getElementById('footVipRooms'); if (el) el.innerText = vipTotal || '—';
 
-  document.querySelectorAll('#footStaffCount, #footReception, #footBooking, #footMorning, #footEvening, #footNight, #footAlertCount, #footAlertTotal').forEach(function(el) {
+  document.querySelectorAll('#footStaffCount, #footReception, #footBooking, #footMorning, #footEvening, #footNight, #footMonthlyContracts, #footAlertCount, #footAlertTotal').forEach(function(el) {
     el.style.display = '';
   });
   var footVip = document.getElementById('footVipRooms');
@@ -159,8 +162,7 @@ function updateEvalBooking(id, val, inputEl, shouldRender) {
   }
   var newVal = parseInt(val, 10) || 0;
   var oldVal = item.evaluationsBooking || 0;
-  var empName = item.name;
-  db.filter(function(i) { return i.name === empName; }).forEach(function(row) { row.evaluationsBooking = newVal; });
+  item.evaluationsBooking = newVal;
   if (typeof markLocalRewardsDirty === 'function') markLocalRewardsDirty();
   if (typeof logAdminAction === 'function' && currentRole) {
     logAdminAction(currentRole, 'update_eval_booking', { employeeName: item.name, employeeId: id, branch: item.branch, oldValue: oldVal, newValue: newVal });
@@ -212,8 +214,7 @@ function updateEvalGoogle(id, val, inputEl, shouldRender) {
   }
   var newVal = parseInt(val, 10) || 0;
   var oldVal = item.evaluationsGoogle || 0;
-  var empName = item.name;
-  db.filter(function(i) { return i.name === empName; }).forEach(function(row) { row.evaluationsGoogle = newVal; });
+  item.evaluationsGoogle = newVal;
   if (typeof markLocalRewardsDirty === 'function') markLocalRewardsDirty();
   if (typeof logAdminAction === 'function' && currentRole) {
     logAdminAction(currentRole, 'update_eval_google', { employeeName: item.name, employeeId: id, branch: item.branch, oldValue: oldVal, newValue: newVal });
@@ -242,6 +243,47 @@ function updateEvalGoogle(id, val, inputEl, shouldRender) {
       } else if (typeof renderUI === 'function' && typeof window !== 'undefined' && window.currentFilter !== undefined) {
         renderUI(window.currentFilter);
       }
+    }
+  }
+}
+
+function updateMonthlyContracts(id, val, inputEl, shouldRender) {
+  if (shouldRender === undefined) shouldRender = true;
+  var db = (typeof window !== 'undefined' && window.db) ? window.db : [];
+  var item = db.find(function(i) { return i.id === id; });
+  if (!item) return;
+  var currentRole = localStorage.getItem('adora_current_role');
+  if (currentRole && currentRole !== 'supervisor' && currentRole !== 'admin') {
+    if (typeof showToast === 'function') showToast('❌ غير مصرح لك بتعديل العقود الشهرية', 'error');
+    if (inputEl) inputEl.value = item._monthlyContracts || 0;
+    return;
+  }
+  var currentFilter = (typeof window !== 'undefined' && window.currentFilter !== undefined) ? window.currentFilter : 'الكل';
+  if (currentFilter === 'الكل') {
+    if (typeof showToast === 'function') showToast('❌ التعديل في الفروع فقط — الكل للعرض والتجميع', 'error');
+    if (inputEl) inputEl.value = item._monthlyContracts || 0;
+    return;
+  }
+  var newVal = Math.max(0, parseInt(val, 10) || 0);
+  var oldVal = item._monthlyContracts || 0;
+  item._monthlyContracts = newVal;
+  if (typeof markLocalRewardsDirty === 'function') markLocalRewardsDirty();
+  if (typeof logAdminAction === 'function' && currentRole) {
+    logAdminAction(currentRole, 'update_monthly_contracts', { employeeName: item.name, employeeId: id, branch: item.branch, oldValue: oldVal, newValue: newVal });
+  }
+  try {
+    localStorage.setItem('adora_rewards_db', JSON.stringify(db));
+    if (typeof window !== 'undefined') window.db = db;
+    // Always sync to Firebase so other browsers/devices see updates (fixes: العقود الشهرية غير محفوظة في متصفح آخر)
+    if (typeof syncLivePeriodToFirebase === 'function') syncLivePeriodToFirebase();
+  } catch (error) {
+    console.error('❌ Error saving to localStorage:', error);
+  }
+  if (shouldRender) {
+    if (typeof updateBadges === 'function') updateBadges();
+    if (typeof updateFooterTotals === 'function') updateFooterTotals();
+    if (typeof renderUI === 'function' && typeof window !== 'undefined' && window.currentFilter !== undefined) {
+      renderUI(window.currentFilter);
     }
   }
 }

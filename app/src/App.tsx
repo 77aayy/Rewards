@@ -56,7 +56,7 @@ import {
   Loader2,
 } from 'lucide-react';
 import { getTheme, toggleTheme } from '../shared/theme.js';
-import type { MatchedRow, StaffRecord, BookingSource, ShiftType, RoomCategory } from './types';
+import type { MatchedRow, StaffRecord, BookingSource, ShiftType, RoomCategory, AttendanceFileResult } from './types';
 import {
   ADMIN_SECRET_KEY,
   ADMIN_ALLOWED_EMAILS,
@@ -112,9 +112,11 @@ import {
   aggregateData,
   getStaffFileStats,
   getStaffDateRange,
+  getLogCreationShiftCounts,
   getLogFileStats,
   getReportFileStats,
   getUnitsFileStats,
+  getActualDatesFileStats,
   detectFileType,
   getFileTypeLabel,
   getFileTypeIcon,
@@ -122,6 +124,7 @@ import {
   extractRoomNumber,
   MAX_FILE_SIZE_BYTES,
   setXLSXModule,
+  parseAttendanceReport,
   type FileDetectionResult,
 } from './parser';
 import {
@@ -130,7 +133,6 @@ import {
   type MergedRoomRule,
   loadConfig,
   saveConfig,
-  hasLocalConfig,
   ensureBranchConfig,
   getDefaultConfig,
   saveDefaultConfig,
@@ -396,6 +398,7 @@ const STORAGE_KEYS = {
   staffList: 'adora_analysis_staffList',
   dateRange: 'adora_analysis_dateRange',
   analyzed: 'adora_analysis_analyzed',
+  logCreationShiftCounts: 'adora_analysis_logCreationShiftCounts',
 };
 
 function getAdminAuth() {
@@ -411,12 +414,20 @@ function isAllowedAdminEmail(email: string | null | undefined): boolean {
   return ADMIN_ALLOWED_EMAILS.includes(normalized);
 }
 
-function saveAnalysisToStorage(d: MatchedRow[], staff: StaffRecord[], range: { from: string; to: string } | null) {
+function saveAnalysisToStorage(
+  d: MatchedRow[],
+  staff: StaffRecord[],
+  range: { from: string; to: string } | null,
+  logCreationShiftCounts?: Record<string, { صباح: number; مساء: number; ليل: number; total: number }>,
+) {
   try {
     localStorage.setItem(STORAGE_KEYS.data, JSON.stringify(d));
     localStorage.setItem(STORAGE_KEYS.staffList, JSON.stringify(staff));
     localStorage.setItem(STORAGE_KEYS.dateRange, JSON.stringify(range));
     localStorage.setItem(STORAGE_KEYS.analyzed, 'true');
+    if (logCreationShiftCounts) {
+      localStorage.setItem(STORAGE_KEYS.logCreationShiftCounts, JSON.stringify(logCreationShiftCounts));
+    }
   } catch (e) {
     console.warn('⚠️ Failed to save analysis to localStorage:', e);
   }
@@ -427,14 +438,16 @@ function loadAnalysisFromStorage(): {
   staffList: StaffRecord[];
   dateRange: { from: string; to: string } | null;
   analyzed: boolean;
+  logCreationShiftCounts: Record<string, { صباح: number; مساء: number; ليل: number; total: number }>;
 } | null {
   try {
     if (localStorage.getItem(STORAGE_KEYS.analyzed) !== 'true') return null;
     const d = JSON.parse(localStorage.getItem(STORAGE_KEYS.data) || '[]');
     const s = JSON.parse(localStorage.getItem(STORAGE_KEYS.staffList) || '[]');
     const r = JSON.parse(localStorage.getItem(STORAGE_KEYS.dateRange) || 'null');
+    const logCounts = JSON.parse(localStorage.getItem(STORAGE_KEYS.logCreationShiftCounts) || '{}');
     if (!Array.isArray(d) || d.length === 0) return null;
-    return { data: d, staffList: s, dateRange: r, analyzed: true };
+    return { data: d, staffList: s, dateRange: r, analyzed: true, logCreationShiftCounts: logCounts };
   } catch {
     return null;
   }
@@ -611,17 +624,17 @@ export default function App() {
   // Last transfer payload — child tab can request it via postMessage if localStorage fails
   const transferPayloadRef = useRef<Record<string, unknown> | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const attendanceInputRef = useRef<HTMLInputElement>(null);
 
-  // On first load: if no local config (new device), try fetching from Firebase
+  // On first load: try fetching config from Firebase (source of truth across devices)
   useEffect(() => {
-    if (hasLocalConfig()) return; // Already has local settings — skip
     import('./firebase').then(({ loadConfigFromFirebase }) => {
       loadConfigFromFirebase({ forceFetch: true }).then((fbConfig) => {
         if (fbConfig) {
           setConfig(fbConfig);
           saveConfig(fbConfig); // Cache locally so next load is instant
         }
-      }).catch(() => {/* Firebase unavailable — use defaults */});
+      }).catch(() => {/* Firebase unavailable — keep local config */});
     }).catch(() => {/* dynamic import failed */});
   }, []);
 
@@ -650,6 +663,9 @@ export default function App() {
   const [data, setData] = useState<MatchedRow[]>(() => cachedAnalysis?.data ?? []);
   const [staffList, setStaffList] = useState<StaffRecord[]>(() => cachedAnalysis?.staffList ?? []);
   const [dateRange, setDateRange] = useState<{ from: string; to: string } | null>(() => cachedAnalysis?.dateRange ?? null);
+  const [logCreationShiftCounts, setLogCreationShiftCounts] = useState<
+    Record<string, { صباح: number; مساء: number; ليل: number; total: number }>
+  >(() => cachedAnalysis?.logCreationShiftCounts ?? {});
   const [analyzing, setAnalyzing] = useState(false);
   const [analyzed, setAnalyzed] = useState(() => cachedAnalysis?.analyzed ?? false);
   const [loadProgress, setLoadProgress] = useState(false);
@@ -670,6 +686,62 @@ export default function App() {
   const [showRatingExplanation, setShowRatingExplanation] = useState(false);
   const [showConditions, setShowConditions] = useState(false);
   const [showSettings, setShowSettings] = useState(false);
+  const [showAttendanceModal, setShowAttendanceModal] = useState(false);
+  const [attendanceResults, setAttendanceResults] = useState<AttendanceFileResult[] | null>(null);
+  const [attendanceLoading, setAttendanceLoading] = useState(false);
+  /** عند النقر على رقم في جدول الحضور: { resultIndex, column } لفتح نافذة التفاصيل */
+  const [attendanceDetail, setAttendanceDetail] = useState<{ resultIndex: number; column: string } | null>(null);
+
+  // Attendance: upload TeamAttendanceReport.xls files and show results
+  const handleAttendanceFiles = useCallback(async (files: FileList | File[]) => {
+    const fileArray = Array.from(files).filter((f) => /\.xls$/i.test(f.name) || /\.xlsx$/i.test(f.name));
+    if (fileArray.length === 0) {
+      alert('اختر ملفات Excel (تقارير حضور فريق العمل — .xls أو .xlsx)');
+      return;
+    }
+    setAttendanceLoading(true);
+    setAttendanceResults(null);
+    try {
+      const xlsxMod = await import('xlsx');
+      setXLSXModule(xlsxMod);
+    } catch (err) {
+      setAttendanceLoading(false);
+      alert('تعذّر تحميل مكتبة Excel.\n' + (err instanceof Error ? err.message : String(err)));
+      return;
+    }
+    try {
+      const results: AttendanceFileResult[] = [];
+      for (const file of fileArray) {
+        if (file.size > MAX_FILE_SIZE_BYTES) continue;
+        try {
+          const buffer = await readFileAsArrayBuffer(file);
+          const result = parseAttendanceReport(buffer, file.name);
+          results.push(result);
+        } catch {
+        results.push({
+          fileName: file.name,
+          employeeName: '—',
+          period: '',
+          totalDaysInPeriod: 0,
+          totalWorkDays: 0,
+          validDays: 0,
+          incompleteDays: 0,
+          absentDays: 0,
+          permittedAbsence: 0,
+          reviewRequiredDays: 0,
+          totalNetHours: 0,
+          fingerprintAccuracy: 0,
+          days: [],
+        });
+        }
+      }
+      setAttendanceResults(results);
+      setShowAttendanceModal(true);
+      if (attendanceInputRef.current) attendanceInputRef.current.value = '';
+    } finally {
+      setAttendanceLoading(false);
+    }
+  }, []);
 
   // Detect and classify files from content
   const handleFiles = useCallback(async (files: FileList | File[]) => {
@@ -734,6 +806,9 @@ export default function App() {
         } else if (result.baseType === 'units') {
           const s = getUnitsFileStats(buffer);
           stats = `${s.bookings} حجز • ${s.units} وحدة`;
+        } else if (result.baseType === 'actualDates') {
+          const s = getActualDatesFileStats(buffer);
+          stats = `${s.rows} صف`;
         }
 
         newSlots[result.slotKey] = {
@@ -783,6 +858,7 @@ export default function App() {
     if (mergedConfig !== config) {
       setConfig(mergedConfig);
       saveConfig(mergedConfig);
+      import('./firebase').then(({ saveConfigToFirebase }) => saveConfigToFirebase(mergedConfig).catch(() => {}));
     }
     setFileSlots(newSlots);
     setUnknownFiles(newUnknown);
@@ -844,6 +920,7 @@ export default function App() {
     ];
     for (const br of discoveredBranches) {
       slots.push({ key: `report-${br}`, baseType: 'report', branch: br, required: true });
+      slots.push({ key: `actualDates-${br}`, baseType: 'actualDates', branch: br, required: true });
       slots.push({ key: `log-${br}`, baseType: 'log', branch: br, required: false });
       slots.push({ key: `units-${br}`, baseType: 'units', branch: br, required: false });
     }
@@ -894,6 +971,8 @@ export default function App() {
       const logLookup = buildLogLookup(allLogBookings);
       const unitsLookup = buildUnitsLookup(allUnits);
       const staffDateRange = getStaffDateRange(staffBuf);
+      const logCounts = getLogCreationShiftCounts(allLogBookings, staffDateRange);
+      setLogCreationShiftCounts(logCounts);
       const matched = aggregateData(staff, allReportBookings, logLookup, unitsLookup, staffDateRange, config);
       const stats = getStaffFileStats(staffBuf);
 
@@ -905,7 +984,7 @@ export default function App() {
       setDateRange(range);
       setAnalyzed(true);
       // Persist to localStorage so refresh preserves the results
-      saveAnalysisToStorage(matched, staff, range);
+      saveAnalysisToStorage(matched, staff, range, logCounts);
     } catch (err) {
       console.error('Analysis error:', err);
       alert('خطأ في التحليل. تأكد من صحة الملفات.');
@@ -933,6 +1012,12 @@ export default function App() {
       startAnalysis();
     }
   }, [pendingReanalysis, canAnalyze, analyzing, startAnalysis]);
+
+  // ربط الرفع بالنتيجة: عند اكتمال كل الملفات المطلوبة تشغيل التحليل تلقائياً فتظهر النتيجة في جدول "ملخص المكافآت"
+  useEffect(() => {
+    if (!isAllFilesFilled || !canAnalyze || analyzed || analyzing) return;
+    startAnalysis();
+  }, [isAllFilesFilled, canAnalyze, analyzed, analyzing, startAnalysis]);
 
   // Derived data
   const countedData = useMemo(() => data.filter((d) => !d.isExcess), [data]);
@@ -1183,6 +1268,28 @@ export default function App() {
                   </button>
                 );
               })}
+              <button
+                type="button"
+                onClick={() => attendanceInputRef.current?.click()}
+                className="action-header-btn action-header-btn--cyan"
+                title="رفع تقارير حضور فريق العمل (TeamAttendanceReport.xls) وعرض النتيجة"
+              >
+                <Upload className="w-4 h-4 shrink-0" />
+                <span className="hidden sm:inline">رفع تقارير الحضور</span>
+                <span className="sm:hidden">الحضور</span>
+              </button>
+              <input
+                ref={attendanceInputRef}
+                type="file"
+                accept=".xls,.xlsx"
+                multiple
+                aria-label="رفع تقارير الحضور"
+                className="sr-only"
+                onChange={(e) => {
+                  const list = e.target.files;
+                  if (list && list.length > 0) handleAttendanceFiles(list);
+                }}
+              />
             </div>
           </div>
         </div>
@@ -1229,7 +1336,12 @@ export default function App() {
                     <div className="text-center space-y-1.5">
                       <p className="text-lg font-bold text-[var(--adora-text)]">ارفع كل الملفات دفعة واحدة</p>
                       <p className="text-sm text-[var(--adora-text-secondary)]">اسحب الملفات هنا أو اضغط لاختيارها — التعرف تلقائي من المحتوى</p>
-                      <p className="text-sm text-[var(--adora-text-secondary)]">تقرير إحصائيات الموظفين + سجل حركات النظام + تقرير حجوزات العملاء + تقرير وحدات الحجوزات</p>
+                      <p className="text-sm text-[var(--adora-text-secondary)]">
+                        <span className="text-[var(--adora-accent)]">مطلوب:</span> تقرير إحصائيات الموظفين (واحد لجميع الفروع) • تقرير التواريخ الفعلية للحجوزات (ملف لكل فرع) • تقرير حجوزات العملاء (ملف لكل فرع)
+                      </p>
+                      <p className="text-xs text-[var(--adora-text-secondary)]/80">
+                        اختياري: سجل حركات النظام • تقرير وحدات الحجوزات (ملف لكل فرع)
+                      </p>
                     </div>
                     <div className="flex items-center gap-2 text-[var(--adora-text-secondary)] text-sm mt-1">
                       <Upload className="w-3.5 h-3.5" /> xlsx / xls
@@ -1459,7 +1571,7 @@ export default function App() {
             </section>
 
             {/* Employee Breakdown */}
-            <EmployeeBreakdown staffList={staffList} data={data} config={config} dateRange={dateRange} />
+            <EmployeeBreakdown staffList={staffList} data={data} config={config} dateRange={dateRange} logCreationShiftCounts={logCreationShiftCounts} />
 
             {/* Filters */}
             <section className="glass rounded-2xl sm:rounded-[28px] p-5 space-y-4 neon-glow animate-in animate-delay-200">
@@ -1627,6 +1739,165 @@ export default function App() {
       )}
       {showConditions && (
         <ConditionsPopup config={config} onClose={() => setShowConditions(false)} />
+      )}
+
+      {/* ===== Attendance results modal ===== */}
+      {showAttendanceModal && attendanceResults && (
+        <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm" role="dialog" aria-modal="true" aria-labelledby="attendance-modal-title">
+          <div className="bg-[var(--adora-bg-card)] border border-[var(--adora-border)] rounded-2xl shadow-2xl max-w-4xl w-full max-h-[90vh] flex flex-col overflow-hidden">
+            <div className="flex items-center justify-between px-5 py-4 border-b border-[var(--adora-border)] bg-[var(--adora-modal-header-bg)]">
+              <div>
+                <h2 id="attendance-modal-title" className="text-lg font-bold text-[var(--adora-text)]">نتيجة تقارير الحضور</h2>
+                {attendanceResults.length > 0 && attendanceResults[0].period && (
+                  <p className="text-sm text-[var(--adora-text-secondary)] mt-0.5">الفترة: {attendanceResults[0].period}</p>
+                )}
+              </div>
+              <button type="button" onClick={() => { setShowAttendanceModal(false); setAttendanceResults(null); setAttendanceDetail(null); }} className="p-2 rounded-lg hover:bg-[var(--adora-hover-bg)] transition-colorss" aria-label="إغلاق">
+                <X className="w-5 h-5 text-[var(--adora-text-secondary)]" />
+              </button>
+            </div>
+            <div className="overflow-auto flex-1 p-5">
+              <table className="w-full text-right border-collapse">
+                <thead>
+                  <tr className="border-b border-[var(--adora-border)]">
+                    <th className="py-2 px-2 text-[var(--adora-text-secondary)] font-semibold">الموظف</th>
+                    <th className="py-2 px-2 text-[var(--adora-text-secondary)] font-semibold">أيام العمل</th>
+                    <th className="py-2 px-2 text-[var(--adora-text-secondary)] font-semibold">حاضر كامل</th>
+                    <th className="py-2 px-2 text-yellow-500 font-semibold" title="حضور محسوب لكن البصمة غير مكتملة (دخول فقط أو خروج فقط)">بصمة غير مكتملة</th>
+                    <th className="py-2 px-2 text-[var(--adora-text-secondary)] font-semibold">غياب</th>
+                    <th className="py-2 px-2 text-[var(--adora-text-secondary)] font-semibold">إجازة</th>
+                    <th className="py-2 px-2 text-[var(--adora-text-secondary)] font-semibold">تحتاج مراجعة</th>
+                    <th className="py-2 px-2 text-[var(--adora-text-secondary)] font-semibold">صافي الساعات</th>
+                    <th className="py-2 px-2 text-[var(--adora-text-secondary)] font-semibold">نسبة البصمة %</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {attendanceResults.map((r, idx) => {
+                    const openDetail = (column: string) => () => setAttendanceDetail({ resultIndex: idx, column });
+                    const cellClass = 'py-2.5 px-2 tabular-nums cursor-pointer hover:ring-1 hover:ring-[var(--adora-accent)]/50 rounded';
+                    return (
+                      <tr key={idx} className="border-b border-[var(--adora-border)]/60 hover:bg-[var(--adora-hover-bg)]/50">
+                        <td className="py-2.5 px-2 text-[var(--adora-text)] font-medium">{r.employeeName}</td>
+                        <td className={`${cellClass} text-[var(--adora-accent)] font-bold`} onClick={openDetail('totalDaysInPeriod')} title="اضغط للتفاصيل">{r.totalDaysInPeriod ?? (r.validDays + r.incompleteDays + r.absentDays + r.permittedAbsence + (r.reviewRequiredDays ?? 0))}</td>
+                        <td className={`${cellClass} text-emerald-500/90`} onClick={openDetail('validDays')} title="اضغط للتفاصيل">{r.validDays}</td>
+                        <td className={`${cellClass} text-yellow-500 font-medium bg-yellow-500/10`} onClick={openDetail('incompleteDays')} title="اضغط للتفاصيل">{r.incompleteDays}</td>
+                        <td className={`${cellClass} text-red-400/90`} onClick={openDetail('absentDays')} title="اضغط للتفاصيل">{r.absentDays}</td>
+                        <td className={`${cellClass} text-[var(--adora-text-secondary)]`} onClick={openDetail('permittedAbsence')} title="اضغط للتفاصيل">{r.permittedAbsence}</td>
+                        <td className={`${cellClass} text-amber-600/90`} onClick={openDetail('reviewRequiredDays')} title="اضغط للتفاصيل">{r.reviewRequiredDays ?? 0}</td>
+                        <td className={`${cellClass} text-[var(--adora-text)]`} onClick={openDetail('totalNetHours')} title="اضغط للتفاصيل">{typeof r.totalNetHours === 'number' ? r.totalNetHours.toFixed(1) : '—'}</td>
+                        <td className={`${cellClass} text-[var(--adora-accent)]`} onClick={openDetail('fingerprintAccuracy')} title="اضغط للتفاصيل">{typeof r.fingerprintAccuracy === 'number' ? r.fingerprintAccuracy + '%' : '—'}</td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+
+              {/* نافذة تفاصيل الرقم عند النقر على خلية */}
+              {attendanceDetail != null && attendanceResults && attendanceResults[attendanceDetail.resultIndex] && (() => {
+                const res = attendanceResults[attendanceDetail.resultIndex];
+                const col = attendanceDetail.column;
+                const days = res.days ?? [];
+                const statusMap: Record<string, string> = {
+                  validDays: 'valid',
+                  incompleteDays: 'incomplete',
+                  absentDays: 'absent',
+                  permittedAbsence: 'permitted_absence',
+                  reviewRequiredDays: 'review_required',
+                };
+                const filtered = statusMap[col] ? days.filter((d) => d.status === statusMap[col]) : [];
+                const titles: Record<string, string> = {
+                  totalDaysInPeriod: 'أيام العمل (إجمالي الفترة)',
+                  totalWorkDays: 'أيام الحضور',
+                  validDays: 'حاضر كامل',
+                  incompleteDays: 'بصمة غير مكتملة',
+                  absentDays: 'غياب',
+                  permittedAbsence: 'إجازة',
+                  reviewRequiredDays: 'تحتاج مراجعة',
+                  totalNetHours: 'صافي الساعات',
+                  fingerprintAccuracy: 'نسبة البصمة %',
+                };
+                const desc: Record<string, string> = {
+                  totalDaysInPeriod: 'إجمالي أيام الفترة = حاضر كامل + بصمة غير مكتملة + غياب + إجازة + تحتاج مراجعة.',
+                  totalWorkDays: 'أيام الحضور فقط = حاضر كامل + بصمة غير مكتملة (لنسبة البصمة).',
+                  validDays: 'أيام ذات بصمة دخول + خروج ومدة ≥ 4 ساعات.',
+                  incompleteDays: 'أيام ذات بصمة واحدة فقط (دخول أو خروج) — محسوبة تقديرياً.',
+                  absentDays: 'أيام بدون أي بصمة في التقرير.',
+                  permittedAbsence: 'أيام مسجلة كإجازة/غياب مسموح.',
+                  reviewRequiredDays: 'أيام بصمة وحيدة غير ليلية — تحتاج قرار إداري.',
+                  totalNetHours: 'مجموع ساعات كل أيام الحضور (حد أقصى 12 ساعة/يوم).',
+                  fingerprintAccuracy: 'نسبة الالتزام = (حاضر كامل ÷ أيام الحضور) × 100.',
+                };
+                const value =
+                  col === 'totalDaysInPeriod' ? (res.totalDaysInPeriod ?? (res.validDays + res.incompleteDays + res.absentDays + res.permittedAbsence + (res.reviewRequiredDays ?? 0)))
+                  : col === 'totalWorkDays' ? res.totalWorkDays
+                  : col === 'validDays' ? res.validDays
+                  : col === 'incompleteDays' ? res.incompleteDays
+                  : col === 'absentDays' ? res.absentDays
+                  : col === 'permittedAbsence' ? res.permittedAbsence
+                  : col === 'reviewRequiredDays' ? (res.reviewRequiredDays ?? 0)
+                  : col === 'totalNetHours' ? (typeof res.totalNetHours === 'number' ? res.totalNetHours.toFixed(1) : '—')
+                  : col === 'fingerprintAccuracy' ? (typeof res.fingerprintAccuracy === 'number' ? res.fingerprintAccuracy + '%' : '—')
+                  : '';
+                return (
+                  <div className="fixed inset-0 z-[102] flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm" onClick={() => setAttendanceDetail(null)} role="presentation">
+                    <div className="bg-[var(--adora-bg-card)] border border-[var(--adora-border)] rounded-xl shadow-2xl max-w-sm w-full max-h-[70vh] flex flex-col overflow-hidden" onClick={(e) => e.stopPropagation()} role="dialog" aria-label="تفاصيل الرقم">
+                      <div className="flex items-center justify-between p-3 border-b border-[var(--adora-border)]">
+                        <h4 className="text-[var(--adora-text)] font-semibold">{res.employeeName}: {titles[col]} ({value})</h4>
+                        <button type="button" onClick={() => setAttendanceDetail(null)} className="p-1.5 rounded-lg hover:bg-[var(--adora-hover-bg)] text-[var(--adora-text-secondary)]" aria-label="إغلاق">×</button>
+                      </div>
+                      <div className="p-3 overflow-auto text-[13px] text-[var(--adora-text-secondary)]">
+                        <p className="mb-2">{desc[col]}</p>
+                        {filtered.length > 0 ? (
+                          <p className="mt-2 text-[var(--adora-text)] font-medium">التواريخ ({filtered.length}):</p>
+                        ) : null}
+                        {filtered.length > 0 ? (
+                          <ul className="mt-1 list-disc list-inside space-y-0.5 text-[var(--adora-text)]">
+                            {filtered.map((d) => {
+                              const [y, m, day] = d.workDateStr.split('-');
+                              const dateLabel = `${day}/${m}/${y}`;
+                              return <li key={d.workDateStr}>{dateLabel}{col === 'validDays' || col === 'incompleteDays' ? ` — ${d.netHours.toFixed(1)} س` : ''}</li>;
+                            })}
+                          </ul>
+                        ) : col === 'totalDaysInPeriod' ? (
+                          <p className="text-[var(--adora-text)]">حاضر كامل: {res.validDays} + بصمة غير مكتملة: {res.incompleteDays} + غياب: {res.absentDays} + إجازة: {res.permittedAbsence} + تحتاج مراجعة: {res.reviewRequiredDays ?? 0} = إجمالي {res.totalDaysInPeriod ?? (res.validDays + res.incompleteDays + res.absentDays + res.permittedAbsence + (res.reviewRequiredDays ?? 0))} يوم</p>
+                        ) : col === 'totalWorkDays' ? (
+                          <p className="text-[var(--adora-text)]">حاضر كامل: {res.validDays} + بصمة غير مكتملة: {res.incompleteDays} = أيام الحضور (لنسبة البصمة).</p>
+                        ) : col === 'totalNetHours' ? (
+                          <p className="text-[var(--adora-text)]">مجموع ساعات أيام الحضور (كل يوم حد أقصى 12 ساعة).</p>
+                        ) : col === 'fingerprintAccuracy' ? (
+                          <p className="text-[var(--adora-text)]">حاضر كامل {res.validDays} ÷ أيام الحضور {res.totalWorkDays} × 100 = {typeof res.fingerprintAccuracy === 'number' ? res.fingerprintAccuracy + '%' : '—'}</p>
+                        ) : null}
+                      </div>
+                    </div>
+                  </div>
+                );
+              })()}
+
+              <div className="mt-4 space-y-3">
+                {attendanceResults.some((r) => (r.fingerprintAccuracy ?? 0) === 0 && (r.totalWorkDays ?? 0) > 0) && (
+                  <div className="p-3 rounded-xl bg-amber-500/15 border border-amber-500/40 text-[13px] text-amber-800 dark:text-amber-200">
+                    <p className="font-semibold">تنبيه إداري</p>
+                    <p className="mt-1">نسبة البصمة 0% تعني أن كل أيام الحضور محسوبة من «بصمة وحيدة» (خروج فقط). الحضور مقبول تقنياً لعدم الظلم، لكن الالتزام بنظام البصمة (دخول + خروج) ضعيف. يُفضّل تشجيع البصمة الكاملة لاحتساب الساعات الفعلية والأوفر تايم بدقة.</p>
+                  </div>
+                )}
+                <div className="p-3 rounded-xl bg-[var(--adora-hover-bg)]/50 border border-[var(--adora-border)]/50 text-[13px] text-[var(--adora-text-secondary)] space-y-1">
+                  <p><strong className="text-[var(--adora-text)]">المعادلات:</strong> أيام العمل (إجمالي الفترة) = حاضر كامل + بصمة غير مكتملة + غياب + إجازة + تحتاج مراجعة. صافي الساعات: بصمة وحيدة = 8 ساعات تقديرياً؛ بصمتين = المدة الفعلية (حد أقصى 12 ساعة). نسبة البصمة = (حاضر كامل ÷ أيام الحضور) × 100.</p>
+                  <p>التاريخ الذكي: بصمة قبل 06:00 → تُحسب لليوم السابق. البصمة الوحيدة ليلاً (21–01) = حضور نسيان دخول؛ غير ذلك = تحتاج مراجعة (لا تُحسب).</p>
+                  <p className="text-[var(--adora-text)]/80 mt-1">الأيام ذات البصمة غير المكتملة (دخول فقط أو خروج فقط) محسوبة تقديرياً — للمراجعة والاعتماد الإداري.</p>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {attendanceLoading && (
+        <div className="fixed inset-0 z-[99] flex items-center justify-center bg-black/50 backdrop-blur-sm">
+          <div className="flex flex-col items-center gap-3 px-6 py-5 rounded-2xl bg-[var(--adora-bg-card)] border border-[var(--adora-border)]">
+            <Loader2 className="w-10 h-10 text-[var(--adora-accent)] animate-spin" />
+            <p className="text-[var(--adora-text)] font-medium">جاري معالجة تقارير الحضور...</p>
+          </div>
+        </div>
       )}
     </div>
     )
@@ -1855,12 +2126,12 @@ function SettingsPanel({ config, discoveredBranches, onSave, onSaveAsDefault, on
             {/* صندوق الدعم — نسبة مخصومة من الإجمالي قبل الصافي */}
             <div className="space-y-1.5">
               <p className="text-sm font-medium text-cyan-400/90">صندوق الدعم</p>
-              <div className="flex items-center gap-3 flex-wrap">
-                <label className="text-sm text-[var(--adora-text-secondary)] shrink-0">نسبة من الإجمالي (%)</label>
+              <div className="max-w-[140px]">
+                <label className="text-sm text-[var(--adora-text-secondary)] block mb-1">نسبة من الإجمالي (%)</label>
                 <input type="number" min={0} max={100} step={1} value={draft.rewardPricing.supportFundPercent ?? 15}
                   onChange={(e) => setDraft(prev => ({ ...prev, rewardPricing: { ...prev.rewardPricing, supportFundPercent: Math.min(100, Math.max(0, parseInt(e.target.value, 10) || 0)) } }))}
-                  className="w-20 bg-[var(--adora-input-bg)] border border-[var(--adora-border)] text-[var(--adora-text)] text-sm rounded-lg px-3 py-2 outline-none focus:ring-2 focus:ring-emerald-500/50 font-mono" />
-                <span className="text-xs text-[var(--adora-text-secondary)]">الصافي = الإجمالي − (الإجمالي × هذه النسبة)</span>
+                  className="w-full bg-[var(--adora-input-bg)] border border-[var(--adora-border)] text-[var(--adora-text)] text-sm rounded-lg px-3 py-2 outline-none focus:ring-2 focus:ring-emerald-500/50 font-mono" />
+                <p className="text-xs text-[var(--adora-text-secondary)] mt-1">الصافي = الإجمالي − (الإجمالي × هذه النسبة)</p>
               </div>
             </div>
 
@@ -2223,6 +2494,7 @@ function MethodologyPopup({ config, onClose }: { config: AppConfig; onClose: () 
             </h4>
             <div className="space-y-1.5 text-slate-300 text-sm mr-8">
               <p><span className="text-cyan-300 font-bold">تقرير إحصائيات الموظفين</span> — المرجع النهائي لعدد الحجوزات لكل موظف (الحَكَم). يُستخرج منه عدد الحجوزات + فترة التقرير.</p>
+              <p><span className="text-violet-300 font-bold">تقرير التواريخ الفعلية للحجوزات</span> — دخول/خروج فعلي لكل فرع (لتحديد الشفت بدقة).</p>
               <p><span className="text-sky-300 font-bold">تقرير حجوزات العملاء</span> — المصدر الأساسي للتفاصيل: اسم العميل، الوحدة، السعر، تاريخ الدخول/الخروج، مصدر الحجز.</p>
               <p><span className="text-teal-300 font-bold">سجل حركات النظام</span> — مصدر ثانوي لكشف نقل الغرف فقط (Room Transfer).</p>
               <p><span className="text-amber-300 font-bold">تقرير وحدات الحجوزات</span> — مصدر تكميلي لأسعار الغرف المدمجة بدقة (per-unit pricing).</p>
@@ -2415,7 +2687,7 @@ function RatingExplanationPopup({ config, onClose }: { config: AppConfig; onClos
             <ul className="space-y-2 list-none">
               <li className="flex items-start gap-2"><span className="text-[var(--adora-accent)] font-bold">•</span><span><strong className="text-[var(--adora-text)]">عدد الحجوزات:</strong> كلما كان عدد حجوزاتك أقرب إلى أعلى موظف في الفريق، زادت نقاطك في هذا الجزء.</span></li>
               <li className="flex items-start gap-2"><span className="text-[var(--adora-accent)] font-bold">•</span><span><strong className="text-[var(--adora-text)]">التقييمات (Booking و Google):</strong> كلما كان إجمالي تقييماتك أقرب إلى أعلى موظف، زادت نقاطك.</span></li>
-              <li className="flex items-start gap-2"><span className="text-[var(--adora-accent)] font-bold">•</span><span><strong className="text-[var(--adora-text)]">الحضور 26 يوم وأكثر:</strong> إذا أتممت 26 يوماً وأكثر من العطاء (بطل تحدي الظروف)، يُضاف لك <strong className="text-[var(--adora-success)]">+0.15</strong> على النتيجة النهائية كمكافأة التزام.</span></li>
+              <li className="flex items-start gap-2"><span className="text-[var(--adora-accent)] font-bold">•</span><span><strong className="text-[var(--adora-text)]">الحضور 26 يوم وأكثر:</strong> إذا أتممت 26 يوماً وأكثر من العطاء (بطل تحدي الظروف)، يُضاف لك <strong className="text-[var(--adora-success)]">50 ريال</strong> حافز تحدي الظروف في جدول المكافآت، ويُحسّن ترتيبك في مستوى الأداء.</span></li>
               <li className="flex items-start gap-2"><span className="text-[var(--adora-error)] font-bold">•</span><span><strong className="text-[var(--adora-text)]">الخصم الإداري:</strong> إذا كان عليك خصم إداري بأي قيمة، يتم <strong className="text-[var(--adora-error)]">تخفيض التقييم بمقدار 0.25</strong> ليعكس تأثير التقصير على الأداء.</span></li>
               <li className="flex items-start gap-2"><span className="text-[var(--adora-error)] font-bold">•</span><span><strong className="text-[var(--adora-text)]">خصم تقييم الفندق (تقييمات سلبية) وفقدان فرص حجز (مكالمات لم يُرد عليها):</strong> إذا سجّل الفرع تقييمات سلبية (أقل من تقييم الفندق) أو فقدان فرص حجز نتيجة المكالمات التي لم يتم الرد عليها، يُخصم <strong className="text-[var(--adora-error)]">10 ريال × عدد التقييمات السلبية للفرع</strong> من صافي كل موظف في ذلك الفرع، ويُنقص نقاط التقييم.</span></li>
             </ul>
@@ -2850,12 +3122,36 @@ function formatRegistrationTime(dateTimeStr: string): string {
 
 interface DrilldownInfo {
   title: string;
+  filterType?: string;
   bookings: DrilldownBooking[];
 }
 
-function EmployeeBreakdown({ staffList, data, config, dateRange }: {
+/** صافي المكافأة لصف ملخص (نفس معادلة Rewards: إجمالي − صندوق الدعم) — لاختيار الفرع الأعلى صافي للموظف المتكرر */
+export function computeNetForRewardRow(
+  row: { branch: string; receptionMorning: number; receptionEvening: number; receptionNight: number; bookingRegular: number; vipBySource: Record<string, { reception: number; booking: number }> },
+  pricing: AppConfig['rewardPricing']
+): number {
+  const pct = (pricing.supportFundPercent ?? 15) / 100;
+  let gross = 0;
+  gross += (row.receptionMorning || 0) * (pricing.rateMorning || 0);
+  gross += (row.receptionEvening || 0) * (pricing.rateEvening || 0);
+  gross += (row.receptionNight || 0) * (pricing.rateNight || 0);
+  gross += (row.bookingRegular || 0) * (pricing.rateBooking || 0);
+  const vipDefault = pricing.rateVipDefault ?? { reception: 0, booking: 0 };
+  const branchVip = (pricing.rateVipByBranch && row.branch) ? (pricing.rateVipByBranch[row.branch] ?? {}) : {};
+  for (const roomNum of Object.keys(row.vipBySource || {})) {
+    const src = row.vipBySource[roomNum];
+    const rates = branchVip[String(roomNum)] ?? vipDefault;
+    gross += (src.reception || 0) * (rates.reception ?? 0);
+    gross += (src.booking || 0) * (rates.booking ?? 0);
+  }
+  return gross * (1 - pct);
+}
+
+function EmployeeBreakdown({ staffList, data, config, dateRange, logCreationShiftCounts }: {
   staffList: StaffRecord[]; data: MatchedRow[]; config: AppConfig;
   dateRange: { from: string; to: string } | null;
+  logCreationShiftCounts: Record<string, { صباح: number; مساء: number; ليل: number; total: number }>;
 }) {
   const [transferring, setTransferring] = useState(false);
   const [transferDone, setTransferDone] = useState(false);
@@ -2935,6 +3231,7 @@ function EmployeeBreakdown({ staffList, data, config, dateRange }: {
 
     setDrilldown({
       title,
+      filterType,
       bookings: filtered.map((d) => ({
         bookingNumber: d.bookingNumber,
         guestName: d.guestName,
@@ -3053,11 +3350,34 @@ function EmployeeBreakdown({ staffList, data, config, dateRange }: {
       if (d.isMerged) a.mergedCount++;
     }
 
-    // المرجع هو الأساس ويُوزَّع — عند نقص التقرير (counted < staffCount) نوزّع الفرق تناسبياً
+    // مصدر التوزيع: إن وُجد سجل إنشاء حجز كافٍ (من اللوج) نستخدمه؛ وإلا نوزّع تناسبياً من التقرير.
     for (const k of Object.keys(agg)) {
       const a = agg[k];
       const ref = a.staffCount;
       const counted = a.counted;
+      const logCount = logCreationShiftCounts[k];
+      if (logCount && logCount.total >= ref) {
+        // توزيع من الإكسيل (سجل النشاط — حركات إنشاء حجز) = صباح+مساء+ليل = المرجع
+        let صباح = logCount.صباح;
+        let مساء = logCount.مساء;
+        let ليل = logCount.ليل;
+        if (logCount.total > ref) {
+          const ratio = ref / logCount.total;
+          صباح = Math.round(logCount.صباح * ratio);
+          مساء = Math.round(logCount.مساء * ratio);
+          ليل = ref - صباح - مساء;
+        }
+        a['صباح'] = صباح;
+        a['مساء'] = مساء;
+        a['ليل'] = ليل;
+        // استقبال/بوكينج من التقرير إن كان counted = ref؛ وإلا نترك التوزيع التناسبي التالي يطبّق عليهم
+        if (counted < ref) {
+          const oldRec = a['استقبال'];
+          a['استقبال'] = Math.round(ref * (oldRec / counted));
+          a['بوكينج'] = ref - a['استقبال'];
+        }
+        continue;
+      }
       if (ref <= 0 || counted <= 0) continue;
       if (counted === ref) continue;
 
@@ -3071,7 +3391,6 @@ function EmployeeBreakdown({ staffList, data, config, dateRange }: {
       a['مساء'] = Math.round(ref * (oldE / counted));
       a['ليل'] = ref - a['صباح'] - a['مساء'];
 
-      // توزيع تناسبي لـ receptionMorning/Evening/Night و bookingRegular
       const oldRm = a.receptionMorning;
       const oldRe = a.receptionEvening;
       const oldRn = a.receptionNight;
@@ -3100,8 +3419,17 @@ function EmployeeBreakdown({ staffList, data, config, dateRange }: {
       }
     }
 
+    // تطبيع نهائي: ضمان استقبال+بوكينج = المرجع و صباح+مساء+ليل = المرجع (بدون خلل تقريب)
+    for (const k of Object.keys(agg)) {
+      const a = agg[k];
+      const ref = a.staffCount;
+      if (ref <= 0) continue;
+      a['بوكينج'] = ref - a['استقبال'];
+      a['ليل'] = ref - a['صباح'] - a['مساء'];
+    }
+
     return Object.values(agg);
-  }, [staffList, data, countedData, ALL_VIP_NUMS, VIP_ROOMS]);
+  }, [staffList, data, countedData, logCreationShiftCounts, ALL_VIP_NUMS, VIP_ROOMS]);
 
   // Sort handler
   const handleSort = useCallback((key: string) => {
