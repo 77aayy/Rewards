@@ -19,6 +19,10 @@ echo ========================================
 echo   Local server + Admin
 echo ========================================
 echo.
+REM Admin key: ADMIN_KEY > VITE_ADMIN_SECRET_KEY > default. Set env before running to override.
+if defined ADMIN_KEY goto :adminset
+if defined VITE_ADMIN_SECRET_KEY (set "ADMIN_KEY=%VITE_ADMIN_SECRET_KEY%") else (set "ADMIN_KEY=ayman5255")
+:adminset
 
 set "REWARDS=%~dp0app\Rewards"
 if exist "%REWARDS%\scripts\watch-and-predeploy.js" (
@@ -28,7 +32,7 @@ if exist "%REWARDS%\scripts\watch-and-predeploy.js" (
   echo Watcher started.
 )
 
-start /b cmd /c "ping -n 9 127.0.0.1 >nul & start http://localhost:5180/?admin=ayman5255"
+start /b cmd /c "ping -n 9 127.0.0.1 >nul & start http://localhost:5180/?admin=%ADMIN_KEY%"
 
 cd /d "%~dp0app"
 

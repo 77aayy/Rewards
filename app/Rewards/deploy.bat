@@ -1,5 +1,6 @@
 @echo off
-REM Rewards-only deploy from app\Rewards. For full app deploy use deploy-github-firebase.bat from root.
+REM Rewards-only deploy: يرفع من app\Rewards وينشر Firebase Hosting الخاص بـ Rewards.
+REM النشر الرئيسي للمشروع الكامل: استخدم deploy-github-firebase.bat من جذر المشروع.
 chcp 65001 >nul
 echo ========================================
 echo   رفع إلى GitHub + نشر Firebase
