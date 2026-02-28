@@ -642,8 +642,8 @@
                             <tr id="breakdownGroupRow" class="breakdown-group-row" style="display:none;"></tr>
                             <tr class="main-header-row">
                                 <th class="checkbox-col no-print text-right">
-                                    <input type="checkbox" id="selectAll" onclick="toggleAll(this)"
-                                        class="cursor-pointer accent-turquoise checkbox-custom">
+                                    <input type="checkbox" id="selectAll" name="selectAll" onclick="toggleAll(this)"
+                                        class="cursor-pointer accent-turquoise checkbox-custom" aria-label="تحديد الكل">
                                 </th>
                                 <th class="col-m text-right">م</th>
                                 <th class="col-name text-center cursor-pointer hover:bg-white/10 transition-colors select-none"
@@ -879,8 +879,8 @@
                             <span class="action-btn-label-short sm:hidden">كل التقارير</span>
                         </button>
                         <button onclick="showEmployeeCodesModal()"
-                            class="btn-modern px-4 sm:px-5 md:px-6 py-2 sm:py-2.5 md:py-3 bg-gradient-to-r from-turquoise/80 to-teal-500/80 text-white rounded-lg sm:rounded-xl text-xs sm:text-sm font-bold border border-turquoise/30 flex items-center gap-2 hover:shadow-lg hover:from-turquoise hover:to-teal-500 transition-all backdrop-blur-sm"
-                            style="font-size: clamp(0.75rem, 2vw, 0.875rem);">
+                            class="btn-modern px-4 sm:px-5 md:px-6 py-2 sm:py-2.5 md:py-3 bg-gradient-to-r from-[var(--adora-accent)] to-teal-700 text-white rounded-lg sm:rounded-xl text-xs sm:text-sm font-bold border border-[var(--adora-accent)]/30 flex items-center gap-2 hover:shadow-lg hover:brightness-110 transition-all backdrop-blur-sm"
+                            style="font-size: clamp(0.75rem, 2vw, 0.875rem);" aria-label="عرض أكواد الموظفين">
                             <span class="text-base sm:text-lg">🔑</span>
                             <span class="action-btn-label-long hidden sm:inline">الأكواد</span>
                             <span class="action-btn-label-short sm:hidden">كود</span>
@@ -917,18 +917,20 @@
                 <div id="currentReportsContent">
                     <!-- Search and Filter -->
                     <div class="mb-6 space-y-4">
-                        <input type="text" id="reportsEmployeeSearch" placeholder="🔍 ابحث عن موظف..."
+                        <label for="reportsEmployeeSearch" class="sr-only">بحث عن موظف</label>
+                        <input type="text" id="reportsEmployeeSearch" name="reportsEmployeeSearch"
+                            placeholder="🔍 ابحث عن موظف..."
                             class="w-full px-4 py-3 sm:py-3 rounded-xl text-base sm:text-sm text-white placeholder-gray-300 focus:outline-none min-h-[44px]"
                             style="background: rgba(255, 255, 255, 0.1); border: 1px solid rgba(255, 255, 255, 0.2);"
-                            onfocus="this.style.borderColor='rgba(64, 224, 208, 0.6)'; this.style.background='rgba(255, 255, 255, 0.15)';"
+                            onfocus="this.style.borderColor='var(--adora-accent)'; this.style.background='rgba(255, 255, 255, 0.15)';"
                             onblur="this.style.borderColor='rgba(255, 255, 255, 0.2)'; this.style.background='rgba(255, 255, 255, 0.1)';"
                             onkeyup="scheduleReportsFilter(this)">
 
                         <!-- Branch Filter -->
                         <div class="flex flex-wrap gap-2">
                             <button onclick="filterReportsByBranch('الكل')"
-                                class="filter-reports-pill active px-4 py-2 rounded-lg text-sm font-bold transition-all text-white shadow-[0_0_20px_rgba(64,224,208,0.3)]"
-                                data-filter="الكل">
+                                class="filter-reports-pill active px-4 py-2 rounded-lg text-sm font-bold transition-all text-white shadow-[0_0_20px_rgba(13,148,136,0.3)]"
+                                data-filter="الكل" aria-label="تصفية الكل">
                                 الكل
                             </button>
                         </div>
@@ -945,8 +947,10 @@
                 <div id="archivedReportsContent" class="hidden">
                     <div class="mb-4 flex flex-col sm:flex-row sm:items-end gap-3">
                         <div class="flex-1 min-w-0">
-                            <label class="block text-sm font-bold text-gray-300 mb-2">اختر الفترة:</label>
-                            <select id="archivedPeriodSelect" onchange="loadArchivedPeriod(this.value)"
+                            <label for="archivedPeriodSelect" class="block text-sm font-bold text-gray-300 mb-2">اختر
+                                الفترة:</label>
+                            <select id="archivedPeriodSelect" name="archivedPeriodSelect"
+                                onchange="loadArchivedPeriod(this.value)"
                                 class="w-full px-4 py-3 rounded-xl text-base sm:text-sm text-white bg-white/10 border border-white/20 focus:outline-none focus:border-turquoise min-h-[44px]">
                                 <option value="">-- اختر فترة --</option>
                             </select>
@@ -968,8 +972,9 @@
                                 id="archivedClosedAt">-</span>
                         </p>
                         <button type="button" onclick="restoreArchivedPeriodAsCurrent()"
-                            class="hidden mt-4 w-full sm:w-auto btn-modern px-4 py-2.5 rounded-xl text-sm font-bold bg-gradient-to-r from-turquoise/80 to-teal-500/80 text-white border border-turquoise/30 flex items-center justify-center gap-2 hover:from-turquoise hover:to-teal-500 transition-all"
-                            aria-hidden="true" title="مخفي — لا يُسمح بالتعديل على الفترات المغلقة">
+                            class="hidden mt-4 w-full sm:w-auto btn-modern px-4 py-2.5 rounded-xl text-sm font-bold bg-gradient-to-r from-[var(--adora-accent)] to-teal-700 text-white border border-[var(--adora-accent)]/30 flex items-center justify-center gap-2 hover:brightness-110 transition-all"
+                            aria-hidden="true" title="مخفي — لا يُسمح بالتعديل على الفترات المغلقة"
+                            aria-label="استعادة الفترة للتعديل">
                             <span>🔄</span>
                             <span>استعادة الفترة للتعديل</span>
                         </button>
@@ -1078,7 +1083,8 @@
                                                 data-sort-key="points" title="الترتيب حسب النقاط"
                                                 onclick="sortEmployeePerformanceTable(this.dataset.sortKey)">
                                                 <span>الترتيب</span> <span
-                                                    class="sort-arrow text-xs opacity-70 mr-1">▼</span></th>
+                                                    class="sort-arrow text-xs opacity-70 mr-1">▼</span>
+                                            </th>
                                             <th class="p-3 text-right font-bold text-turquoise cursor-pointer select-none hover:bg-white/10 transition-colors"
                                                 data-sort-key="name" title="فرز حسب الاسم"
                                                 onclick="sortEmployeePerformanceTable(this.dataset.sortKey)"><span>اسم
@@ -1088,7 +1094,8 @@
                                                 data-sort-key="branches" title="فرز حسب الفرع"
                                                 onclick="sortEmployeePerformanceTable(this.dataset.sortKey)">
                                                 <span>الفرع</span> <span
-                                                    class="sort-arrow text-xs opacity-70 mr-1">↕</span></th>
+                                                    class="sort-arrow text-xs opacity-70 mr-1">↕</span>
+                                            </th>
                                             <th class="p-3 text-center font-bold text-turquoise cursor-pointer select-none hover:bg-white/10 transition-colors"
                                                 data-sort-key="count" title="فرز حسب عدد الحجوزات"
                                                 onclick="sortEmployeePerformanceTable(this.dataset.sortKey)"><span>عدد
@@ -1098,18 +1105,21 @@
                                                 data-sort-key="totalEval" title="فرز حسب التقييمات"
                                                 onclick="sortEmployeePerformanceTable(this.dataset.sortKey)">
                                                 <span>التقييمات</span> <span
-                                                    class="sort-arrow text-xs opacity-70 mr-1">↕</span></th>
+                                                    class="sort-arrow text-xs opacity-70 mr-1">↕</span>
+                                            </th>
                                             <th class="p-3 text-center font-bold text-turquoise cursor-pointer select-none hover:bg-white/10 transition-colors"
                                                 data-sort-key="net" title="فرز حسب الصافي"
                                                 onclick="sortEmployeePerformanceTable(this.dataset.sortKey)">
                                                 <span>الصافي المستحق</span> <span
-                                                    class="sort-arrow text-xs opacity-70 mr-1">↕</span></th>
+                                                    class="sort-arrow text-xs opacity-70 mr-1">↕</span>
+                                            </th>
                                             <th class="p-3 text-center font-bold text-turquoise cursor-pointer select-none hover:bg-white/10 transition-colors rounded-tr"
                                                 data-sort-key="points"
                                                 title="رصيد النقاط من الفترة (صافي + مساهمة 15%). للتفاصيل اضغط على الاسم."
                                                 onclick="sortEmployeePerformanceTable(this.dataset.sortKey)">
                                                 <span>النقاط</span> <span
-                                                    class="sort-arrow text-xs opacity-70 mr-1">↕</span></th>
+                                                    class="sort-arrow text-xs opacity-70 mr-1">↕</span>
+                                            </th>
                                         </tr>
                                     </thead>
                                     <tbody id="employeePerformanceTableBody">
@@ -1499,24 +1509,28 @@
                     </div>
                     <div class="glass p-2 rounded-lg border border-white/10 min-w-0 discount-pct-cell discounts-form-card"
                         style="position: relative; z-index: 1;">
-                        <label class="block text-xs font-bold text-gray-200 mb-0.5 flex items-center gap-1"><span
+                        <label for="discountPercentageInput"
+                            class="block text-xs font-bold text-gray-200 mb-0.5 flex items-center gap-1"><span
                                 class="text-red-400">📊</span> نسبة %</label>
-                        <input type="number" id="discountPercentageInput" min="1" max="100" step="0.1" placeholder="5"
-                            class="w-full px-2 py-1.5 rounded-lg text-xs text-white bg-white/10 border border-white/20 focus:outline-none focus:border-[#14b8a6] focus:ring-1 focus:ring-[#14b8a6]/30 min-h-[34px]">
+                        <input type="number" id="discountPercentageInput" name="discountPercentageInput" min="1"
+                            max="100" step="0.1" placeholder="5"
+                            class="w-full px-2 py-1.5 rounded-lg text-xs text-white bg-white/10 border border-white/20 focus:outline-none focus:border-[var(--adora-accent)] focus:ring-1 focus:ring-[var(--adora-accent)]/30 min-h-[34px]">
                         <p class="text-[9px] text-gray-500 mt-0.5">1–100%</p>
                     </div>
                     <!-- السطر الثاني: تاريخ الحدث (واسع) | زر الإضافة -->
                     <div
                         class="glass p-2 rounded-lg border border-white/10 min-w-0 discounts-date-cell discounts-form-card">
-                        <label class="block text-xs font-bold text-gray-200 mb-0.5 flex items-center gap-1"><span
+                        <label for="discountEventDateInput"
+                            class="block text-xs font-bold text-gray-200 mb-0.5 flex items-center gap-1"><span
                                 class="text-red-400">📅</span> تاريخ الحدث</label>
-                        <input type="date" id="discountEventDateInput"
-                            class="w-full px-2 py-1.5 rounded-lg text-xs text-white bg-white/10 border border-white/20 focus:outline-none focus:border-[#14b8a6] focus:ring-1 focus:ring-[#14b8a6]/30 min-h-[34px]"
+                        <input type="date" id="discountEventDateInput" name="discountEventDateInput"
+                            class="w-full px-2 py-1.5 rounded-lg text-xs text-white bg-white/10 border border-white/20 focus:outline-none focus:border-[var(--adora-accent)] focus:ring-1 focus:ring-[var(--adora-accent)]/30 min-h-[34px]"
                             title="تاريخ التقصير أو المخالفة">
                     </div>
                     <div class="flex items-center justify-center min-w-0 discounts-add-cell">
                         <button type="button" onclick="addDiscount()"
-                            class="btn-modern w-full px-3 py-2 bg-white/[0.07] text-[#14b8a6] rounded-lg text-xs font-bold border border-white/20 hover:bg-[#14b8a6]/15 hover:border-[#14b8a6]/40 hover:text-white min-h-[34px] flex items-center justify-center gap-1.5">
+                            class="btn-modern w-full px-3 py-2 bg-white/[0.07] text-[var(--adora-accent)] rounded-lg text-xs font-bold border border-white/20 hover:bg-[var(--adora-accent)]/15 hover:border-[var(--adora-accent)]/40 hover:text-white min-h-[34px] flex items-center justify-center gap-1.5"
+                            aria-label="إضافة خصم">
                             <span>➕</span>
                             <span>إضافة خصم</span>
                         </button>
@@ -1588,15 +1602,18 @@
 
             <!-- Add New Type -->
             <div class="mb-5 glass p-3 sm:p-4 rounded-lg border border-white/10">
-                <label class="block text-xs sm:text-sm font-bold text-gray-200 mb-2 flex items-center gap-2">
+                <label for="newDiscountTypeInput"
+                    class="block text-xs sm:text-sm font-bold text-gray-200 mb-2 flex items-center gap-2">
                     <span class="text-turquoise">➕</span>
                     <span>إضافة نوع خصم جديد:</span>
                 </label>
                 <div class="flex gap-2">
-                    <input type="text" id="newDiscountTypeInput" placeholder="أدخل نوع خصم جديد..."
-                        class="flex-1 px-3 py-2.5 rounded-lg text-sm text-white bg-white/10 border border-white/20 focus:outline-none focus:border-[#14b8a6] focus:ring-2 focus:ring-[#14b8a6]/30 transition-all min-h-[40px]">
+                    <input type="text" id="newDiscountTypeInput" name="newDiscountTypeInput"
+                        placeholder="أدخل نوع خصم جديد..."
+                        class="flex-1 px-3 py-2.5 rounded-lg text-sm text-white bg-white/10 border border-white/20 focus:outline-none focus:border-[var(--adora-accent)] focus:ring-2 focus:ring-[var(--adora-accent)]/30 transition-all min-h-[40px]">
                     <button onclick="addDiscountType()"
-                        class="btn-modern px-4 py-2.5 bg-white/[0.07] text-[#14b8a6] rounded-lg text-xs sm:text-sm font-bold border border-white/20 hover:bg-[#14b8a6]/15 hover:border-[#14b8a6]/40 hover:text-white transition-all backdrop-blur-sm min-h-[40px] flex items-center justify-center gap-2">
+                        class="btn-modern px-4 py-2.5 bg-white/[0.07] text-[var(--adora-accent)] rounded-lg text-xs sm:text-sm font-bold border border-white/20 hover:bg-[var(--adora-accent)]/15 hover:border-[var(--adora-accent)]/40 hover:text-white transition-all backdrop-blur-sm min-h-[40px] flex items-center justify-center gap-2"
+                        aria-label="إضافة نوع خصم">
                         <span>➕</span>
                         <span class="action-btn-label-long hidden sm:inline">إضافة</span>
                     </button>

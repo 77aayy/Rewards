@@ -67,7 +67,7 @@
 --adora-bg-card: #f8fafc;
 --adora-text: #334155;
 --adora-text-secondary: #475569;
---adora-accent: #0f766e;
+--adora-accent: #0d9488; /* Darker teal for 4.5:1 contrast against white */
 --adora-border: rgba(100, 116, 139, 0.25);
 --adora-hover-bg: rgba(148, 163, 184, 0.15);
 --adora-active-bg: rgba(148, 163, 184, 0.2);
@@ -236,10 +236,10 @@ border-color: var(--adora-accent);
 }
 [data-theme="light"] .filter-pill.active,
 [data-theme="light"] .filter-reports-pill.active {
-  background: linear-gradient(135deg, var(--adora-accent) 0%, #115e59 100%) !important;
-  color: #f8fafc !important;
+  background: linear-gradient(135deg, #0d9488 0%, #0f766e 100%) !important;
+  color: #ffffff !important;
   border-color: transparent !important;
-  box-shadow: 0 2px 10px rgba(15, 118, 110, 0.25);
+  box-shadow: 0 2px 10px rgba(13, 148, 136, 0.25);
   font-weight: 700;
 }
 /* حاوية الفلاتر — خلفية هادئة */
