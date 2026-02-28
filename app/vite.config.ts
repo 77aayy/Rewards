@@ -57,7 +57,7 @@ function serveRewardsFromSource(req: IncomingMessage, res: ServerResponse, next:
   }
 }
 
-export const BASE_PATH = (import.meta as any).env?.VITE_BASE_PATH || '/Rewards/';
+export const BASE_PATH = process.env.VITE_BASE_PATH || '/Rewards/';
 
 export default defineConfig({
   base: './', // Use relative paths for assets to work in any subfolder or root
