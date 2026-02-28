@@ -1,0 +1,44 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl"><head><meta charset="utf-8"><title>مسح الجلسة</title></head>
+<body><p>جاري تسجيل الخروج ومسح الجلسة...</p>
+<script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-auth-compat.js"></script>
+<script>
+// مصدر الحقيقة للإعداد: app/Rewards/src/firebase-config.js — حدّث معه عند التغيير. راجع SECURITY.md.
+(function() {
+  var config = {
+    apiKey: 'AIzaSyAKpUAnc_EJXxGrhPPfTAgnFB13Qvs_ogk',
+    authDomain: 'rewards-63e43.firebaseapp.com',
+    projectId: 'rewards-63e43',
+    storageBucket: 'rewards-63e43.firebasestorage.app',
+    messagingSenderId: '453256410249',
+    appId: '1:453256410249:web:b7edd6afe3922c3e738258'
+  };
+  // قائمة المفاتيح المُمسحة — مصدر واحد. أي مفتاح جديد يُضاف هنا فقط.
+  var keysToRemove = ['adora_admin_auth_session', 'adora_current_role', 'adora_current_token', 'adora_current_period', 'adora_admin_just_logged_out', 'adora_rewards_db', 'adora_rewards_branches', 'adora_rewards_evalRate', 'adora_rewards_startDate', 'adora_rewards_periodText', 'adora_analysis_data', 'adora_analysis_staffList', 'adora_analysis_dateRange', 'adora_analysis_analyzed', 'adora_transfer_payload'];
+  function clearSessionKeys() {
+    keysToRemove.forEach(function(k) { try { localStorage.removeItem(k); } catch (_) {} });
+  }
+  try {
+    var app;
+    try { app = firebase.app('adora-admin-auth'); } catch (_) { app = firebase.initializeApp(config, 'adora-admin-auth'); }
+    var auth = firebase.auth(app);
+    var params = typeof window !== 'undefined' && window.location && window.location.search ? new URLSearchParams(window.location.search) : null;
+    var adminParam = params && params.get('admin') ? params.get('admin') : '';
+    var redirectTo = window.location.origin + (adminParam ? '/?admin=' + encodeURIComponent(adminParam) : '/');
+    auth.signOut().then(function() {
+      clearSessionKeys();
+      window.location.replace(redirectTo);
+    }).catch(function() {
+      clearSessionKeys();
+      window.location.replace(redirectTo);
+    });
+  } catch (e) {
+    clearSessionKeys();
+    var params = typeof window !== 'undefined' && window.location && window.location.search ? new URLSearchParams(window.location.search) : null;
+    var adminParam = params && params.get('admin') ? params.get('admin') : '';
+    window.location.replace(window.location.origin + (adminParam ? '/?admin=' + encodeURIComponent(adminParam) : '/'));
+  }
+})();
+</script>
+</body></html>

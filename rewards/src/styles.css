@@ -1,0 +1,4020 @@
+/* مصدر واحد لأزرار الترويسة — يجب أن يكون @import في بداية الملف */
+@import url('../../shared/action-header-buttons.css');
+
+:root,
+[data-theme="dark"] {
+--adora-font-sans: 'IBM Plex Sans Arabic', 'Segoe UI', Tahoma, sans-serif;
+--adora-text-h1: clamp(1.2rem, 2.5vw, 1.5rem);
+--adora-text-h2: clamp(1rem, 2vw, 1.2rem);
+--adora-text-body: 0.9375rem;
+--adora-text-small: 0.875rem;
+--turquoise: #40E0D0;
+--turquoise-light: #7FFFD4;
+--primary-500: #14b8a6;
+--primary-glow: rgba(20, 184, 166, 0.35);
+--dark-bg: #0a0e1a;
+--dark-card: #0f1729;
+--glow-turquoise: rgba(64, 224, 208, 0.4);
+--adora-bg: #0a0e1a;
+--adora-bg-card: #0f1729;
+--adora-text: #e2e8f0;
+--adora-text-secondary: #94a3b8;
+--adora-accent: #14b8a6;
+--adora-border: rgba(255, 255, 255, 0.1);
+--adora-hover-bg: rgba(20, 184, 166, 0.15);
+--adora-active-bg: rgba(20, 184, 166, 0.25);
+--adora-focus-border: rgba(20, 184, 166, 0.5);
+--adora-disabled: rgba(148, 163, 184, 0.5);
+--adora-success: #22c55e;
+--adora-warning: #eab308;
+--adora-error: #ef4444;
+--adora-scrollbar-track: rgba(15, 23, 41, 0.6);
+--adora-scrollbar-thumb: rgba(64, 224, 208, 0.4);
+--adora-scrollbar-thumb-hover: rgba(64, 224, 208, 0.6);
+--adora-modal-bg: rgba(15, 23, 41, 0.98);
+--adora-modal-header-bg: rgba(30, 41, 59, 0.6);
+--adora-input-bg: #1e293b;
+--adora-table-header-bg: rgba(15, 23, 41, 0.6);
+--adora-section-bg: linear-gradient(to bottom right, rgba(15, 23, 41, 0.8), rgba(30, 41, 59, 0.6), rgba(15, 23, 41, 0.8));
+
+/* ====== Fluid Column Widths — change here, whole table adapts ====== */
+--col-checkbox-w: 28px;
+--col-m-w: 28px;
+--col-name-w: 95px;
+--col-count-w: 46px;
+--col-attendance-w: 70px;
+--col-eval-w: 50px;
+--col-net-w: 80px;
+--col-fund-w: 55px;
+--col-rate-w: 45px;
+--col-breakdown-w: 44px;
+--col-breakdown-vip-w: 40px;
+}
+/* صفحات قائمة بذاتها — ألوان هادئة مريحة للعين */
+:root {
+  --adora-page-bg: linear-gradient(to bottom right, #f8fafc, #f1f5f9, #e2e8f0);
+  --adora-standalone-card-radius: 28px;
+  --adora-standalone-card-shadow: 0 20px 60px rgba(0, 0, 0, 0.08);
+}
+
+[data-theme="light"] {
+--dark-bg: #f1f5f9;
+--dark-card: #f8fafc;
+--turquoise: #0f766e;
+--turquoise-light: #0d9488;
+--glow-turquoise: rgba(15, 118, 110, 0.2);
+--adora-bg: #f1f5f9;
+--adora-bg-card: #f8fafc;
+--adora-text: #334155;
+--adora-text-secondary: #475569;
+--adora-accent: #0f766e;
+--adora-border: rgba(100, 116, 139, 0.25);
+--adora-hover-bg: rgba(148, 163, 184, 0.15);
+--adora-active-bg: rgba(148, 163, 184, 0.2);
+--adora-focus-border: rgba(15, 118, 110, 0.5);
+--adora-disabled: rgba(71, 85, 105, 0.5);
+--adora-success: #166534;
+--adora-warning: #854d0e;
+--adora-error: #991b1b;
+--adora-scrollbar-track: rgba(100, 116, 139, 0.1);
+--adora-scrollbar-thumb: rgba(100, 116, 139, 0.3);
+--adora-scrollbar-thumb-hover: rgba(100, 116, 139, 0.45);
+--adora-modal-bg: #f1f5f9;
+--adora-modal-header-bg: #e2e8f0;
+--adora-input-bg: #f8fafc;
+--adora-table-header-bg: #e2e8f0;
+--adora-section-bg: linear-gradient(135deg, #f8fafc 0%, #f1f5f9 50%, #e2e8f0 100%);
+}
+
+/* خلفية الوضع الفاتح: تباين واضح حتى لا يذوب المحتوى مع الخلفية */
+[data-theme="light"] body {
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  background: linear-gradient(160deg, #cbd5e1 0%, #e2e8f0 25%, #f1f5f9 50%, #e2e8f0 75%, #cbd5e1 100%) !important;
+  background-attachment: fixed;
+  min-height: 100vh;
+}
+[data-theme="light"] body::before {
+  content: "";
+  position: fixed;
+  inset: 0;
+  z-index: 0;
+  pointer-events: none;
+  background-image:
+    radial-gradient(ellipse 70% 40% at 90% 10%, rgba(100, 116, 139, 0.08) 0%, transparent 45%),
+    radial-gradient(ellipse 60% 35% at 10% 90%, rgba(100, 116, 139, 0.06) 0%, transparent 45%),
+    linear-gradient(180deg, rgba(255,255,255,0.03) 0%, transparent 30%, transparent 70%, rgba(0,0,0,0.02) 100%);
+  opacity: 1;
+}
+/* نقشة هندسية خفيفة + تأثير جلد (حبيبات) على الخلفية — الوضع الفاتح */
+[data-theme="light"] body::after {
+  content: "";
+  position: fixed;
+  inset: 0;
+  z-index: 0;
+  pointer-events: none;
+  background-image:
+    /* شبكة خطوط قطرية خفيفة */
+    repeating-linear-gradient(
+      105deg,
+      transparent 0,
+      transparent 1px,
+      rgba(100, 116, 139, 0.04) 1px,
+      rgba(100, 116, 139, 0.04) 2px
+    ),
+    repeating-linear-gradient(
+      -105deg,
+      transparent 0,
+      transparent 1px,
+      rgba(100, 116, 139, 0.03) 1px,
+      rgba(100, 116, 139, 0.03) 2px
+    ),
+    /* حبيبات شبيهة بالجلد (SVG noise) */
+    url("data:image/svg+xml,%3Csvg viewBox='0 0 256 256' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='4' stitchTiles='stitch'/%3E%3CfeColorMatrix type='saturate' values='0'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E");
+  background-size: 8px 8px, 8px 8px, 256px 256px;
+  opacity: 0.4;
+  mix-blend-mode: multiply;
+}
+
+html {
+transition: background-color 0.3s ease, color 0.3s ease, border-color 0.3s ease;
+}
+
+[data-theme="light"] {
+font-size: 106.25%;
+}
+
+body {
+  font-family: var(--adora-font-sans);
+  font-size: var(--adora-text-body);
+  line-height: 1.55;
+  color: var(--adora-text);
+}
+
+/* Typography: readability — +35–40% for data/numbers across Rewards app */
+.text-\[9px\] { font-size: 12px !important; }
+.text-\[10px\] { font-size: 14px !important; }
+.text-\[11px\] { font-size: 15px !important; }
+.text-\[12px\] { font-size: 15px !important; }
+.text-xs { font-size: 0.875rem !important; }
+.number-display { font-size: clamp(0.85rem, 2vw, 1rem) !important; }
+.footer-summary-val { font-size: 0.875rem !important; }
+
+[data-theme="light"] .glass {
+  background: linear-gradient(135deg, rgba(255, 255, 255, 0.98) 0%, rgba(248, 250, 252, 0.98) 50%, rgba(241, 245, 249, 0.95) 100%);
+  border: 1px solid rgba(100, 116, 139, 0.28);
+  box-shadow: 0 10px 40px rgba(0, 0, 0, 0.08), 0 4px 12px rgba(0, 0, 0, 0.05), inset 0 1px 0 rgba(255, 255, 255, 0.95);
+}
+
+/* هوية بصرية مميزة للترويسة في الوضع الفاتح — حد تيل واضح مع توهج خفيف */
+[data-theme="light"] header .glass {
+  border-right-width: 4px !important;
+  border-right-color: var(--adora-accent) !important;
+  box-shadow: 4px 0 20px rgba(15, 118, 110, 0.1), 0 8px 24px rgba(0, 0, 0, 0.05);
+}
+[data-theme="light"] header h1 {
+  color: var(--adora-text) !important;
+}
+[data-theme="light"] header .text-gray-300 {
+  color: var(--adora-text-secondary) !important;
+}
+
+.theme-toggle-btn {
+padding: 0.5rem;
+border-radius: 0.75rem;
+border: 1px solid var(--adora-border);
+background: var(--adora-bg-card);
+color: var(--adora-text);
+transition: background-color 0.3s ease, color 0.3s ease, border-color 0.3s ease;
+}
+.theme-toggle-btn:hover {
+background: var(--adora-hover-bg);
+}
+.theme-toggle-btn .theme-icon svg {
+color: var(--adora-accent);
+}
+
+/* ========== Rewards Light Mode Overrides (tabs, inputs, pills, tables) ========== */
+[data-theme="light"] #reportsTabsBar {
+border-color: var(--adora-border);
+}
+[data-theme="light"] #reportsTabArchived,
+[data-theme="light"] #reportsTabStatistics {
+color: var(--adora-text-secondary);
+}
+[data-theme="light"] #reportsTabArchived:hover,
+[data-theme="light"] #reportsTabStatistics:hover {
+color: var(--adora-text);
+}
+[data-theme="light"] #reportsEmployeeSearch {
+background: var(--adora-input-bg) !important;
+border-color: var(--adora-border) !important;
+color: var(--adora-text) !important;
+}
+[data-theme="light"] #reportsEmployeeSearch::placeholder {
+color: var(--adora-text-secondary);
+}
+[data-theme="light"] #reportsEmployeeSearch:focus {
+border-color: var(--adora-focus-border) !important;
+background: var(--adora-input-bg) !important;
+}
+[data-theme="light"] #archivedPeriodSelect {
+background: var(--adora-input-bg) !important;
+border-color: var(--adora-border) !important;
+color: var(--adora-text) !important;
+}
+[data-theme="light"] .filter-reports-pill:not(.active),
+[data-theme="light"] .filter-pill:not(.active) {
+background: var(--adora-input-bg);
+color: var(--adora-text);
+border: 1px solid var(--adora-border);
+}
+[data-theme="light"] .filter-reports-pill:not(.active):hover,
+[data-theme="light"] .filter-pill:not(.active):hover {
+background: var(--adora-hover-bg);
+border-color: var(--adora-accent);
+}
+[data-theme="light"] .filter-pill.active,
+[data-theme="light"] .filter-reports-pill.active {
+  background: linear-gradient(135deg, var(--adora-accent) 0%, #115e59 100%) !important;
+  color: #f8fafc !important;
+  border-color: transparent !important;
+  box-shadow: 0 2px 10px rgba(15, 118, 110, 0.25);
+  font-weight: 700;
+}
+/* حاوية الفلاتر — خلفية هادئة */
+[data-theme="light"] #branchFilters {
+  background: #f8fafc !important;
+  border: 1px solid rgba(100, 116, 139, 0.2);
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.04);
+}
+[data-theme="light"] .text-turquoise { color: var(--adora-accent) !important; }
+[data-theme="light"] .border-turquoise { border-color: var(--adora-accent) !important; }
+[data-theme="light"] #statEmployees,
+[data-theme="light"] .stats-card .text-turquoise,
+[data-theme="light"] .number-display.text-turquoise { color: var(--adora-accent) !important; }
+[data-theme="light"] #reportsTabCurrent.text-turquoise,
+[data-theme="light"] #reportsPage .text-turquoise { color: var(--adora-accent) !important; }
+[data-theme="light"] #reportsPage .border-turquoise { border-color: var(--adora-accent) !important; }
+[data-theme="light"] #currentPeriodStatsBlock .text-turquoise,
+[data-theme="light"] #currentPeriodStats .text-lg.font-black.text-turquoise { color: var(--adora-accent) !important; }
+[data-theme="light"] .glass .border-white\/10,
+[data-theme="light"] .glass .border-white\/15,
+[data-theme="light"] .glass [class*="border-white"] {
+border-color: var(--adora-border) !important;
+}
+[data-theme="light"] .glass .text-white:not(button):not(.active),
+[data-theme="light"] .glass h3.text-white,
+[data-theme="light"] .glass .text-white\/50,
+[data-theme="light"] .glass .text-white\/90 {
+color: var(--adora-text) !important;
+}
+[data-theme="light"] .glass .text-gray-400,
+[data-theme="light"] .glass .text-gray-500 {
+color: var(--adora-text-secondary) !important;
+}
+[data-theme="light"] .glass thead th,
+[data-theme="light"] table thead th {
+background: var(--adora-table-header-bg);
+color: var(--adora-text);
+border-color: var(--adora-border);
+font-size: 0.975rem !important;
+}
+[data-theme="light"] #targetTable tbody td,
+[data-theme="light"] #targetTable tfoot td {
+font-size: 0.975rem !important;
+}
+/* شارة مزامنة Firebase — ألوان هادئة */
+[data-theme="light"] #adoraFirebaseSyncBadge div {
+  background: rgba(100, 116, 139, 0.1) !important;
+  border-color: rgba(100, 116, 139, 0.2) !important;
+  color: var(--adora-accent) !important;
+}
+[data-theme="light"] #adoraFirebaseSyncBadge svg,
+[data-theme="light"] #adoraFirebaseSyncBadge svg path {
+  color: var(--adora-accent) !important;
+  stroke: var(--adora-accent) !important;
+}
+[data-theme="light"] .glass .text-\[9px\],
+[data-theme="light"] .glass .text-\[10px\],
+[data-theme="light"] .glass .text-\[11px\] {
+font-size: 0.75rem !important;
+}
+[data-theme="light"] input[type="text"].theme-input,
+[data-theme="light"] input[type="search"].theme-input,
+[data-theme="light"] select.theme-input {
+background: var(--adora-input-bg);
+border: 1px solid var(--adora-border);
+color: var(--adora-text);
+}
+[data-theme="light"] .btn-secondary,
+[data-theme="light"] .btn-modern:not(.primary) {
+background: var(--adora-input-bg);
+color: var(--adora-text);
+border-color: var(--adora-border);
+}
+[data-theme="light"] .btn-secondary:hover,
+[data-theme="light"] .btn-modern:not(.primary):hover {
+background: var(--adora-hover-bg);
+border-color: var(--adora-accent);
+}
+
+/* ========== الوضع الفاتح: ألوان هادئة مريحة للعين ========== */
+[data-theme="light"] .neon-glow {
+  border: 1px solid rgba(100, 116, 139, 0.3);
+  box-shadow: 0 4px 24px rgba(0, 0, 0, 0.06), 0 1px 3px rgba(0, 0, 0, 0.04);
+}
+/* كروت الإحصائيات — ظلال ناعمة وشريط علوي باهت */
+[data-theme="light"] .stats-grid-container .glass {
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.05), 0 1px 3px rgba(0, 0, 0, 0.03);
+  border: 1px solid rgba(100, 116, 139, 0.25);
+  position: relative;
+  overflow: hidden;
+}
+[data-theme="light"] .stats-grid-container .glass::before {
+  content: "";
+  position: absolute;
+  top: 0;
+  right: 0;
+  left: 0;
+  height: 3px;
+  background: linear-gradient(90deg, var(--adora-accent), rgba(15, 118, 110, 0.4));
+  opacity: 0.6;
+}
+[data-theme="light"] .stats-card .text-white,
+[data-theme="light"] .stats-card .font-black.text-white {
+  color: var(--adora-text) !important;
+}
+[data-theme="light"] #targetTable tbody tr:nth-child(odd) {
+background: var(--adora-table-header-bg);
+}
+[data-theme="light"] #targetTable tbody tr:nth-child(even) {
+  background: rgba(148, 163, 184, 0.06);
+}
+[data-theme="light"] #targetTable tbody tr {
+  transition: background 0.2s ease;
+}
+[data-theme="light"] #targetTable tbody tr:hover {
+  background: var(--adora-hover-bg);
+}
+[data-theme="light"] #targetTable tr.breakdown-group-row th {
+background: var(--adora-table-header-bg) !important;
+border-left: 1px solid var(--adora-border) !important;
+border-bottom: 1px solid var(--adora-border) !important;
+color: var(--adora-text) !important;
+}
+[data-theme="light"] #targetTable tr.breakdown-group-row th span {
+font-size: 0.9rem !important;
+color: var(--adora-text) !important;
+}
+[data-theme="light"] #targetTable tr.breakdown-group-row th span[style] {
+background: transparent !important;
+border-color: var(--adora-border) !important;
+}
+[data-theme="light"] .negative-ratings-header-row {
+  background: linear-gradient(90deg, rgba(254, 249, 195, 0.6) 0%, rgba(254, 226, 226, 0.4) 100%);
+  border-bottom: 1px solid rgba(202, 138, 4, 0.2);
+}
+[data-theme="light"] .negative-ratings-label-cell {
+  color: var(--adora-text);
+  font-weight: 700;
+  font-size: 12px;
+}
+[data-theme="light"] [id$="Modal"] .glass {
+  background: var(--adora-modal-bg) !important;
+  border: 1px solid rgba(100, 116, 139, 0.25) !important;
+  box-shadow: 0 24px 64px rgba(0, 0, 0, 0.08), 0 8px 24px rgba(0, 0, 0, 0.05);
+}
+[data-theme="light"] [id$="Modal"] .glass .text-gray-300,
+[data-theme="light"] [id$="Modal"] .glass .text-gray-400,
+[data-theme="light"] [id$="Modal"] .glass .text-gray-500,
+[data-theme="light"] [id$="Modal"] .glass .text-white:not(button):not(.btn):not([role="button"]) {
+  color: var(--adora-text) !important;
+}
+[data-theme="light"] [id$="Modal"] .glass .text-white\/90,
+[data-theme="light"] [id$="Modal"] .glass .text-white\/80 {
+  color: var(--adora-text-secondary) !important;
+}
+[data-theme="light"] #employeeReportModal {
+  background: rgba(0, 0, 0, 0.35) !important;
+}
+[data-theme="light"] #employeeReportModal > div[class*="rounded"] {
+  background: #f1f5f9 !important;
+  border: 1px solid rgba(100, 116, 139, 0.25) !important;
+  box-shadow: 0 25px 70px rgba(0, 0, 0, 0.1), 0 4px 20px rgba(0, 0, 0, 0.06) !important;
+}
+[data-theme="light"] #employeeReportModal .text-gray-300,
+[data-theme="light"] #employeeReportModal .text-gray-400,
+[data-theme="light"] #employeeReportModal .text-white:not(button):not(.btn) {
+  color: #334155 !important;
+}
+[data-theme="light"] #employeeReportModal h2.text-turquoise,
+[data-theme="light"] #employeeReportModal .text-turquoise {
+  color: #0f766e !important;
+}
+[data-theme="light"] #employeeReportModal .text-gray-400:hover {
+  color: var(--adora-text) !important;
+}
+/* ملخص الحساب — خلفية رمادية فاتحة مريحة للعين */
+[data-theme="light"] #employeeReportModal .employee-report-content [class*="from-slate"] {
+  background: linear-gradient(to right, #e2e8f0, #f1f5f9) !important;
+  border-color: rgba(100, 116, 139, 0.3) !important;
+  color: #334155 !important;
+}
+[data-theme="light"] #employeeReportModal .employee-report-content [class*="from-slate"] h5,
+[data-theme="light"] #employeeReportModal .employee-report-content [class*="from-slate"] .text-white,
+[data-theme="light"] #employeeReportModal .employee-report-content [class*="from-slate"] .text-gray-300 {
+  color: #334155 !important;
+}
+[data-theme="light"] #employeeReportModal .employee-report-content .border-white\/10 {
+  border-color: rgba(100, 116, 139, 0.2) !important;
+}
+/* صناديق الهيدر والملخص (from-turquoise) — تفتيح هادئ */
+[data-theme="light"] #employeeReportModal .employee-report-content [class*="from-turquoise"] {
+  background: linear-gradient(to right, #f0fdfa, #f8fafc) !important;
+  border-color: rgba(13, 148, 136, 0.2) !important;
+}
+/* صناديق ملونة — ألوان هادئة غير صاخبة */
+[data-theme="light"] #employeeReportModal [class*="bg-orange-500"] {
+  background: #fff7ed !important;
+  border-color: rgba(194, 65, 12, 0.25) !important;
+}
+[data-theme="light"] #employeeReportModal [class*="bg-purple-500"] {
+  background: #faf5ff !important;
+  border-color: rgba(126, 34, 206, 0.25) !important;
+}
+[data-theme="light"] #employeeReportModal [class*="bg-yellow-500"] {
+  background: #fefce8 !important;
+  border-color: rgba(161, 98, 7, 0.25) !important;
+}
+[data-theme="light"] #employeeReportModal [class*="bg-green-500"] {
+  background: #f0fdf4 !important;
+  border-color: rgba(21, 128, 61, 0.25) !important;
+}
+[data-theme="light"] #employeeReportModal [class*="bg-turquoise"] {
+  background: #f0fdfa !important;
+  border-color: rgba(13, 148, 136, 0.25) !important;
+}
+[data-theme="light"] #employeeReportModal .text-orange-400,
+[data-theme="light"] #employeeReportModal .text-orange-300,
+[data-theme="light"] #employeeReportModal [class*="text-orange-300"] {
+  color: #9a3412 !important;
+}
+[data-theme="light"] #employeeReportModal .text-purple-400,
+[data-theme="light"] #employeeReportModal .text-purple-300 {
+  color: #6b21a8 !important;
+}
+[data-theme="light"] #employeeReportModal .text-yellow-400,
+[data-theme="light"] #employeeReportModal .text-yellow-300,
+[data-theme="light"] #employeeReportModal .text-yellow-200 {
+  color: #854d0e !important;
+}
+[data-theme="light"] #employeeReportModal .text-green-400 {
+  color: #166534 !important;
+}
+[data-theme="light"] #employeeReportModal .text-red-400 {
+  color: #991b1b !important;
+}
+/* أزرار التقرير — ألوان هادئة */
+[data-theme="light"] #employeeReportModal .glass {
+  background: #e2e8f0 !important;
+  border: 1px solid rgba(100, 116, 139, 0.3) !important;
+}
+[data-theme="light"] #employeeReportModal button.glass {
+  color: #334155 !important;
+  background: #cbd5e1 !important;
+  border: 1px solid rgba(100, 116, 139, 0.35) !important;
+}
+[data-theme="light"] #employeeReportModal button.glass:hover,
+[data-theme="light"] #employeeReportModal button.glass.hover\:bg-white\/10:hover {
+  background: #94a3b8 !important;
+  color: #0f172a !important;
+}
+[data-theme="light"] #employeeReportModal button.text-white,
+[data-theme="light"] #employeeReportModal button.glass .text-white {
+  color: #334155 !important;
+}
+[data-theme="light"] #employeeReportModal button.text-gray-300 {
+  color: #475569 !important;
+}
+[data-theme="light"] #reportsPage .text-gray-300,
+[data-theme="light"] #reportsPage .text-gray-400,
+[data-theme="light"] #reportsPage .text-gray-500 {
+  color: var(--adora-text) !important;
+}
+[data-theme="light"] #reportsPage .text-white:not(button):not(.btn):not(.filter-reports-pill):not(.filter-pill):not(.active) {
+  color: var(--adora-text) !important;
+}
+[data-theme="light"] #reportsPage .filter-reports-pill:not(.active),
+[data-theme="light"] #reportsPage .filter-pill:not(.active) {
+  color: var(--adora-text-secondary) !important;
+}
+[data-theme="light"] #employeePerformanceTable tbody td,
+[data-theme="light"] #employeePerformanceTableBody td {
+  color: var(--adora-text) !important;
+}
+[data-theme="light"] #employeePerformanceTable tbody td.text-gray-300,
+[data-theme="light"] #employeePerformanceTableBody td.text-gray-300 {
+  color: var(--adora-text-secondary) !important;
+}
+[data-theme="light"] #employeePerformanceTable .text-turquoise,
+[data-theme="light"] #employeePerformanceTableBody .text-turquoise {
+  color: var(--adora-accent) !important;
+}
+[data-theme="light"] #currentPeriodStats .text-gray-300,
+[data-theme="light"] #currentPeriodStatsBlock .text-gray-300,
+[data-theme="light"] #currentPeriodStatsHeaderBlock .text-gray-300,
+[data-theme="light"] #statisticsReportsContent .text-gray-300 {
+  color: var(--adora-text) !important;
+}
+[data-theme="light"] #statisticsSectionTitle,
+[data-theme="light"] #cumulativePointsBody,
+[data-theme="light"] #cumulativePointsSection .text-turquoise,
+[data-theme="light"] #reportsPage h2 .text-turquoise,
+[data-theme="light"] #reportsPage h3 .text-turquoise {
+  color: var(--adora-accent) !important;
+}
+[data-theme="light"] #cumulativePointsSection button span {
+  color: var(--adora-text) !important;
+}
+[data-theme="light"] #reportsPage label.text-gray-300,
+[data-theme="light"] #archivedReportsContent label.text-gray-300 {
+  color: var(--adora-text) !important;
+}
+[data-theme="light"] #reportsEmployeesGrid .text-turquoise {
+  color: var(--adora-accent) !important;
+}
+[data-theme="light"] #reportsPage .text-green-400,
+[data-theme="light"] #reportsPage .text-green-500 {
+  color: var(--adora-success) !important;
+}
+/* تقارير: أي نص رمادي داخل الصفحة — ثيم فاتح */
+[data-theme="light"] #reportsPage [class*="text-gray-300"],
+[data-theme="light"] #reportsPage [class*="text-gray-400"],
+[data-theme="light"] #statisticsReportsContent div.text-sm,
+[data-theme="light"] #currentPeriodStatsBlock div.text-sm,
+[data-theme="light"] #currentPeriodStatsTableWrap td {
+  color: var(--adora-text) !important;
+}
+
+/* نافذة إدارة الإداريين — ثيم فاتح: خلفية وحدود ونصوص واضحة */
+[data-theme="light"] #adminManagementModal .glass {
+  background: var(--adora-modal-bg) !important;
+  border: 1px solid var(--adora-border) !important;
+}
+[data-theme="light"] #adminManagementModal .text-gray-300,
+[data-theme="light"] #adminManagementModal .text-gray-400,
+[data-theme="light"] #adminManagementModal .text-white:not(button) {
+  color: var(--adora-text) !important;
+}
+[data-theme="light"] #adminManagementModal button.text-gray-400:hover {
+  color: var(--adora-text) !important;
+}
+[data-theme="light"] #adminManagementModal button.text-gray-300,
+[data-theme="light"] #adminManagementModal .glass button {
+  color: var(--adora-text) !important;
+}
+[data-theme="light"] #adminManagementModal button:hover {
+  background: var(--adora-hover-bg) !important;
+}
+[data-theme="light"] #adminManagementModal .border-white\/10,
+[data-theme="light"] #adminManagementModal [class*="border-white"] {
+  border-color: var(--adora-border) !important;
+}
+[data-theme="light"] #adminManagementModal p[style*="color"],
+[data-theme="light"] #adminManagementModal div[style*="color"] {
+  color: var(--adora-text) !important;
+}
+
+/* نافذة كيفية حساب التقييم — ثيم فاتح: نصوص وحدود وخلفيات واضحة */
+[data-theme="light"] #ratingExplanationModal .glass {
+  background: var(--adora-modal-bg) !important;
+  border: 1px solid var(--adora-border) !important;
+}
+[data-theme="light"] #ratingExplanationModal .text-gray-200,
+[data-theme="light"] #ratingExplanationModal .text-gray-300,
+[data-theme="light"] #ratingExplanationModal .text-gray-400,
+[data-theme="light"] #ratingExplanationModal .text-white {
+  color: var(--adora-text) !important;
+}
+[data-theme="light"] #ratingExplanationModal .text-turquoise,
+[data-theme="light"] #ratingExplanationModal .text-turquoise\/90 {
+  color: var(--adora-accent) !important;
+}
+[data-theme="light"] #ratingExplanationModal .text-green-300,
+[data-theme="light"] #ratingExplanationModal .text-green-400 {
+  color: var(--adora-success) !important;
+}
+[data-theme="light"] #ratingExplanationModal .text-yellow-400,
+[data-theme="light"] #ratingExplanationModal .text-orange-400 {
+  color: var(--adora-warning) !important;
+}
+[data-theme="light"] #ratingExplanationModal .text-red-400 {
+  color: var(--adora-error) !important;
+}
+[data-theme="light"] #ratingExplanationModal button.text-gray-400:hover,
+[data-theme="light"] #ratingExplanationModal .hover\:text-white:hover {
+  color: var(--adora-text) !important;
+}
+[data-theme="light"] #ratingExplanationModal .hover\:bg-white\/10:hover {
+  background: var(--adora-hover-bg) !important;
+}
+[data-theme="light"] #ratingExplanationModal .border-white\/10,
+[data-theme="light"] #ratingExplanationModal [class*="border-white"] {
+  border-color: var(--adora-border) !important;
+}
+[data-theme="light"] #ratingExplanationModal .bg-white\/5 {
+  background: var(--adora-hover-bg) !important;
+}
+[data-theme="light"] #ratingExplanationModal .bg-turquoise\/5,
+[data-theme="light"] #ratingExplanationModal .bg-turquoise\/10 {
+  background: rgba(20, 184, 166, 0.08) !important;
+}
+[data-theme="light"] #ratingExplanationModal .border-turquoise\/20,
+[data-theme="light"] #ratingExplanationModal .border-turquoise\/30 {
+  border-color: rgba(13, 148, 136, 0.35) !important;
+}
+
+[data-theme="light"] .footer-summary,
+[data-theme="light"] .footer-summary-final {
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.98) 0%, var(--adora-table-header-bg) 100%) !important;
+  border-top: 2px solid rgba(13, 148, 136, 0.25);
+  color: var(--adora-text);
+  box-shadow: 0 -4px 20px rgba(13, 148, 136, 0.05);
+}
+[data-theme="light"] .footer-summary td,
+[data-theme="light"] .footer-summary-final td,
+[data-theme="light"] #bonusesCombinedRow td {
+background: var(--adora-table-header-bg) !important;
+}
+[data-theme="light"] #footerRowFinalTotal td {
+background: var(--adora-table-header-bg) !important;
+}
+[data-theme="light"] .footer-summary-label,
+[data-theme="light"] .footer-summary-val {
+color: var(--adora-text);
+font-size: 0.875rem !important;
+}
+[data-theme="light"] .footer-summary-net {
+color: var(--adora-accent);
+}
+[data-theme="light"] .footer-summary-final .footer-summary-net {
+color: var(--adora-accent) !important;
+}
+[data-theme="light"] .footer-summary .text-turquoise,
+[data-theme="light"] .footer-summary-final .text-turquoise {
+color: var(--adora-accent) !important;
+}
+[data-theme="light"] .footer-summary .text-orange-400 {
+color: #9a3412 !important;
+}
+[data-theme="light"] .footer-summary .text-white\/30 {
+color: var(--adora-text-secondary) !important;
+}
+[data-theme="light"] #bonusesCombinedRow .rounded-lg {
+  background: linear-gradient(135deg, rgba(255, 255, 255, 0.95) 0%, rgba(240, 253, 250, 0.9) 100%) !important;
+  box-shadow: 0 4px 16px rgba(13, 148, 136, 0.08), inset 0 1px 0 rgba(255, 255, 255, 0.9);
+  border: 1px solid rgba(13, 148, 136, 0.22);
+}
+[data-theme="light"] #bonusesCombinedRow .rounded-lg .text-turquoise {
+  color: var(--adora-accent) !important;
+}
+[data-theme="light"] #bonusesCombinedRow .text-white {
+color: var(--adora-text) !important;
+}
+[data-theme="light"] #bonusesCombinedRow .text-turquoise.font-bold,
+[data-theme="light"] #bonusesCombinedRow .rounded-lg > .text-turquoise {
+  color: var(--adora-accent) !important;
+}
+[data-theme="light"] #bonusesCombinedRow .rounded-md {
+background: rgba(15, 23, 42, 0.06) !important;
+border-color: var(--adora-border) !important;
+}
+[data-theme="light"] #targetTable th,
+[data-theme="light"] #targetTable td {
+border-color: var(--adora-border) !important;
+}
+[data-theme="light"] #targetTable thead tr.main-header-row th {
+  background: linear-gradient(180deg, #f0fdfa 0%, #e6fffa 100%) !important;
+  color: #0c1222 !important;
+  font-weight: 700 !important;
+  border-bottom: 1px solid rgba(13, 148, 136, 0.2) !important;
+}
+[data-theme="light"] .footer-summary-label,
+[data-theme="light"] .footer-summary-val {
+font-size: 1.125rem !important;
+font-weight: 600 !important;
+}
+[data-theme="light"] .badges-wrapper span {
+font-size: 0.8rem !important;
+}
+[data-theme="light"] .glass .badges-wrapper .text-yellow-400,
+[data-theme="light"] .glass .badges-wrapper .text-yellow-500,
+[data-theme="light"] .glass .badges-wrapper .text-blue-400,
+[data-theme="light"] .glass .badges-wrapper .text-blue-500,
+[data-theme="light"] .glass .badges-wrapper .text-green-400,
+[data-theme="light"] .glass .badges-wrapper .text-green-500,
+[data-theme="light"] .glass .badges-wrapper .text-red-400,
+[data-theme="light"] .glass .badges-wrapper .text-red-500 {
+color: var(--adora-text) !important;
+}
+
+/* تباين الأرقام والنصوص داخل الجدول — الوضع الفاتح (ألوان أغمق) */
+[data-theme="light"] .glass #targetTable .text-amber-300,
+[data-theme="light"] .glass #targetTable .text-yellow-300,
+[data-theme="light"] .glass #targetTable .text-yellow-400 {
+color: #92400e !important;
+}
+[data-theme="light"] .glass #targetTable .text-blue-400,
+[data-theme="light"] .glass #targetTable .text-indigo-300 {
+color: #1e40af !important;
+}
+[data-theme="light"] .glass #targetTable .text-red-300,
+[data-theme="light"] .glass #targetTable .text-red-400 {
+color: var(--adora-error) !important;
+}
+[data-theme="light"] .glass #targetTable .text-green-400 {
+color: var(--adora-success) !important;
+}
+[data-theme="light"] .glass #targetTable .text-primary-500 {
+color: var(--adora-accent) !important;
+}
+[data-theme="light"] .glass #targetTable .text-gray-700,
+[data-theme="light"] .glass #targetTable .text-gray-400 {
+color: var(--adora-text-secondary) !important;
+}
+[data-theme="light"] .glass #targetTable thead .text-amber-300,
+[data-theme="light"] .glass #targetTable thead .text-yellow-300,
+[data-theme="light"] .glass #targetTable thead .text-red-300,
+[data-theme="light"] .glass #targetTable thead .text-violet-300 {
+color: var(--adora-text) !important;
+}
+[data-theme="light"] .glass #targetTable .text-orange-100,
+[data-theme="light"] .glass #targetTable .text-orange-300,
+[data-theme="light"] .glass #targetTable .text-orange-400 {
+color: #9a3412 !important;
+}
+
+/* Theme utility classes for JS-generated HTML (use in app.js / app-extensions.js) */
+.theme-text { color: var(--adora-text); }
+.theme-text-secondary { color: var(--adora-text-secondary); }
+.theme-bg { background-color: var(--adora-bg-card); }
+.theme-bg-subtle { background: var(--adora-input-bg); }
+.theme-border { border-color: var(--adora-border); }
+
+/* ترويسة موحدة مع التحليل — لون الحد والخط */
+.border-turquoise { border-color: var(--turquoise); }
+.text-turquoise { color: var(--turquoise); }
+#headerPeriodRange { color: var(--adora-accent) !important; }
+/* ========== Mobile First: عرض الجوال أولاً، تنكمش وتتمدد حسب الشاشة ========== */
+html {
+overflow-x: hidden;
+-webkit-text-size-adjust: 100%;
+}
+body {
+width: 100%;
+min-width: 0;
+max-width: 100vw;
+}
+/* الحاوية الرئيسية: fluid — تتمدد على كل الشاشات */
+.max-w-full.sm\:max-w-7xl.mx-auto,
+[class*="max-w-full"][class*="mx-auto"] {
+width: 100%;
+min-width: 0;
+max-width: min(98%, 96rem);
+padding-left: clamp(0.5rem, 2vw, 1.5rem);
+padding-right: clamp(0.5rem, 2vw, 1.5rem);
+}
+@media (min-width: 1400px) {
+.max-w-full.sm\:max-w-7xl.mx-auto,
+[class*="max-w-full"][class*="mx-auto"] {
+max-width: min(96%, 120rem);
+}
+}
+/* النوافذ المنبثقة: عند الإظهار تكون flex وتتقلص مع الشاشة */
+[id$="Modal"].fixed.inset-0 {
+display: none;
+align-items: center;
+justify-content: center;
+padding: clamp(0.5rem, 2vw, 1rem);
+}
+[id$="Modal"].fixed.inset-0:not(.hidden) {
+display: flex !important;
+}
+[id$="Modal"] .glass.rounded-2xl,
+[id$="Modal"] [class*="max-w-"] {
+width: 100%;
+min-width: 0;
+max-width: min(100%, 42rem);
+margin-left: auto;
+margin-right: auto;
+}
+[id="conditionsModal"] [class*="max-w-2xl"] { max-width: min(100%, 42rem); }
+[id="discountsModal"] [class*="max-w-3xl"],
+[id="discountsModal"] .glass.rounded-xl { max-width: min(100%, 33.6rem) !important; }
+[id="instructionsModal"] [class*="max-w-3xl"] { max-width: min(100%, 48rem); }
+[id="employeeReportModal"] [class*="max-w-4xl"] { max-width: min(100%, 56rem); }
+/* Hide fund column (العمال) in table body - value is shown in footer */
+tbody .col-fund,
+thead .col-fund {
+display: none !important;
+}
+/* Keep fund column visible in footer for totals */
+tfoot .col-fund,
+tfoot #footFund {
+display: table-cell !important;
+}
+/* Hide rate column (الفئة) in table body and header - to reduce column congestion */
+tbody .col-rate,
+thead .col-rate {
+display: none !important;
+}
+/* Keep rate column visible in footer if needed */
+tfoot .col-rate {
+display: none !important; /* إخفاء من footer أيضاً */
+}
+/* Show rate column in print */
+@media print {
+tbody .col-rate,
+thead .col-rate,
+tfoot .col-rate {
+display: table-cell !important;
+}
+}
+
+/* محاذاة عمود الموظف مع الترويسة — auto layout for content-adaptive columns */
+#targetTable {
+  table-layout: auto;
+  width: 100%;
+  border-collapse: collapse;
+}
+/* أعمدة التفصيل (وضع الاستقبال): حد أدنى مناسب للأرقام */
+#targetTable th.col-breakdown,
+#targetTable td.col-breakdown {
+  min-width: 38px;
+  white-space: nowrap;
+  font-size: 0.84rem;
+  padding: 0.25rem 0.2rem !important;
+  text-align: center;
+}
+#targetTable th.col-breakdown-vip,
+#targetTable td.col-breakdown-vip {
+  min-width: 34px;
+  white-space: nowrap;
+}
+/* Breakdown mode: auto layout with constraints for balanced distribution */
+#targetTable.adora-breakdown-mode {
+  table-layout: auto;
+  width: 100%;
+  min-width: 0;
+}
+/* محاذاة الرأس مع الجسم: نفس عرض الصندوق للأعمدة المشتركة */
+#targetTable.adora-breakdown-mode thead .main-header-row th,
+#targetTable.adora-breakdown-mode tbody td {
+  box-sizing: border-box;
+}
+/* في fixed layout: الـ header widths بتحدد عرض الأعمدة */
+/* في وضع الاستقبال: إخفاء عمود "الحجوزات" الواحد بالكامل (التفصيل يحل محله) */
+#targetTable.adora-breakdown-mode th.col-count-single,
+#targetTable.adora-breakdown-mode td.col-count-single {
+  display: none !important;
+}
+.table-scroll-container.adora-breakdown-mode {
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
+  scroll-snap-type: x proximity;
+  scroll-behavior: smooth;
+  position: relative;
+}
+/* Gradient fade hints to show more content exists (scroll indicator) */
+.table-scroll-container.adora-breakdown-mode::before,
+.table-scroll-container.adora-breakdown-mode::after {
+  content: '';
+  position: sticky;
+  top: 0;
+  bottom: 0;
+  width: 24px;
+  z-index: 2;
+  pointer-events: none;
+}
+.table-scroll-container.adora-breakdown-mode::before {
+  left: 0;
+  background: linear-gradient(to right, rgba(10,14,26,0.6), transparent);
+}
+.table-scroll-container.adora-breakdown-mode::after {
+  right: 0;
+  background: linear-gradient(to left, rgba(10,14,26,0.6), transparent);
+}
+#targetTable thead th.col-name,
+#targetTable tbody td.col-name {
+  width: auto;
+  min-width: var(--col-name-w);
+  vertical-align: middle;
+  text-align: right;
+  white-space: nowrap;
+  padding: 0.3rem 0.4rem !important;
+  font-size: 0.96rem;
+  line-height: 1.3;
+}
+#targetTable tbody td.col-name > div {
+  text-align: right;
+  direction: rtl;
+}
+
+/* ========== تنسيق جدول المكافآت — نظرة فرونت اند ========== */
+/* توحيد الحشو والارتفاع في الهيدر والجسم — Compact readable */
+#targetTable thead th {
+  padding: 0.4rem 0.3rem;
+  font-size: 0.84rem;
+  font-weight: 600;
+  vertical-align: middle;
+  min-height: 2rem;
+  line-height: 1.25;
+  letter-spacing: 0.01em;
+  white-space: normal;
+  word-wrap: break-word;
+}
+/* Breakdown mode headers — slightly smaller but readable */
+#targetTable.adora-breakdown-mode thead th {
+  padding: 0.3rem 0.2rem;
+  font-size: 0.78rem;
+  line-height: 1.2;
+}
+#targetTable.adora-breakdown-mode thead th.col-breakdown,
+#targetTable.adora-breakdown-mode thead th.col-breakdown-vip {
+  font-size: 0.75rem;
+  padding: 0.25rem 0.15rem;
+}
+#targetTable tbody td {
+  padding: 0.35rem 0.3rem;
+  vertical-align: middle;
+  font-size: 0.96rem;
+  line-height: 1.35;
+}
+#targetTable tbody td.col-breakdown,
+#targetTable tbody td.col-m,
+#targetTable tbody td.col-rate {
+  padding: 0.3rem 0.2rem;
+  vertical-align: middle;
+  font-size: 0.96rem;
+}
+#targetTable.adora-breakdown-mode tbody td.col-breakdown,
+#targetTable.adora-breakdown-mode tbody td.col-breakdown-vip {
+  padding: 0.25rem 0.15rem;
+  font-size: 0.9rem;
+}
+
+/* ========== جدول موحد — خط واحد، لون بيانات واحد، صافي بلون العلامة (تجربة بصرية احترافية) ========== */
+#targetTable thead tr.main-header-row th {
+  font-size: 0.975rem !important;
+  font-weight: 600 !important;
+  padding: 0.4rem 0.35rem !important;
+}
+#targetTable tbody td {
+  font-size: 0.875rem !important;
+  line-height: 1.4;
+  padding: 0.4rem 0.35rem !important;
+}
+#targetTable tbody td.col-net {
+  font-size: 0.9rem !important;
+  font-weight: 700 !important;
+}
+#targetTable tbody td.col-count,
+#targetTable tbody td.col-breakdown,
+#targetTable tbody td.col-eval-booking,
+#targetTable tbody td.col-eval-google,
+#targetTable tbody td.col-fund {
+  font-size: 0.875rem !important;
+  font-weight: 600 !important;
+}
+#targetTable tbody td.col-attendance {
+  font-size: 0.875rem !important;
+  font-weight: 600 !important;
+}
+#targetTable tbody td.col-attendance * {
+  font-size: 0.875rem !important;
+}
+#targetTable tbody td.col-attendance .text-\[9px\],
+#targetTable tbody td.col-attendance .text-\[10px\] {
+  font-size: 0.75rem !important;
+}
+#targetTable .badges-wrapper span {
+  font-size: 0.8rem !important;
+  padding: 0.12rem 0.35rem !important;
+}
+#targetTable tbody td.col-name {
+  font-size: 0.875rem !important;
+}
+#targetTable tbody td.col-name .text-\[10px\] {
+  font-size: 0.75rem !important;
+  line-height: 1.35;
+}
+#targetTable tbody td.col-m {
+  font-size: 0.8125rem !important;
+}
+/* لون موحد للأرقام — لون النص الأساسي؛ الصافي فقط بلون العلامة */
+#targetTable tbody td.col-count,
+#targetTable tbody td.col-breakdown,
+#targetTable tbody td.col-eval-booking,
+#targetTable tbody td.col-eval-google,
+#targetTable tbody td.col-fund {
+  color: var(--adora-text) !important;
+}
+#targetTable tbody td.col-count *,
+#targetTable tbody td.col-breakdown *,
+#targetTable tbody td.col-eval-booking *,
+#targetTable tbody td.col-eval-google *,
+#targetTable tbody td.col-fund * {
+  color: inherit !important;
+}
+#targetTable tbody td.col-net,
+#targetTable tbody td.col-net * {
+  color: var(--adora-accent) !important;
+}
+#targetTable tbody td.col-attendance {
+  color: var(--adora-text) !important;
+}
+#targetTable tbody td.col-attendance .text-green-400,
+#targetTable tbody td.col-attendance .text-green-500 {
+  color: var(--adora-success) !important;
+}
+#targetTable tbody td.col-attendance .text-red-400,
+#targetTable tbody td.col-attendance .text-red-500 {
+  color: var(--adora-error) !important;
+}
+
+/* عمود الاختيار: compact — ثابت صغير */
+#targetTable th.checkbox-col,
+#targetTable td.checkbox-col {
+  width: var(--col-checkbox-w);
+  max-width: var(--col-checkbox-w);
+  padding: 0.25rem !important;
+  text-align: center;
+  background: rgba(255, 255, 255, 0.02);
+  vertical-align: middle;
+}
+#targetTable thead tr:first-child th.checkbox-col {
+  border-top-left-radius: 0;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+}
+/* فواصل بصرية بين الأقسام — كل قسم مميز بخاناته لتمييز الفرز البصري */
+#targetTable th.th-section-start,
+#targetTable td.td-section-start {
+  border-left: 2px solid rgba(64, 224, 208, 0.5);
+  padding-left: 0.5rem;
+  box-shadow: inset 2px 0 0 rgba(64, 224, 208, 0.12);
+}
+#targetTable.adora-breakdown-mode th.col-breakdown.th-section-start,
+#targetTable.adora-breakdown-mode td.col-breakdown.td-section-start {
+  border-left-color: rgba(64, 224, 208, 0.55);
+  box-shadow: inset 2px 0 0 rgba(64, 224, 208, 0.18);
+}
+/* حد بين بيانات الموظف وقسم الحجوزات — على يمين عمود العقود (بين الموظف والعقود) */
+#targetTable th.th-section-end,
+#targetTable td.td-section-end {
+  border-right: 2px solid rgba(64, 224, 208, 0.35);
+  padding-right: 0.375rem;
+  box-shadow: inset -1px 0 0 rgba(64, 224, 208, 0.08);
+}
+#targetTable.adora-breakdown-mode th.col-breakdown.th-section-end,
+#targetTable.adora-breakdown-mode td.col-breakdown.td-section-end {
+  border-right-color: rgba(64, 224, 208, 0.4);
+  box-shadow: inset -2px 0 0 rgba(64, 224, 208, 0.15);
+}
+/* تمييز قسم التقييمات — الحد يكون على طرف مجموعة التقييمات (عمود GOOGLE) */
+#targetTable th.col-eval-google,
+#targetTable td.col-eval-google {
+  border-left: 2px solid rgba(251, 191, 36, 0.3);
+}
+/* عمود الصافي — بدون خط طولي؛ النص في وسط الخانة */
+#targetTable th.col-net.th-section-start,
+#targetTable td.col-net {
+  border-left: none;
+}
+#targetTable tbody td.col-net,
+#targetTable tfoot td.col-net {
+  text-align: center !important;
+}
+/* صف التجميع: أوضح لتمييز الأقسام والفرز البصري — حجم خط متناسق */
+#targetTable tr.breakdown-group-row th {
+  padding: 0.5rem 0.5rem;
+  min-height: 2.25rem;
+  font-size: 0.8rem;
+  font-weight: 800;
+  letter-spacing: 0.04em;
+  border-bottom: 2px solid rgba(255, 255, 255, 0.1);
+  vertical-align: middle;
+}
+#targetTable tr.breakdown-group-row th span {
+  padding: 0.25rem 0.5rem !important;
+  font-size: 0.8rem !important;
+  font-weight: 800 !important;
+  letter-spacing: 0.03em;
+}
+#targetTable tr.breakdown-group-row th:not([colspan="2"]):not([colspan="1"]) {
+  border-left: 2px solid rgba(255, 255, 255, 0.12);
+}
+/* عمود العقود الشهرية — حدود واضحة بين VIP وتنبيهات (رأس الجدول + صفوف البيانات) */
+#targetTable tr.breakdown-group-row th.col-monthly-contracts {
+  border-left: 2px solid rgba(20, 184, 166, 0.65) !important;
+  border-right: 2px solid rgba(255, 255, 255, 0.5) !important;
+  box-shadow: inset -2px 0 0 rgba(255, 255, 255, 0.15);
+}
+#targetTable td.col-monthly-contracts.td-section-end {
+  border-right: 2px solid rgba(255, 255, 255, 0.5) !important;
+  box-shadow: inset -2px 0 0 rgba(255, 255, 255, 0.12);
+}
+/* حد بداية تنبيهات — أوضح بين العقود الشهرية وتنبيهات (الخانة التي تلي العقود الشهرية) */
+#targetTable td.col-monthly-contracts.td-section-end + td.td-section-start {
+  border-left: 2px solid rgba(255, 255, 255, 0.5) !important;
+  box-shadow: inset 2px 0 0 rgba(255, 255, 255, 0.12);
+}
+/* main-header-row: الحد بين العقود الشهرية وتنبيهات — على يمين العقود وعلى يسار تنبيه */
+/* العقود الشهرية: حد يسار (بعد VIP) + حد يمين (قبل تنبيهات) */
+#targetTable tr.main-header-row th.col-monthly-contracts.th-section-start {
+  border-left: 2px solid rgba(20, 184, 166, 0.55) !important;
+}
+#targetTable tr.main-header-row th.col-monthly-contracts.th-section-end {
+  border-right: 2px solid rgba(255, 255, 255, 0.5) !important;
+}
+#targetTable tr.main-header-row th[data-sort-key="alertCount"].th-section-start {
+  border-left: 2px solid rgba(255, 255, 255, 0.5) !important;
+}
+/* تنبيهات: حد يمين (قبل الحضور) — main-header */
+/* تنبيهات: حد يمين في صفوف البيانات (خانة نقص SAR) */
+#targetTable td.td-section-end:has(+ td.col-attendance) {
+  border-right: 2px solid rgba(255, 255, 255, 0.5) !important;
+}
+#targetTable tr.main-header-row th[data-sort-key="alertTotal"].th-section-end {
+  border-right: 2px solid rgba(255, 255, 255, 0.5) !important;
+}
+/* الحضور: حد يمين (قبل التقييمات) — main-header + صفوف البيانات */
+#targetTable tr.main-header-row th.col-attendance.th-section-end {
+  border-right: 2px solid rgba(16, 185, 129, 0.55) !important;
+}
+#targetTable td.col-attendance.td-section-end {
+  border-right: 2px solid rgba(16, 185, 129, 0.55) !important;
+}
+/* ترويسة الجدول: خلفية وفاصل موحّد */
+.table-head-theme {
+  background: linear-gradient(135deg, rgba(255,255,255,0.07) 0%, rgba(255,255,255,0.03) 100%);
+  border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+}
+/* تصغير نص الترويسة — مقياس موحد: لا 0.7em عشوائي؛ مستوى أول 0.8rem، مستوى ثانٍ 0.75rem */
+#targetTable thead th {
+  font-size: 0.75rem !important;
+}
+#targetTable thead tr:first-child th:not([colspan]) {
+  font-size: 0.8rem !important;
+}
+#targetTable thead tr.main-header-row th {
+  font-size: 0.8rem !important;
+}
+#targetTable thead tr.main-header-row th {
+  border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+  background: rgba(255, 255, 255, 0.02);
+}
+#targetTable thead tr.main-header-row th.col-name,
+#targetTable thead tr.main-header-row th.col-net {
+  text-align: center !important;
+}
+#targetTable thead tr.main-header-row th[data-sort-key].sort-asc::after {
+  content: ' ▲';
+  opacity: 0.9;
+  font-size: 0.7em;
+}
+#targetTable thead tr.main-header-row th[data-sort-key].sort-desc::after {
+  content: ' ▼';
+  opacity: 0.9;
+  font-size: 0.7em;
+}
+
+/* صف «تقييمات سلبية» — الصف كله مخصص لها: توزيع المحتوى (افرد) */
+.negative-ratings-header-row {
+  background: linear-gradient(90deg, rgba(239, 68, 68, 0.08) 0%, rgba(251, 191, 36, 0.05) 100%);
+  border-bottom: 1px solid rgba(239, 68, 68, 0.2);
+  border-top: 1px solid rgba(255, 255, 255, 0.06);
+}
+.negative-ratings-header-row td {
+  vertical-align: middle !important;
+}
+.negative-ratings-row-cell {
+  padding: 0 !important;
+  border: none !important;
+  width: 100%;
+}
+.negative-ratings-row-inner {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.5rem 1.25rem;
+  width: 100%;
+  padding: 8px 16px;
+  min-height: 2.5rem;
+}
+.negative-ratings-label-cell {
+  flex: 1 1 auto;
+  min-width: 0;
+  text-align: right;
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 0.03em;
+  color: rgba(251, 191, 36, 1);
+  text-shadow: 0 0 1px rgba(0, 0, 0, 0.3);
+  border-right: 3px solid rgba(239, 68, 68, 0.5);
+  padding-right: 12px;
+  margin-left: 12px;
+  line-height: 1.45;
+  white-space: normal;
+}
+.negative-ratings-data-cell,
+#negativeRatingsCell {
+  display: flex !important;
+  flex-wrap: wrap;
+  justify-content: flex-start;
+  align-items: center;
+  gap: 0.5rem 1.25rem;
+  padding: 0 0 0 8px !important;
+  text-align: center;
+  flex-shrink: 0;
+}
+#negativeRatingsCell > span {
+  white-space: nowrap;
+}
+
+/* عمود م: compact — مقروء */
+#targetTable th.col-m,
+#targetTable td.col-m {
+  width: var(--col-m-w);
+  max-width: var(--col-m-w);
+  text-align: center;
+  padding: 0.25rem 0.125rem;
+  font-size: 0.75rem;
+}
+
+/* Prevent unnecessary word wrapping in bonus rows and footer labels */
+#commitmentBonusText,
+#excellenceBonusText {
+white-space: normal;
+font-size: 0.75rem !important;
+line-height: 1.4 !important;
+}
+#commitmentBonusText span,
+#excellenceBonusText span {
+white-space: nowrap;
+}
+/* Legacy total-label for print compatibility */
+.total-label {
+white-space: nowrap;
+}
+* {
+margin: 0;
+padding: 0;
+box-sizing: border-box;
+}
+body {
+font-family: 'IBM Plex Sans Arabic', sans-serif;
+background: linear-gradient(135deg, var(--adora-bg) 0%, var(--dark-card) 100%);
+color: var(--adora-text);
+min-height: 100vh;
+overflow-x: hidden;
+-webkit-text-size-adjust: 100%;
+-webkit-tap-highlight-color: transparent;
+padding-left: env(safe-area-inset-left);
+padding-right: env(safe-area-inset-right);
+padding-bottom: env(safe-area-inset-bottom);
+}
+/* Mobile-specific improvements */
+@media (max-width: 480px) {
+body {
+font-size: 14px;
+-webkit-font-smoothing: antialiased;
+-moz-osx-font-smoothing: grayscale;
+}
+/* Improve touch targets */
+button, a, input[type="button"], input[type="submit"], .btn {
+min-height: 44px !important;
+min-width: 44px !important;
+}
+/* Prevent zoom on input focus (iOS) */
+input[type="text"], input[type="number"], input[type="email"], select, textarea {
+font-size: 16px !important;
+}
+/* Modal improvements for mobile */
+.glass {
+padding: 1rem !important;
+}
+/* Stats cards on mobile */
+.stats-card {
+min-height: 52px !important;
+}
+/* Table: تمرير أفقي سلس على الجوال */
+.table-scroll-container {
+margin: 0 -0.5rem;
+padding: 0 0.5rem;
+overflow-x: auto;
+-webkit-overflow-scrolling: touch;
+}
+/* فلتر الفروع على الجوال: لف وعدم امتداد */
+#branchFilters {
+flex-wrap: wrap;
+justify-content: center;
+padding: 0.35rem !important;
+gap: 0.35rem !important;
+}
+#branchFilters button {
+min-height: 28px !important;
+padding: 0.35rem 0.5rem !important;
+font-size: 0.7rem !important;
+}
+/* الهيدر على الجوال: تقليل الحشو وتمكين لف الأزرار */
+header .glass,
+header.glass {
+padding: 0.75rem 1rem !important;
+gap: 0.5rem !important;
+}
+#actionBtns {
+max-height: 50vh;
+overflow-y: auto;
+-webkit-overflow-scrolling: touch;
+gap: 0.5rem !important;
+}
+/* نفس تصميم صفحة التحليل — المصدر المشترك app/shared/action-header-buttons.css */
+#actionBtns .btn-modern {
+padding: 0.5rem 0.75rem !important;
+font-size: 0.75rem !important;
+min-height: 40px !important;
+}
+/* مساحة المحتوى الرئيسي على الجوال */
+.max-w-full.mx-auto.space-y-4 {
+padding-left: 0.5rem !important;
+padding-right: 0.5rem !important;
+gap: 0.75rem !important;
+}
+/* Better spacing on mobile */
+.space-y-4 > * + * {
+margin-top: 1rem;
+}
+.space-y-6 > * + * {
+margin-top: 1.25rem;
+}
+/* Reports page: جوال أولاً وتكيف مع العرض */
+#reportsPage {
+padding: clamp(0.75rem, 3vw, 1.5rem) !important;
+width: 100%;
+min-width: 0;
+}
+#reportsPage .glass {
+padding: clamp(0.75rem, 3vw, 1.5rem) !important;
+width: 100%;
+min-width: 0;
+}
+#reportsPage .flex.items-center.justify-between {
+flex-wrap: wrap;
+gap: clamp(0.5rem, 2vw, 1rem);
+}
+#reportsPage .flex.gap-2.mb-6.border-b {
+overflow-x: auto;
+-webkit-overflow-scrolling: touch;
+flex-wrap: nowrap;
+gap: 0.25rem;
+padding-bottom: 2px;
+margin-bottom: clamp(1rem, 4vw, 1.5rem);
+}
+#reportsPage .flex.gap-2.mb-6.border-b button {
+flex-shrink: 0;
+padding: clamp(0.5rem, 2vw, 0.75rem) clamp(0.75rem, 2.5vw, 1rem);
+font-size: clamp(0.75rem, 2vw, 0.875rem);
+min-height: 44px;
+}
+#reportsEmployeesGrid,
+#archivedReportsGrid {
+gap: clamp(0.5rem, 2vw, 1rem);
+max-height: min(70vh, 600px);
+}
+
+/* منسدلة الفترات المغلقة — ثيم داكن متناسق مع المشروع */
+#archivedReportsContent {
+  color-scheme: dark;
+}
+#archivedPeriodSelect {
+  background-color: rgba(15, 23, 41, 0.95) !important;
+  color: #e2e8f0 !important;
+  border-color: rgba(255, 255, 255, 0.2) !important;
+}
+#archivedPeriodSelect option {
+  background-color: rgba(15, 23, 41, 0.98) !important;
+  color: #e2e8f0 !important;
+  padding: 8px 12px;
+}
+#archivedPeriodSelect:focus {
+  border-color: var(--turquoise) !important;
+  outline: none !important;
+  box-shadow: 0 0 0 2px rgba(64, 224, 208, 0.25);
+}
+#archivedPeriodSelect:hover {
+  background-color: rgba(15, 23, 41, 0.98) !important;
+  border-color: rgba(255, 255, 255, 0.3) !important;
+}
+
+#reportsPage h2 {
+font-size: clamp(1.125rem, 4vw, 1.5rem);
+}
+#currentPeriodStats {
+gap: clamp(0.5rem, 2vw, 1rem);
+}
+#employeePerformanceTable {
+font-size: clamp(0.75rem, 2vw, 0.875rem);
+}
+#employeePerformanceTable th,
+#employeePerformanceTable td {
+padding: clamp(0.375rem, 1.5vw, 0.75rem) !important;
+}
+/* Employee cards in reports */
+#reportsEmployeesGrid > div {
+min-height: auto !important;
+padding: 1rem !important;
+}
+/* Better badge display on mobile */
+.badges-wrapper {
+gap: 2px 3px !important;
+max-height: 20px;
+}
+.badges-wrapper span {
+font-size: 9px !important;
+padding: 0 5px !important;
+}
+/* Attendance column text on mobile */
+.col-attendance span {
+font-size: clamp(0.65rem, 1.55vw, 0.75rem) !important;
+line-height: 1.3 !important;
+}
+}
+
+/* صف أسباب التقييم — مقروء */
+#employeePerformanceTable tbody tr.reasons-row td,
+#employeePerformanceTableBody tr.reasons-row td {
+  font-size: 10px !important;
+  line-height: 1.4 !important;
+  padding: 4px 12px !important;
+  color: #9ca3af !important;
+}
+
+/* Tablet — stats cards only (أحجام مدمجة لتناسب الجدول) */
+@media (min-width: 481px) and (max-width: 768px) {
+.stats-card {
+min-height: 56px;
+}
+}
+/* Desktop — scroll container */
+@media (min-width: 1025px) {
+.table-scroll-container {
+padding: 0;
+}
+}
+/* إخفاء شريط التمرير مع الإبقاء على التمرير (للتبويبات على الجوال) */
+.scrollbar-hide {
+-ms-overflow-style: none;
+scrollbar-width: none;
+}
+.scrollbar-hide::-webkit-scrollbar {
+display: none;
+}
+/* Hide number input spinners */
+input[type=number]::-webkit-inner-spin-button, 
+input[type=number]::-webkit-outer-spin-button { 
+-webkit-appearance: none; 
+margin: 0; 
+}
+input[type=number] {
+-moz-appearance: textfield;
+appearance: textfield;
+}
+/* Fix for Evaluation Inputs to keep numbers English and LTR — compact */
+.eval-input {
+direction: ltr;
+font-family: sans-serif;
+width: 2.5rem;
+max-width: 40px;
+padding: 2px 2px;
+font-variant-numeric: tabular-nums;
+}
+/* Attendance Toggle Switch */
+.attendance-toggle {
+position: absolute;
+opacity: 0;
+width: 0;
+height: 0;
+}
+.attendance-toggle + div {
+position: relative;
+display: inline-block;
+width: 20px;
+height: 10px;
+background-color: #dc2626;
+border-radius: 9999px;
+transition: background-color 0.3s;
+cursor: pointer;
+}
+.attendance-toggle:checked + div {
+background-color: #10b981;
+}
+.attendance-toggle + div::after {
+content: '';
+position: absolute;
+top: 1px;
+left: 1px;
+width: 8px;
+height: 8px;
+background-color: white;
+border-radius: 50%;
+transition: transform 0.3s;
+box-shadow: 0 1px 2px rgba(0,0,0,0.2);
+}
+.attendance-toggle:checked + div::after {
+transform: translateX(10px);
+}
+/* Badges Row Styling */
+.badges-row {
+background: linear-gradient(90deg, rgba(64, 224, 208, 0.06) 0%, transparent 100%) !important;
+border-top: 1px solid rgba(64, 224, 208, 0.12) !important;
+border-bottom: 1px solid rgba(255, 255, 255, 0.1) !important;
+}
+/* Hide inline badges next to employee name — badges-row below already shows them */
+td.col-name .font-bold > span.badges-wrapper {
+display: none !important;
+}
+.badges-row td {
+border-top: none !important;
+padding: 1px 8px 2px !important;
+width: 100%;
+box-sizing: border-box;
+}
+/* Wrapper: سطر واحد مرئي — عند hover يتوسع بسلاسة (حجم أصغر 20%) */
+.badges-wrapper {
+display: flex !important;
+flex-wrap: wrap !important;
+gap: 2px 4px !important;
+align-items: center;
+padding: 1px 0;
+direction: rtl;
+max-height: 18px;
+overflow: hidden;
+transition: max-height 0.35s ease, padding 0.3s ease;
+position: relative;
+}
+/* عدم تغيير ارتفاع الصف عند الـ hover — إلغاء التمدد المشتت */
+.badges-row:hover .badges-wrapper {
+max-height: 16px;
+padding: 0;
+}
+/* Badge pills — حجم مقروء ومتناسق */
+.badges-wrapper span {
+display: inline-flex;
+align-items: center;
+padding: 2px 6px;
+border-radius: 8px;
+white-space: nowrap;
+border: 1px solid rgba(255, 255, 255, 0.1);
+background: rgba(0, 0, 0, 0.22);
+backdrop-filter: blur(4px);
+transition: all 0.2s ease;
+font-size: 0.65rem !important;
+line-height: 1.4;
+}
+/* تصغير شارات صف الشارات (badges-row) — حجم مقروء وصف مناسب بدون قص */
+tr.badges-row .badges-wrapper {
+  max-height: none !important;
+  min-height: 28px !important;
+  gap: 6px 8px !important;
+  padding: 4px 0 !important;
+  overflow: visible !important;
+  align-items: center !important;
+}
+tr.badges-row:hover .badges-wrapper {
+  max-height: none !important;
+}
+tr.badges-row td {
+  padding: 6px 8px 8px !important;
+  vertical-align: middle !important;
+  line-height: 1.4 !important;
+}
+tr.badges-row .badges-wrapper span {
+  font-size: 0.7rem !important;
+  padding: 3px 6px !important;
+  border-radius: 6px;
+  line-height: 1.4;
+}
+#targetTable tr.badges-row .badges-wrapper span,
+#mainTable tr.badges-row .badges-wrapper span {
+  font-size: 0.7rem !important;
+  padding: 3px 6px !important;
+}
+.badges-wrapper span:hover {
+filter: brightness(1.2);
+box-shadow: 0 1px 4px rgba(0, 0, 0, 0.3);
+}
+/* Color-specific badge pill styles */
+.badges-wrapper .text-yellow-400,
+.badges-wrapper .text-yellow-500 {
+background: rgba(234, 179, 8, 0.15) !important;
+border-color: rgba(234, 179, 8, 0.3) !important;
+}
+.badges-wrapper .text-blue-400,
+.badges-wrapper .text-blue-500 {
+background: rgba(59, 130, 246, 0.15) !important;
+border-color: rgba(59, 130, 246, 0.3) !important;
+}
+.badges-wrapper .text-green-400,
+.badges-wrapper .text-green-500 {
+background: rgba(16, 185, 129, 0.15) !important;
+border-color: rgba(16, 185, 129, 0.3) !important;
+}
+.badges-wrapper .text-red-400,
+.badges-wrapper .text-red-500 {
+background: rgba(239, 68, 68, 0.15) !important;
+border-color: rgba(239, 68, 68, 0.3) !important;
+}
+.badges-wrapper .text-turquoise-400,
+.badges-wrapper .text-turquoise-500 {
+background: rgba(20, 184, 166, 0.15) !important;
+border-color: rgba(20, 184, 166, 0.3) !important;
+}
+@media print {
+.attendance-toggle + div {
+width: 38px;
+height: 19px;
+border: 2px solid #000;
+}
+.attendance-toggle + div::after {
+width: 15px;
+height: 15px;
+top: 1px;
+left: 1px;
+border: 1px solid #000;
+}
+.attendance-toggle:checked + div::after {
+transform: translateX(19px);
+}
+.col-attendance span {
+font-size: 6px !important;
+font-weight: 900 !important;
+color: #000 !important;
+}
+/* Badges Row in Print */
+.badges-row {
+background-color: rgba(0, 0, 0, 0.02) !important;
+page-break-inside: avoid;
+}
+.badges-row td {
+padding: 3px 8px !important;
+font-size: 10px !important;
+}
+.badges-wrapper {
+display: flex !important;
+flex-wrap: wrap !important;
+gap: 4px !important;
+direction: rtl !important;
+}
+.badges-wrapper span {
+font-size: 8px !important;
+padding: 2px 5px !important;
+margin: 0 !important;
+border: 1px solid #000 !important;
+border-radius: 4px !important;
+background-color: rgba(255, 255, 255, 0.7) !important;
+font-weight: 600 !important;
+}
+.badges-row {
+background-color: rgba(0, 0, 0, 0.03) !important;
+border-top: 1px solid #ddd !important;
+border-bottom: 1px solid #ddd !important;
+}
+.badges-row td {
+padding: 4px 8px !important;
+font-size: 10px !important;
+}
+}
+/* Animated Background Particles */
+.particles {
+position: fixed;
+top: 0;
+left: 0;
+width: 100%;
+height: 100%;
+pointer-events: none;
+z-index: 0;
+opacity: 0.15;
+}
+.particle {
+position: absolute;
+width: 3px;
+height: 3px;
+background: var(--turquoise);
+border-radius: 50%;
+animation: float 20s infinite ease-in-out;
+box-shadow: 0 0 10px var(--glow-turquoise);
+}
+@keyframes float {
+0%,
+100% {
+transform: translate(0, 0) scale(1);
+opacity: 0.3;
+}
+50% {
+transform: translate(50px, -50px) scale(1.5);
+opacity: 0.8;
+}
+}
+/* الوضع الفاتح: خلفية النقاط أخف حتى لا تختلط مع المحتوى */
+[data-theme="light"] .particles {
+  opacity: 0.2;
+}
+[data-theme="light"] .particle {
+  background: #0d9488;
+  box-shadow: 0 0 8px rgba(13, 148, 136, 0.35), 0 0 3px rgba(13, 148, 136, 0.25);
+  width: 3px;
+  height: 3px;
+}
+[data-theme="light"] .particle {
+  animation: floatLight 20s infinite ease-in-out;
+}
+@keyframes floatLight {
+0%, 100% { transform: translate(0, 0) scale(1); opacity: 0.5; }
+50% { transform: translate(50px, -50px) scale(1.4); opacity: 0.9; }
+}
+/* Premium Glassmorphism Cards */
+.glass {
+background: linear-gradient(135deg, rgba(255, 255, 255, 0.05) 0%, rgba(255, 255, 255, 0.01) 100%);
+backdrop-filter: blur(20px) saturate(180%);
+-webkit-backdrop-filter: blur(20px) saturate(180%);
+border: 1px solid rgba(255, 255, 255, 0.1);
+box-shadow:
+0 8px 32px rgba(0, 0, 0, 0.3),
+inset 0 1px 0 rgba(255, 255, 255, 0.1);
+}
+.neon-glow {
+border: 1px solid var(--turquoise);
+box-shadow:
+0 0 30px rgba(64, 224, 208, 0.2),
+0 0 60px rgba(64, 224, 208, 0.1),
+inset 0 0 20px rgba(64, 224, 208, 0.05);
+}
+/* Turquoise group dividers for tables */
+.group-divider {
+  border-right: 2px solid rgba(64, 224, 208, 0.3);
+  box-shadow: 2px 0 12px rgba(64, 224, 208, 0.08);
+}
+.group-divider-subtle {
+  border-right: 1px solid rgba(64, 224, 208, 0.2);
+}
+/* Smooth Animations */
+@keyframes fadeInUp {
+from {
+opacity: 0;
+transform: translateY(30px);
+}
+to {
+opacity: 1;
+transform: translateY(0);
+}
+}
+@keyframes pulse {
+0%,
+100% {
+transform: scale(1);
+}
+50% {
+transform: scale(1.05);
+}
+}
+@keyframes shimmer {
+0% {
+background-position: -1000px 0;
+}
+100% {
+background-position: 1000px 0;
+}
+}
+.animate-in {
+animation: fadeInUp 0.8s ease-out forwards;
+}
+/* Premium Buttons */
+.btn {
+position: relative;
+overflow: hidden;
+transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+cursor: pointer;
+}
+.btn::before {
+content: '';
+position: absolute;
+top: 50%;
+left: 50%;
+width: 0;
+height: 0;
+border-radius: 50%;
+background: rgba(255, 255, 255, 0.2);
+transform: translate(-50%, -50%);
+transition: width 0.6s, height 0.6s;
+}
+.btn:hover::before {
+width: 300px;
+height: 300px;
+}
+.btn:hover {
+transform: translateY(-2px);
+box-shadow: 0 10px 40px rgba(64, 224, 208, 0.4);
+}
+.btn:active {
+transform: translateY(0);
+}
+/* Upload Zone Enhancement — توحيد بصري مع primary */
+#uploadBox {
+  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+  position: relative;
+  overflow: hidden;
+  border-color: rgba(255, 255, 255, 0.1);
+}
+#uploadBox::after {
+  content: '';
+  position: absolute;
+  top: -50%;
+  left: -50%;
+  width: 200%;
+  height: 200%;
+  background: linear-gradient(45deg,
+    transparent,
+    var(--primary-glow),
+    transparent);
+  animation: shimmer 3s infinite;
+}
+#uploadBox:hover,
+#uploadBox:focus-within {
+  transform: scale(1.01);
+  border-color: var(--primary-500) !important;
+  box-shadow: 0 0 32px var(--primary-glow);
+}
+#uploadBox:focus-within {
+  outline: 2px solid var(--primary-500);
+  outline-offset: 2px;
+}
+/* Table Container — fluid width */
+.table-scroll-container {
+width: 100%;
+overflow-y: visible;
+overflow-x: auto;
+position: relative;
+-webkit-overflow-scrolling: touch;
+width: 100%;
+min-width: 0;
+}
+/* Responsive Statistics Cards - تتمدد وتنكمش حسب حجم الشاشة */
+.stats-grid-container {
+display: grid;
+grid-auto-flow: row;
+gap: clamp(0.35rem, 1vw, 0.6rem);
+width: 100%;
+min-width: 0;
+/* أعمدة مرنة: حد أدنى للكارت مع نمو لملء العرض */
+grid-template-columns: repeat(auto-fit, minmax(min(100px, 100%), 1fr));
+}
+/* Responsive breakpoints for optimal card distribution */
+@media (max-width: 480px) {
+/* Small screens: 2 columns (3, 3, 2 distribution) */
+.stats-grid-container {
+grid-template-columns: repeat(2, 1fr);
+}
+}
+@media (min-width: 481px) and (max-width: 640px) {
+/* Small tablets: 3 columns (3, 3, 2 distribution) */
+.stats-grid-container {
+grid-template-columns: repeat(3, 1fr);
+}
+}
+@media (min-width: 641px) and (max-width: 768px) {
+/* Tablets: 4 columns (4, 4 distribution) */
+.stats-grid-container {
+grid-template-columns: repeat(4, 1fr);
+}
+}
+@media (min-width: 769px) and (max-width: 1024px) {
+/* Small desktops: 5 columns (5, 3 distribution) */
+.stats-grid-container {
+grid-template-columns: repeat(5, 1fr);
+}
+}
+@media (min-width: 1025px) and (max-width: 1280px) {
+/* Medium desktops: 6 columns (6, 2 distribution) */
+.stats-grid-container {
+grid-template-columns: repeat(6, 1fr);
+}
+}
+@media (min-width: 1281px) {
+/* شاشات كبيرة: عدد أعمدة مرن — الكروت تتمدد لملء العرض (min 160px ثم 1fr) */
+.stats-grid-container {
+grid-template-columns: repeat(auto-fit, minmax(min(160px, 100%), 1fr));
+}
+}
+.stats-card {
+min-height: clamp(48px, 8vw, 72px);
+display: flex;
+flex-direction: column;
+justify-content: center;
+align-items: center;
+width: 100%;
+min-width: 0;
+}
+/* Responsive Typography with clamp for fluid scaling */
+body {
+font-size: clamp(14px, 2vw, 16px);
+}
+/* ====== Responsive Table — Fluid Variable Reassignment ====== */
+/* Small phones (≤480px): wider columns for readability, table scrolls */
+@media (max-width: 480px) {
+:root {
+  --col-checkbox-w: 24px;
+  --col-m-w: 24px;
+  --col-name-w: 75px;
+  --col-count-w: 38px;
+  --col-attendance-w: 60px;
+  --col-eval-w: 42px;
+  --col-net-w: 65px;
+  --col-breakdown-w: 36px;
+  --col-breakdown-vip-w: 32px;
+}
+table { font-size: clamp(10px, 2.8vw, 12px) !important; }
+.table-scroll-container {
+  -webkit-overflow-scrolling: touch;
+  scroll-behavior: smooth;
+}
+input[type="number"].eval-input {
+  font-size: 16px !important;
+  min-height: 44px !important;
+}
+.attendance-toggle + div { width: 28px !important; height: 14px !important; }
+.attendance-toggle + div::after { width: 11px !important; height: 11px !important; }
+.attendance-toggle:checked + div::after { transform: translateX(13px) !important; }
+}
+/* Tablets (481px – 1024px) */
+@media (min-width: 481px) and (max-width: 1024px) {
+:root {
+  --col-checkbox-w: 22px;
+  --col-m-w: 22px;
+}
+table { font-size: clamp(11px, 2vw, 13px); }
+.col-name { max-width: 120px; }
+}
+/* Large screens (≥1400px): wider columns, more breathing room */
+@media (min-width: 1400px) {
+:root {
+  --col-checkbox-w: 28px;
+  --col-m-w: 28px;
+}
+table { font-size: 14px; }
+.col-name { max-width: 180px; }
+#targetTable th.col-breakdown,
+#targetTable td.col-breakdown { min-width: 44px; }
+}
+#actionBtns { display: flex; flex-wrap: wrap; align-items: center; justify-content: flex-end; }
+/* ====== Small phones (≤480px) ====== */
+@media (max-width: 480px) {
+  header.glass, header .glass {
+    padding: 0.75rem 1rem !important;
+    gap: 0.75rem !important;
+  }
+  header h1 {
+    font-size: clamp(0.9rem, 4vw, 1.3rem) !important;
+  }
+  header p {
+    font-size: clamp(0.7rem, 3vw, 0.95rem) !important;
+  }
+  #actionBtns {
+    max-height: 45vh;
+    overflow-y: auto;
+    -webkit-overflow-scrolling: touch;
+  }
+}
+/* Table Enhancements */
+table {
+border-collapse: separate;
+border-spacing: 0;
+width: 100%;
+}
+/* Sticky Header */
+thead {
+position: sticky;
+top: 0;
+z-index: 10;
+}
+thead th {
+background: #151b2e !important;
+box-shadow: 0 2px 8px rgba(0, 0, 0, 0.3);
+}
+/* Sticky Footer */
+tfoot {
+position: sticky;
+bottom: 0;
+z-index: 10;
+box-shadow: 0 -2px 8px rgba(0, 0, 0, 0.3);
+}
+tfoot td {
+background: rgba(15, 23, 41, 0.92) !important;
+}
+/* ====== Footer Summary Rows — لون موحد (بدون غامق/فاتح) ====== */
+.footer-summary {
+border-top: 1px solid rgba(255, 255, 255, 0.08);
+}
+.footer-summary td {
+background: rgba(15, 23, 41, 0.95) !important;
+}
+.footer-summary-final {
+border-top: 1px solid rgba(20, 184, 166, 0.2);
+}
+.footer-summary-final td {
+background: rgba(15, 23, 41, 0.95) !important;
+}
+.footer-summary-label {
+vertical-align: middle;
+padding-right: 1rem !important;
+}
+.footer-summary-val {
+vertical-align: middle;
+white-space: nowrap;
+border-left: 1px solid rgba(255, 255, 255, 0.1);
+background: rgba(15, 23, 41, 0.95) !important;
+}
+/* الصافي يبقى بنفس لون الصف — لا خلفية فاتحة منفصلة */
+.footer-summary-net {
+background: rgba(15, 23, 41, 0.95) !important;
+}
+.footer-summary-final .footer-summary-net {
+background: rgba(15, 23, 41, 0.95) !important;
+font-size: 0.9rem !important;
+color: #5eead4 !important;
+}
+#footerRowFinalTotal td {
+background: rgba(15, 23, 41, 0.95) !important;
+}
+tbody tr {
+border-bottom: 1px solid rgba(255, 255, 255, 0.1) !important;
+background: rgba(255, 255, 255, 0.01);
+}
+tbody tr:nth-child(odd) {
+background: rgba(255, 255, 255, 0.01);
+}
+tbody tr:nth-child(even) {
+background: rgba(64, 224, 208, 0.03);
+}
+/* تأثير الـ hover — بدون transition/box-shadow لتفادي أي رعشة */
+#mainTable tbody tr {
+transition: none;
+box-shadow: none !important;
+}
+#mainTable tr:hover {
+background: linear-gradient(90deg, rgba(64, 224, 208, 0.2) 0%, rgba(64, 224, 208, 0.05) 100%) !important;
+box-shadow: none !important;
+outline: none !important;
+}
+#mainTable tr.badges-row:hover {
+background: rgba(255, 255, 255, 0.02) !important;
+}
+.checkbox-col {
+  text-align: right !important;
+}
+.col-m {
+  min-width: 24px;
+  max-width: 32px;
+  text-align: center !important;
+}
+/* Custom checkbox size - +30% for better visibility (9px→12px, 10px→13px on mobile) */
+.emp-checkbox,
+.checkbox-custom {
+width: 12px !important;
+height: 12px !important;
+min-width: 12px !important;
+min-height: 12px !important;
+flex-shrink: 0;
+cursor: pointer;
+}
+@media (max-width: 480px) {
+/* Larger touch target on mobile */
+.emp-checkbox,
+.checkbox-custom {
+width: 13px !important;
+height: 13px !important;
+min-width: 13px !important;
+min-height: 13px !important;
+}
+}
+.col-name {
+max-width: 150px;
+white-space: normal;
+word-wrap: break-word;
+overflow-wrap: break-word;
+overflow: hidden;
+padding: 0.2rem 0.3rem !important;
+text-align: right !important;
+direction: rtl !important;
+font-size: 0.8125rem;
+line-height: 1.35;
+}
+/* ترويسة عمود الموظف: توسيط النص فقط في الهيدر (تتجاوز .col-name أعلاه) */
+#targetTable thead tr.main-header-row th.col-name {
+text-align: center !important;
+direction: ltr !important;
+}
+.col-name > div {
+text-align: right !important;
+direction: rtl !important;
+}
+.col-count {
+min-width: 38px;
+white-space: nowrap;
+}
+.col-rate {
+min-width: 36px;
+white-space: nowrap;
+display: none !important;
+}
+.col-fund {
+min-width: 45px;
+white-space: nowrap;
+}
+.col-net {
+min-width: 65px;
+white-space: nowrap;
+padding: 0.2rem 0.25rem !important;
+font-size: 0.875rem;
+}
+/* Net column body rows — readable */
+#targetTable tbody td.col-net {
+font-size: 0.9rem !important;
+font-weight: 900;
+text-align: center !important;
+}
+/* Keep footer net column larger */
+#targetTable tfoot td.col-net {
+font-size: 0.95rem;
+font-weight: 900;
+}
+.col-attendance {
+min-width: 55px;
+max-width: 80px;
+white-space: normal;
+text-align: center;
+padding: 0.15rem 0.1rem !important;
+font-size: 0.75rem;
+line-height: 1.3;
+overflow: hidden;
+}
+/* Compact attendance internals */
+.col-attendance .flex.flex-col {
+gap: 0 !important;
+}
+.col-attendance .flex.items-center {
+gap: 0.2rem !important;
+}
+.col-attendance .attendance-indicator {
+margin: 0;
+display: flex;
+justify-content: center;
+}
+.col-attendance .attendance-indicator span {
+font-size: 0.7rem !important;
+line-height: 1.2 !important;
+}
+.col-attendance .attendance-indicator label {
+gap: 3px !important;
+}
+/* Attendance days input — نفس حجم eval-input (خانات التقييم) */
+.col-attendance .attendance-days-input {
+width: 2.5rem !important;
+max-width: 40px !important;
+padding: 2px 2px !important;
+font-size: 0.75rem !important;
+min-height: 0 !important;
+height: 22px !important;
+border-width: 1px !important;
+}
+/* Branch / small labels inside attendance — مقروءة */
+.col-attendance .text-\[10px\],
+.col-attendance .text-\[9px\] {
+font-size: 0.7rem !important;
+line-height: 1.25 !important;
+}
+/* Total days display */
+.col-attendance .text-green-400.font-bold {
+font-size: 0.75rem !important;
+}
+/* mt-1 gap reducer + centering */
+.col-attendance .mt-1 {
+margin-top: 0.1rem !important;
+display: flex;
+justify-content: center;
+align-items: center;
+}
+.col-eval-booking,
+.col-eval-google {
+min-width: 40px;
+white-space: nowrap;
+text-align: center;
+padding: 0.15rem 0.1rem !important;
+font-size: 0.65rem;
+}
+/* Eval inputs — عرض مريح للإدخال (المشرف/الأدمن)، لمس سهل، جدول مستقر */
+.col-eval-booking input.eval-input,
+.col-eval-google input.eval-input {
+  min-width: 3.25rem !important;
+  width: 4rem !important;
+  max-width: 5rem !important;
+  padding: 6px 8px !important;
+  font-size: 0.9rem !important;
+  text-align: center;
+  height: 36px !important;
+  min-height: 36px !important;
+  border-width: 1px !important;
+  box-sizing: border-box;
+}
+/* Compact eval helper text */
+.col-eval-booking .text-xs,
+.col-eval-google .text-xs,
+.col-eval-booking .text-\[10px\],
+.col-eval-google .text-\[10px\] {
+font-size: 0.7rem !important;
+line-height: 1 !important;
+}
+
+/* جدول المشرف: إخفاء أعمدة الحجوزات والحضور والصافي + تثبيت عرض الأعمدة لترتيب الصفوف والاعمدة */
+body.role-supervisor #targetTable {
+  table-layout: auto;
+  width: 100%;
+}
+body.role-supervisor #targetTable th.col-count,
+body.role-supervisor #targetTable td.col-count,
+body.role-supervisor #targetTable th.col-attendance,
+body.role-supervisor #targetTable td.col-attendance,
+body.role-supervisor #targetTable th.col-net,
+body.role-supervisor #targetTable td.col-net {
+  display: none !important;
+}
+body.role-supervisor #targetTable th.checkbox-col,
+body.role-supervisor #targetTable td.checkbox-col,
+body.role-supervisor #targetTable .checkbox-col {
+  display: none !important;
+}
+body.role-supervisor #bonusesCombinedRow {
+  display: none !important;
+}
+body.role-supervisor #targetTable .col-m {
+  width: 4%;
+}
+body.role-supervisor #targetTable .col-name {
+  width: 36%;
+}
+body.role-supervisor #targetTable .col-eval-booking,
+body.role-supervisor #targetTable .col-eval-google {
+  width: 22%;
+}
+body.role-supervisor #mainTable tr.badges-row {
+  display: none !important;
+}
+body.role-supervisor #mainTable tr.badges-row > td {
+  box-sizing: border-box;
+}
+
+/* منع تراكب البانر الثابت على المحتوى — لجميع صفحات الإداريين (المشرف، HR، الحسابات، المدير العام) */
+body:has(#roleWelcomeBanner) .max-w-full.mx-auto {
+  padding-top: 5.25rem;
+}
+/* fallback للمتصفحات التي لا تدعم :has() */
+body.role-supervisor .max-w-full.mx-auto,
+body.role-hr .max-w-full.mx-auto,
+body.role-accounting .max-w-full.mx-auto,
+body.role-manager .max-w-full.mx-auto {
+  padding-top: 5.25rem;
+}
+
+/* المدير العام: إخفاء الـ dashboard (جدول + شبكة إحصائيات + فلاتر) وزرّي المسح */
+body.role-manager #dashboard {
+  display: none !important;
+}
+body.role-manager .stats-grid-container,
+body.role-manager #branchFilters {
+  display: none !important;
+}
+body.role-manager #clearArchivedPeriodsBtn,
+body.role-manager #clearCumulativePointsBtn {
+  display: none !important;
+}
+/* إخفاء كتلة العنوان والكروت العليا في صفحة الإحصائيات وإظهار كروت النقاط التراكمية فقط */
+body.role-manager #currentPeriodStatsHeaderBlock {
+  display: none !important;
+}
+body.role-manager #cumulativePointsSection {
+  display: block !important;
+}
+body.role-manager #cumulativePointsBody {
+  display: block !important;
+}
+body.role-manager #clearCumulativePointsBtn {
+  display: none !important;
+}
+body.role-manager #reportsTabsBar {
+  display: none !important;
+}
+body.role-manager #statisticsReportsContent {
+  display: flex !important;
+  flex-direction: column;
+}
+body.role-manager #currentPeriodStatsBlock { order: 1; }
+body.role-manager #cumulativePointsSection { order: 2; }
+body.role-manager #archivedPeriodsSection { order: 3; display: block !important; }
+
+/* جدول تقييم الموظفين: إظهاره دائماً مع الإحصائيات (صافي + صندوق شركاء النجاح = نقاط) */
+#currentPeriodStatsTableWrap {
+  display: block !important;
+  visibility: visible !important;
+  opacity: 1 !important;
+}
+body.role-manager #currentPeriodStatsTableWrap {
+  display: block !important;
+  visibility: visible !important;
+  opacity: 1 !important;
+}
+
+/* المشرف: إخفاء الحضور + التقارير + الطباعة + إغلاق الفترة (نسخة CSS احتياطية) */
+body.role-supervisor .attendance-toggle,
+body.role-supervisor .attendance-days-input {
+  display: none !important;
+}
+body.role-supervisor #actionBtns button[onclick*="showReportsPage"],
+body.role-supervisor #actionBtns button[onclick*="smartPrint"],
+body.role-supervisor #actionBtns button[onclick*="printConditions"],
+body.role-supervisor #actionBtns button[onclick*="showClosePeriodModal"],
+body.role-supervisor #actionBtns #printAllBtn,
+body.role-supervisor #actionBtns #printSelectedBtn,
+body.role-supervisor #actionBtns #exportPdfTableAllBtn {
+  display: none !important;
+}
+
+/* HR: إخفاء التقييمات + الخصم + التقارير + الطباعة + إغلاق الفترة (نسخة CSS احتياطية) */
+body.role-hr .eval-input {
+  display: none !important;
+}
+body.role-hr #actionBtns button[onclick*="showDiscountsModal"],
+body.role-hr #actionBtns button[onclick*="showReportsPage"],
+body.role-hr #actionBtns button[onclick*="smartPrint"],
+body.role-hr #actionBtns button[onclick*="printConditions"],
+body.role-hr #actionBtns button[onclick*="showClosePeriodModal"],
+body.role-hr #actionBtns #printAllBtn,
+body.role-hr #actionBtns #printSelectedBtn,
+body.role-hr #actionBtns #exportPdfTableAllBtn {
+  display: none !important;
+}
+
+/* الحسابات: إخفاء التقييمات + الحضور + الخصم + إغلاق الفترة + إدارة الإداريين (يرى شروط المكافآت + الطباعة فقط) */
+body.role-accounting .eval-input,
+body.role-accounting .attendance-toggle,
+body.role-accounting .attendance-days-input {
+  display: none !important;
+}
+body.role-accounting #actionBtns button[onclick*="showDiscountsModal"],
+body.role-accounting #actionBtns button[onclick*="showClosePeriodModal"],
+body.role-accounting #actionBtns button[onclick*="showAdminManagementModal"],
+body.role-accounting #actionBtns button[onclick*="showReportsPage"],
+body.role-accounting #actionBtns #btnReturnToAnalysis,
+body.role-accounting #actionBtns #refreshLiveBtn,
+body.role-accounting #actionBtns #btnLogoutRewards {
+  display: none !important;
+}
+body.role-accounting #clearArchivedPeriodsBtn,
+body.role-accounting #clearCumulativePointsBtn {
+  display: none !important;
+}
+
+/* محاذاة أعمدة صفحة HR (التش ار) — تناسق الترويسة مع الخلايا */
+body.role-hr #targetTable {
+  table-layout: fixed;
+  width: 100%;
+}
+body.role-hr #targetTable th.col-m,
+body.role-hr #targetTable td.col-m {
+  width: 2.5rem;
+  min-width: 2.5rem;
+  max-width: 2.5rem;
+  text-align: center;
+  vertical-align: middle;
+}
+body.role-hr #targetTable th.col-name,
+body.role-hr #targetTable tbody td.col-name {
+  vertical-align: middle;
+  text-align: right;
+  width: 45%;
+  min-width: 5rem;
+}
+body.role-hr #targetTable tbody td.col-name > div {
+  text-align: right;
+  direction: rtl;
+}
+/* عمود بطل تحدي الظروف: عرض موحّد للترويسة والخلايا حتى لا تلتف الترويسة وحدها */
+body.role-hr #targetTable th.col-attendance,
+body.role-hr #targetTable td.col-attendance {
+  width: 100px;
+  min-width: 100px;
+  max-width: 100px;
+  text-align: center;
+  vertical-align: middle;
+  box-sizing: border-box;
+}
+body.role-hr #targetTable th.col-attendance {
+  font-size: 0.455rem;
+  line-height: 1.25;
+  padding: 0.35rem 0.25rem;
+  white-space: normal;
+}
+body.role-hr #targetTable .col-attendance .attendance-days-input,
+body.role-hr #targetTable .col-attendance input {
+  margin: 0 auto;
+  display: block;
+}
+body.role-hr #targetTable .col-count {
+  width: 4rem;
+  min-width: 4rem;
+  text-align: center;
+  vertical-align: middle;
+}
+body.role-hr #targetTable .col-eval-booking,
+body.role-hr #targetTable .col-eval-google {
+  width: 3.5rem;
+  min-width: 3.5rem;
+  text-align: center;
+  vertical-align: middle;
+}
+body.role-hr #targetTable .col-net {
+  width: 4.5rem;
+  min-width: 4.5rem;
+  text-align: center;
+  vertical-align: middle;
+}
+body.role-hr #mainTable tr.badges-row {
+  display: none !important;
+}
+body.role-hr #mainTable tr.badges-row > td {
+  box-sizing: border-box;
+}
+body.role-hr #targetTable th.checkbox-col,
+body.role-hr #targetTable td.checkbox-col,
+body.role-hr #targetTable .checkbox-col {
+  display: none !important;
+}
+body.role-hr #bonusesCombinedRow {
+  display: none !important;
+}
+
+/* Filter Pills - Mobile First */
+.filter-pill, .filter-reports-pill {
+transition: all 0.3s ease;
+position: relative;
+min-height: 44px; /* iOS touch target */
+display: inline-flex;
+align-items: center;
+justify-content: center;
+}
+.filter-pill:hover, .filter-reports-pill:hover {
+transform: scale(1.05);
+}
+.filter-pill.active, .filter-reports-pill.active {
+background: linear-gradient(135deg, var(--turquoise) 0%, var(--turquoise-light) 100%);
+box-shadow: 0 5px 20px rgba(64, 224, 208, 0.4);
+}
+@media (max-width: 480px) {
+.filter-pill, .filter-reports-pill {
+padding: 0.75rem 1rem !important;
+font-size: clamp(0.75rem, 3vw, 0.875rem) !important;
+min-height: 44px !important;
+}
+}
+/* Loading Spinner */
+.spinner {
+border: 3px solid rgba(64, 224, 208, 0.1);
+border-top: 3px solid var(--turquoise);
+border-radius: 50%;
+width: 40px;
+height: 40px;
+animation: spin 1s linear infinite;
+}
+@keyframes spin {
+0% {
+transform: rotate(0deg);
+}
+100% {
+transform: rotate(360deg);
+}
+}
+/* Print Styles */
+@media print {
+@page {
+size: A4 portrait;
+margin: 5mm;
+}
+body {
+margin: 0;
+padding: 0;
+width: 100%;
+max-width: 100%;
+overflow: hidden;
+}
+tfoot { display: table-row-group; }
+input[type=number] {
+border: none !important;
+background: transparent !important;
+width: 50px !important;
+text-align: center !important;
+font-weight: 900 !important;
+font-size: 14px !important;
+color: #000 !important;
+-moz-appearance: textfield;
+appearance: textfield;
+}
+input[type=number]::-webkit-inner-spin-button, 
+input[type=number]::-webkit-outer-spin-button { 
+-webkit-appearance: none; 
+margin: 0; 
+}
+.table-scroll-container {
+width: 100% !important;
+max-width: 100% !important;
+overflow: visible !important;
+}
+table {
+width: 100% !important;
+max-width: 100% !important;
+table-layout: fixed !important;
+font-size: 7px !important;
+border-collapse: collapse !important;
+border-spacing: 0 !important;
+border: none !important;
+}
+th, td {
+padding: 2px 3px !important;
+font-size: 7px !important;
+word-wrap: break-word !important;
+overflow: hidden !important;
+min-width: 0 !important;
+max-width: 100% !important;
+}
+th[style*="min-width"], td[style*="min-width"] {
+min-width: 0 !important;
+}
+.col-name {
+width: 15% !important;
+max-width: 15% !important;
+font-size: 6px !important;
+white-space: normal !important;
+word-wrap: break-word !important;
+line-height: 1.2 !important;
+}
+.col-m {
+width: 3% !important;
+max-width: 3% !important;
+}
+.col-count {
+width: 6% !important;
+max-width: 6% !important;
+}
+.col-attendance {
+width: 12% !important;
+max-width: 12% !important;
+white-space: normal !important;
+word-wrap: break-word !important;
+font-size: 6px !important;
+}
+.col-rate {
+width: 5% !important;
+max-width: 5% !important;
+display: table-cell !important; /* إظهار في الطباعة فقط */
+}
+.col-fund {
+width: 8% !important;
+max-width: 8% !important;
+}
+.col-net {
+width: 10% !important;
+max-width: 10% !important;
+white-space: normal !important;
+word-wrap: break-word !important;
+}
+/* Make bonus rows wider in print to contain full text */
+tfoot tr.footer-row td.col-name {
+width: 15% !important;
+max-width: 15% !important;
+font-size: 7px !important;
+word-wrap: break-word !important;
+white-space: normal !important;
+line-height: 1.3 !important;
+padding: 4px 3px !important;
+}
+/* Footer summary labels in print */
+tfoot tr.footer-summary td.footer-summary-label {
+font-size: 10px !important;
+padding: 6px 8px !important;
+text-align: right !important;
+}
+/* Ensure bonus text containers wrap properly and take full width */
+#commitmentBonusText,
+#excellenceBonusText {
+width: 100% !important;
+max-width: 100% !important;
+word-wrap: break-word !important;
+white-space: normal !important;
+display: block !important;
+}
+/* Responsive bonus cards container */
+#commitmentBonusText > div,
+#excellenceBonusText > div {
+display: flex;
+flex-direction: column;
+gap: 0.5rem;
+}
+@media (min-width: 640px) {
+#commitmentBonusText > div,
+#excellenceBonusText > div {
+flex-direction: row;
+flex-wrap: wrap;
+}
+}
+/* صف الحوافز — مدمج ومضغوط (~80% أصغر) */
+tfoot tr#bonusesCombinedRow td {
+  vertical-align: top !important;
+  padding: 4px 8px !important;
+}
+tfoot tr#bonusesCombinedRow td[colspan] {
+  width: auto !important;
+  max-width: none !important;
+}
+#commitmentBonusBlock,
+#excellenceBonusBlock {
+  min-width: 0;
+}
+.bonuses-compact #commitmentBonusText,
+.bonuses-compact #excellenceBonusText {
+  line-height: 1.4;
+  max-height: 3.2em;
+  overflow: hidden;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+}
+/* Ensure bonus value cell doesn't break layout */
+tfoot tr.footer-row td.col-net {
+width: 10% !important;
+max-width: 10% !important;
+white-space: normal !important;
+word-wrap: break-word !important;
+}
+/* Ensure period and date are visible in print */
+#periodRange,
+#reportDate {
+display: inline !important;
+visibility: visible !important;
+color: #000 !important;
+font-weight: 900 !important;
+}
+/* Ensure print-header is visible in print */
+.print-header {
+display: flex !important;
+visibility: visible !important;
+width: 100% !important;
+max-width: 100% !important;
+padding: 10px 5px !important;
+margin-bottom: 10px !important;
+box-sizing: border-box !important;
+}
+.print-header > div {
+flex: 1 !important;
+min-width: 0 !important;
+padding: 0 5px !important;
+}
+.print-header h1 {
+font-size: 18px !important;
+margin: 0 !important;
+padding: 0 !important;
+}
+.print-header p {
+font-size: 10px !important;
+margin: 3px 0 !important;
+padding: 0 !important;
+}
+.col-count, .col-rate, .col-fund, .col-net {
+font-size: 7px !important;
+}
+body {
+background: white !important;
+color: black !important;
+margin: 0 !important;
+padding: 0 !important;
+width: 100% !important;
+max-width: 100% !important;
+overflow: hidden !important;
+}
+#dashboard, #reportsPage {
+width: 100% !important;
+max-width: 100% !important;
+box-sizing: border-box !important;
+}
+.glass.rounded-xl, .glass.rounded-2xl {
+width: 100% !important;
+max-width: 100% !important;
+box-sizing: border-box !important;
+margin: 0 !important;
+padding: 5px !important;
+}
+.no-print,
+.checkbox-col,
+.toast {
+display: none !important;
+}
+/* Developer Signature in Print */
+footer {
+display: block !important;
+position: fixed;
+bottom: 3mm;
+left: 50%;
+transform: translateX(-50%);
+width: 100%;
+text-align: center;
+z-index: 1000;
+page-break-inside: avoid;
+}
+footer .glass {
+background: transparent !important;
+border: none !important;
+padding: 0 !important;
+box-shadow: none !important;
+}
+footer p.print-only {
+display: block !important;
+font-size: 7px !important;
+color: #666 !important;
+font-weight: 200 !important;
+opacity: 0.5 !important;
+letter-spacing: 0.5px !important;
+margin: 0 !important;
+padding: 0 !important;
+}
+footer p span {
+color: #666 !important;
+opacity: 0.6 !important;
+}
+/* Approval Stamp for Print - Hidden in screen view */
+.approval-stamp {
+display: none !important;
+visibility: hidden !important;
+opacity: 0 !important;
+position: absolute !important;
+left: -9999px !important;
+}
+@media print {
+.approval-stamp {
+display: flex !important;
+visibility: visible !important;
+opacity: 1 !important;
+position: static !important;
+margin: 4mm auto 0 !important;
+text-align: center;
+width: 70px;
+height: 70px;
+border: 2px solid #8b0000;
+border-radius: 50%;
+padding: 8px;
+background: rgba(255, 255, 255, 0.95);
+flex-direction: column;
+justify-content: center;
+align-items: center;
+z-index: 1001;
+page-break-inside: avoid;
+}
+.approval-stamp::before {
+content: '';
+position: absolute;
+top: -2px;
+left: -2px;
+right: -2px;
+bottom: -2px;
+border: 1px solid #8b0000;
+border-radius: 50%;
+opacity: 0.3;
+}
+.approval-stamp .checkmark {
+color: #006400;
+font-size: 28px;
+font-weight: 900;
+margin-bottom: 5px;
+line-height: 1;
+display: block;
+}
+.approval-stamp .department {
+color: #8b0000;
+font-size: 11px;
+font-weight: 700;
+margin-bottom: 3px;
+line-height: 1.2;
+display: block;
+}
+.approval-stamp .approved {
+color: #8b0000;
+font-size: 13px;
+font-weight: 800;
+line-height: 1.2;
+display: block;
+}
+}
+/* Show print conditions section only when printing */
+.print-conditions {
+display: block !important;
+width: 100% !important;
+max-width: 100% !important;
+box-sizing: border-box !important;
+padding: 14px 12px !important;
+margin-top: 16px !important;
+border-top: 2px solid #0d9488 !important;
+background: #f8fafc !important;
+}
+.print-conditions > div {
+width: 100% !important;
+max-width: 100% !important;
+box-sizing: border-box !important;
+padding: 12px !important;
+font-size: 10px !important;
+line-height: 1.4 !important;
+color: #111 !important;
+}
+/* Show print-only elements */
+.print-only {
+display: block !important;
+}
+.print-only-selected tbody tr:not(.selected-for-print):not(.badges-row) {
+display: none !important;
+}
+/* Hide badges row if parent employee row is hidden */
+.print-only-selected tbody tr.badges-row {
+display: none !important;
+}
+.print-only-selected tbody tr.selected-for-print + tr.badges-row {
+display: table-row !important;
+}
+.print-header {
+display: flex !important;
+border-bottom: 3px solid #0d9488 !important;
+padding: 12px 10px 16px !important;
+margin-bottom: 12px !important;
+background: #fff !important;
+page-break-after: avoid !important;
+width: 100% !important;
+max-width: 100% !important;
+box-sizing: border-box !important;
+}
+.print-header > div {
+flex: 1 !important;
+min-width: 0 !important;
+padding: 0 8px !important;
+}
+.print-header h1 {
+font-size: 22px !important;
+font-weight: 900 !important;
+color: #111 !important;
+margin: 0 !important;
+padding-bottom: 6px !important;
+line-height: 1.2 !important;
+}
+.print-header p {
+font-size: 13px !important;
+color: #333 !important;
+margin: 4px 0 0 !important;
+font-weight: 600 !important;
+line-height: 1.3 !important;
+}
+body.print-all-view table {
+font-size: 7px !important;
+table-layout: fixed !important;
+width: 100% !important;
+max-width: 100% !important;
+}
+body.print-all-view th, 
+body.print-all-view td {
+padding: 3px 2px !important;
+font-size: 7px !important;
+line-height: 1.15 !important;
+white-space: normal !important;
+word-wrap: break-word !important;
+overflow: hidden !important;
+}
+body.print-all-view .col-name {
+font-size: 6.5px !important;
+}
+body.print-all-view .print-header {
+padding-bottom: 10px !important;
+margin-bottom: 15px !important;
+}
+body.print-all-view .print-header h1 {
+font-size: 20px !important;
+padding-bottom: 5px !important;
+}
+body.print-all-view .print-header p {
+font-size: 12px !important;
+margin: 3px 0 !important;
+}
+body.print-all-view .badges-row td {
+padding: 2px 4px !important;
+}
+body.print-all-view .badges-wrapper {
+gap: 2px !important;
+}
+body.print-all-view .badges-wrapper span {
+font-size: 6px !important;
+padding: 1px 3px !important;
+}
+/* الحدود السوداء تظهر فقط عند الطباعة */
+/* Increase border thickness for all table borders - فقط عند الطباعة */
+td, th {
+border: none !important;
+}
+thead {
+display: table-header-group !important;
+}
+tfoot {
+display: table-footer-group !important;
+}
+tr {
+page-break-inside: avoid !important;
+page-break-after: avoid !important;
+}
+tbody {
+page-break-inside: avoid !important;
+}
+/* تحسين وضوح الطباعة: حد أدنى لحجم الخط وتباين جيد */
+th {
+background: linear-gradient(135deg, #0f766e 0%, #0d9488 100%) !important;
+border: 1.5px solid #0a5c54 !important;
+padding: 5px 4px !important;
+font-size: 8px !important;
+font-weight: 900 !important;
+color: #fff !important;
+white-space: normal !important;
+word-wrap: break-word !important;
+text-align: center !important;
+line-height: 1.25 !important;
+}
+td {
+border: 1px solid #333 !important;
+padding: 4px 3px !important;
+font-size: 8px !important;
+color: #111 !important;
+white-space: normal !important;
+word-wrap: break-word !important;
+background: #fff !important;
+line-height: 1.25 !important;
+overflow: hidden !important;
+text-overflow: ellipsis !important;
+}
+/* الحدود السوداء تظهر فقط عند الطباعة */
+@media print {
+table {
+border-collapse: collapse !important;
+border: 2px solid #111 !important;
+}
+th {
+border: 1.5px solid #0a5c54 !important;
+}
+td {
+border: 1px solid #333 !important;
+}
+tbody tr {
+border-bottom: none !important;
+box-shadow: none !important;
+}
+}
+/* Increase font size for numbers in print */
+.number-display,
+td.number-display,
+.col-count,
+.col-rate,
+.col-fund,
+.col-net,
+.col-m {
+font-size: 8px !important;
+font-weight: 900 !important;
+color: #111 !important;
+}
+/* Force all text colors to black in print (except headers and footers) */
+td, p, span, div, h1, h2, h3, h4, h5, h6 {
+color: #000 !important;
+}
+th {
+color: #fff !important;
+}
+tfoot tr td {
+color: #fff !important;
+}
+/* Force all colored text to black */
+.text-yellow-400,
+.text-yellow-500,
+.text-yellow-600,
+.text-yellow-700,
+.text-blue-400,
+.text-blue-500,
+.text-blue-600,
+.text-blue-700,
+.text-red-400,
+.text-red-500,
+.text-red-600,
+.text-red-700,
+.text-orange-400,
+.text-green-400,
+.text-gray-300,
+.text-gray-400,
+.text-gray-500,
+.text-gray-600,
+.text-turquoise-400,
+.text-turquoise-600 {
+color: #000 !important;
+font-weight: 900 !important;
+}
+/* Make all gray text dark black like "الموظف" and "الإجمالي" */
+.col-name,
+.col-m,
+td.text-gray-400,
+td.text-gray-500,
+td.text-gray-300,
+span.text-gray-400,
+span.text-gray-500,
+span.text-gray-300 {
+color: #000 !important;
+font-weight: 900 !important;
+}
+/* Hide emojis and icons in badges, show text only */
+.badges-wrapper span::before {
+content: none !important;
+}
+.badges-wrapper {
+font-size: 8px !important;
+color: #000 !important;
+}
+.badges-wrapper span {
+color: #000 !important;
+background: transparent !important;
+border: none !important;
+padding: 0 !important;
+margin: 0 2px !important;
+}
+tbody tr:nth-child(even) td {
+background: #f8f9fa !important;
+}
+/* Yellow highlight for excellence bonus employees */
+tbody tr td.col-net.text-yellow-400,
+tbody tr td.col-net.print\\:text-yellow-600 {
+background: #fef3c7 !important;
+color: #d97706 !important;
+font-weight: 900 !important;
+}
+.is-dup-row {
+background: linear-gradient(90deg, rgba(251, 146, 60, 0.15) 0%, rgba(251, 146, 60, 0.05) 100%) !important;
+box-shadow: inset 0 0 10px rgba(251, 146, 60, 0.1);
+}
+.is-dup-row td {
+color: #000 !important;
+font-style: italic !important;
+}
+.is-dup-row:hover {
+background: linear-gradient(90deg, rgba(251, 146, 60, 0.25) 0%, rgba(251, 146, 60, 0.1) 100%) !important;
+}
+/* Hide emojis in print and replace with text */
+.badges-wrapper span:has(⭐),
+.badges-wrapper span:has(🎯),
+.badges-wrapper span:has(↓),
+.badges-wrapper span:has(😟),
+.badges-wrapper span:has(✨) {
+font-size: 7px !important;
+}
+/* Remove emoji characters and keep only text */
+.badges-wrapper {
+font-family: 'IBM Plex Sans Arabic', sans-serif !important;
+}
+tfoot tr td {
+background: linear-gradient(135deg, #1e293b 0%, #334155 100%) !important;
+border-top: 3px solid #000 !important;
+border-bottom: 3px solid #000 !important;
+border-left: 2px solid #000 !important;
+border-right: 2px solid #000 !important;
+font-weight: 900 !important;
+font-size: 13px !important;
+padding: 10px 8px !important;
+text-align: center !important;
+color: #fff !important;
+}
+/* Make footer labels and their numbers black in print */
+tfoot tr td.text-gray-400,
+tfoot tr td.total-label,
+tfoot tr td#footBookingCount,
+tfoot tr td#footNetNoEval,
+tfoot tr td#footEvalValue,
+tfoot tr td#footFund,
+tfoot tr td#footEvalCount,
+tfoot tr td#footTotalFund,
+tfoot tr td#footTotalNet,
+#footBookingCount,
+#footNetNoEval,
+#footEvalValue,
+#footFund,
+#footEvalCount,
+#footTotalFund,
+#footTotalNet {
+color: #000 !important;
+font-weight: 900 !important;
+}
+/* Override any white color for footer text labels */
+tfoot tr td.col-name.text-gray-400,
+tfoot tr td.col-name.total-label,
+tfoot tr td.footer-summary-label {
+color: #000 !important;
+font-weight: 900 !important;
+}
+tfoot tr td.footer-summary-label span {
+color: #000 !important;
+}
+/* Increase font size for numbers in footer */
+tfoot tr td.number-display,
+tfoot tr td.total-val-net {
+font-size: 15px !important;
+font-weight: 900 !important;
+}
+/* Make footer rows have gray background for distinction in print */
+tfoot tr.footer-row {
+background: #e5e7eb !important;
+}
+tfoot tr.footer-row td {
+background: #e5e7eb !important;
+color: #000 !important;
+}
+tfoot tr td.total-label {
+background: linear-gradient(135deg, #0f172a 0%, #1e293b 100%) !important;
+color: #fff !important;
+font-size: 14px !important;
+}
+tfoot tr td.total-val-net {
+background: linear-gradient(135deg, #40E0D0 0%, #14b8a6 100%) !important;
+color: #000 !important;
+font-size: 18px !important;
+font-weight: 900 !important;
+border: 3px solid #000 !important;
+}
+.footer-row td {
+padding-top: 0.5rem !important;
+padding-bottom: 0.5rem !important;
+}
+.total-label {
+text-align: right !important;
+padding-right: 20px !important;
+font-size: 15px !important;
+}
+.total-val-net {
+background: linear-gradient(135deg, #bfdbfe 0%, #93c5fd 100%) !important;
+font-size: 20px !important;
+text-align: left !important;
+padding-left: 20px !important;
+font-weight: 900 !important;
+}
+}
+.print-header {
+display: none;
+}
+/* Scrollbar — theme variables, fixed size */
+::-webkit-scrollbar {
+width: 8px;
+height: 8px;
+}
+::-webkit-scrollbar-track {
+background: var(--adora-scrollbar-track);
+border-radius: 4px;
+}
+::-webkit-scrollbar-thumb {
+background: var(--adora-scrollbar-thumb);
+border-radius: 4px;
+border: 1px solid transparent;
+}
+::-webkit-scrollbar-thumb:hover {
+background: var(--adora-scrollbar-thumb-hover);
+}
+::-webkit-scrollbar-corner {
+background: var(--adora-scrollbar-track);
+}
+* {
+  scrollbar-width: thin;
+  scrollbar-color: var(--adora-scrollbar-thumb) var(--adora-scrollbar-track);
+}
+/* ===== Global Select & Option Styling — Unified Adora Theme ===== */
+select {
+  appearance: none;
+  -webkit-appearance: none;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 24 24' fill='none' stroke='%2340E0D0' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpolyline points='6 9 12 15 18 9'%3E%3C/polyline%3E%3C/svg%3E");
+  background-repeat: no-repeat;
+  background-position: left 10px center;
+  padding-left: 30px;
+}
+select option {
+  background-color: rgba(15, 23, 41, 0.98);
+  color: #e2e8f0;
+  padding: 8px 12px;
+}
+select option:hover,
+select option:checked {
+  background-color: rgba(64, 224, 208, 0.15);
+  color: #ffffff;
+}
+select:focus option:checked {
+  background: linear-gradient(0deg, rgba(64, 224, 208, 0.2), rgba(64, 224, 208, 0.2));
+  color: #ffffff;
+}
+/* Dark color-scheme for date/number inputs */
+input[type="text"],
+input[type="search"],
+input[type="number"],
+input[type="date"],
+input[type="email"],
+textarea {
+  color-scheme: dark;
+}
+
+/* Number Formatting */
+.number-display {
+font-variant-numeric: tabular-nums;
+letter-spacing: 0.5px;
+}
+/* Toast: موقع ثابت، ألوان حسب النوع (توحيد بصري مع primary) */
+.toast {
+  position: fixed;
+  top: 1.25rem;
+  right: 1.25rem;
+  left: 1.25rem;
+  margin-left: auto;
+  margin-right: auto;
+  max-width: 22rem;
+  padding: 0.875rem 1.25rem;
+  color: #fff;
+  border-radius: 12px;
+  box-shadow: 0 10px 40px rgba(0, 0, 0, 0.2);
+  z-index: 100000;
+  animation: toastSlideIn 0.35s ease-out;
+  font-weight: 600;
+  font-size: 0.9375rem;
+  line-height: 1.4;
+  border: 1px solid rgba(255, 255, 255, 0.15);
+}
+.toast.toast--success {
+  background: linear-gradient(135deg, var(--primary-500) 0%, #0d9488 100%);
+  box-shadow: 0 10px 40px var(--primary-glow);
+}
+.toast.toast--error {
+  background: linear-gradient(135deg, #ef4444 0%, #dc2626 100%);
+  box-shadow: 0 10px 40px rgba(239, 68, 68, 0.3);
+}
+.toast.toast--info {
+  background: linear-gradient(135deg, #3b82f6 0%, #2563eb 100%);
+  box-shadow: 0 10px 40px rgba(59, 130, 246, 0.3);
+}
+@keyframes toastSlideIn {
+  from {
+    transform: translateX(100%);
+    opacity: 0;
+  }
+  to {
+    transform: translateX(0);
+    opacity: 1;
+  }
+}
+@keyframes slideInRight {
+from {
+transform: translateX(400px);
+opacity: 0;
+}
+to {
+transform: translateX(0);
+opacity: 1;
+}
+}
+
+/* === Professional QR Code Styling === */
+.qr-code-container {
+  position: relative;
+  display: inline-block;
+  background: linear-gradient(135deg, #ffffff 0%, #f8fafc 100%);
+  padding: 12px;
+  border-radius: 16px;
+  box-shadow: 0 8px 32px rgba(20, 184, 166, 0.2), 0 0 0 2px rgba(20, 184, 166, 0.1);
+  transition: all 0.3s ease;
+}
+
+.qr-code-container:hover {
+  box-shadow: 0 12px 40px rgba(20, 184, 166, 0.3), 0 0 0 2px rgba(20, 184, 166, 0.2);
+  transform: translateY(-2px);
+}
+
+.qr-code-wrapper {
+  position: relative;
+  background: white;
+  border-radius: 8px;
+  padding: 8px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.qr-code-wrapper canvas {
+  border-radius: 4px;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+}
+
+.qr-code-overlay {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  pointer-events: none;
+  z-index: 10;
+}
+
+.qr-logo {
+  width: 50px;
+  height: 50px;
+  background: linear-gradient(135deg, #14b8a6 0%, #0d9488 100%);
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 24px;
+  box-shadow: 0 4px 12px rgba(20, 184, 166, 0.4);
+  border: 3px solid white;
+}
+
+@media (max-width: 480px) {
+  .qr-code-container {
+    padding: 10px;
+  }
+  
+  .qr-code-wrapper {
+    padding: 6px;
+  }
+  
+  .qr-logo {
+    width: 40px;
+    height: 40px;
+    font-size: 20px;
+    border-width: 2px;
+  }
+}
+
+/* === Modern Button Styles === */
+.btn-modern {
+  position: relative;
+  overflow: hidden;
+  min-height: 44px;
+  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.btn-modern::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: -100%;
+  width: 100%;
+  height: 100%;
+  background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.2), transparent);
+  transition: left 0.5s;
+}
+
+.btn-modern:hover::before {
+  left: 100%;
+}
+
+.btn-modern:active {
+  transform: scale(0.98);
+}
+.btn-modern:focus-visible {
+  outline: 2px solid var(--primary-500);
+  outline-offset: 2px;
+}
+
+/* Header Logo Styling */
+header img {
+  filter: drop-shadow(0 4px 8px rgba(20, 184, 166, 0.3));
+  transition: transform 0.3s ease;
+}
+
+header img:hover {
+  transform: scale(1.05);
+}
+
+/* Header Responsive Improvements */
+@media (max-width: 640px) {
+  header {
+    padding: 1rem !important;
+  }
+  
+  header .flex.items-center {
+    flex-direction: column;
+    align-items: flex-start;
+    width: 100%;
+  }
+  
+  #actionBtns {
+    width: 100%;
+    justify-content: center;
+  }
+  
+  .btn-modern {
+    flex: 1;
+    min-width: 0;
+    font-size: 0.75rem !important;
+    padding: 0.5rem 0.75rem !important;
+  }
+}
+
+/* Discount Modal — فرض الوضع الداكن للقوائم المنسدلة (native dropdown) */
+#discountsModal,
+#manageDiscountTypesModal {
+  color-scheme: dark;
+}
+
+/* منع خروج محتوى الخصومات عن إطار النافذة */
+#discountsModal .glass.rounded-xl {
+  min-width: 0;
+  overflow: hidden;
+}
+
+/* نافذة إدارة الخصومات — المحتوى لا يخرج عن الإطار، التمرير من داخل النافذة فقط */
+.discounts-modal-pane {
+  height: min(88vh, 720px) !important;
+  max-height: min(88vh, 720px) !important;
+  display: flex !important;
+  flex-direction: column !important;
+  overflow: hidden !important;
+  min-height: 0 !important;
+}
+.discounts-modal-header {
+  flex-shrink: 0;
+}
+.discounts-modal-scroll {
+  flex: 1 1 0 !important;
+  min-height: 0 !important;
+  overflow: hidden !important;
+  overflow-x: hidden !important;
+  display: flex !important;
+  flex-direction: column !important;
+  -webkit-overflow-scrolling: touch;
+}
+.discounts-form-body {
+  flex-shrink: 0;
+}
+
+/* توزيع منطقي لنموذج الخصم: سطر1 (من + ماذا + كم) سطر2 (متى + إضافة) */
+.discounts-form-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr minmax(72px, 0.5fr);
+  gap: 0.75rem;
+  align-items: stretch;
+}
+.discounts-form-grid .discounts-form-card {
+  display: flex;
+  flex-direction: column;
+  min-height: 5.25rem;
+  justify-content: flex-start;
+}
+.discounts-form-grid .discounts-date-cell {
+  grid-column: span 2;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+}
+.discounts-form-grid .discounts-add-cell {
+  grid-column: span 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.discounts-form-grid .discounts-add-cell .btn-modern {
+  width: 100%;
+  max-width: 100%;
+}
+@media (max-width: 640px) {
+  .discounts-form-grid {
+    grid-template-columns: 1fr;
+    gap: 0.5rem;
+  }
+  .discounts-form-grid .discounts-date-cell,
+  .discounts-form-grid .discounts-add-cell {
+    grid-column: span 1;
+  }
+}
+.discounts-list-section {
+  flex: 1 1 0 !important;
+  min-height: 0 !important;
+  display: flex !important;
+  flex-direction: column !important;
+  overflow: hidden !important;
+}
+.discounts-list-inner {
+  flex: 1 1 0 !important;
+  min-height: 0 !important;
+  max-height: none !important;
+  overflow-y: auto !important;
+  overflow-x: hidden !important;
+  padding-inline-end: 4px !important;
+  min-width: 0 !important;
+  -webkit-overflow-scrolling: touch;
+}
+
+#discountsList {
+  min-width: 0;
+  overflow-wrap: break-word;
+  word-break: break-word;
+}
+/* شريط تمرير واضح لقائمة الخصومات المطبقة */
+.discounts-list-inner::-webkit-scrollbar {
+  width: 8px;
+}
+.discounts-list-inner::-webkit-scrollbar-track {
+  background: rgba(15, 23, 41, 0.5);
+  border-radius: 4px;
+}
+.discounts-list-inner::-webkit-scrollbar-thumb {
+  background: rgba(239, 68, 68, 0.5);
+  border-radius: 4px;
+}
+.discounts-list-inner::-webkit-scrollbar-thumb:hover {
+  background: rgba(239, 68, 68, 0.7);
+}
+.discounts-list-inner {
+  scrollbar-width: thin;
+  scrollbar-color: rgba(239, 68, 68, 0.5) rgba(15, 23, 41, 0.5);
+}
+#discountsList .glass {
+  min-width: 0;
+  overflow: hidden;
+}
+/* بطاقة خصم مضغوطة — تقليل الارتفاع دون حذف معلومات */
+.discount-card {
+  line-height: 1.35;
+}
+.discount-card h4 {
+  line-height: 1.3;
+}
+.discount-card .space-y-1 > * + * {
+  margin-top: 0.25rem;
+}
+#discountsList .break-words {
+  overflow-wrap: break-word;
+  word-break: break-word;
+}
+
+/* Discount Modal Select Styling - Dark Theme */
+#discountsModal select,
+#manageDiscountTypesModal select {
+  background-color: rgba(15, 23, 41, 0.95) !important;
+  color: #e2e8f0 !important;
+  border-color: rgba(255, 255, 255, 0.2) !important;
+  position: relative !important;
+  z-index: 10 !important;
+}
+
+/* Fix overlap issue - ensure select dropdown container has proper z-index */
+#discountsModal .glass {
+  position: relative !important;
+  z-index: 1 !important;
+  overflow: visible !important;
+}
+
+#discountsModal .glass > div {
+  position: relative !important;
+  z-index: 2 !important;
+  overflow: visible !important;
+}
+
+/* Fix grid container to allow dropdown overflow */
+#discountsModal .grid {
+  overflow: visible !important;
+  position: relative !important;
+}
+
+/* Ensure select dropdown appears above other elements */
+#discountsModal select {
+  position: relative !important;
+  z-index: 10 !important;
+}
+
+#discountsModal select:focus {
+  z-index: 30 !important;
+}
+
+/* Ensure the discount type container has higher z-index when focused */
+#discountsModal .glass:has(select:focus) {
+  z-index: 25 !important;
+}
+
+/* Ensure button next to select is always visible */
+#discountsModal button[onclick*="showManageDiscountTypesModal"] {
+  position: relative !important;
+  z-index: 35 !important;
+}
+
+/* تحسين منسدلة نوع الخصم وزر الإعدادات — قائمة منسدلة عادية (سطر واحد) */
+#discountsModal #discountTypeSelect {
+  min-height: 40px !important;
+  padding: 0.5rem 0.75rem !important;
+  font-size: 0.8125rem !important;
+}
+#discountsModal button[onclick*="showManageDiscountTypesModal"] {
+  min-height: 44px !important;
+  min-width: 44px !important;
+  padding: 0.5rem 0.75rem !important;
+  font-size: 1rem !important;
+}
+
+/* Fix overlap on smaller screens - make grid vertical */
+@media (max-width: 768px) {
+  #discountsModal .grid.grid-cols-1.sm\\:grid-cols-2 {
+    grid-template-columns: 1fr !important;
+  }
+  
+  /* Add more spacing between grid items on mobile */
+  #discountsModal .grid.gap-3.sm\\:gap-4 {
+    gap: 1rem !important;
+  }
+}
+
+/* نافذة الخصومات — على الشاشات الضيقة: نفس الشبكة بمسافات متساوية */
+@media (max-width: 480px) {
+  .discounts-form-body {
+    gap: 0.5rem !important;
+  }
+}
+
+#discountsModal select option,
+#manageDiscountTypesModal select option {
+  background-color: rgba(15, 23, 41, 0.95) !important;
+  color: #e2e8f0 !important;
+  padding: 8px 12px !important;
+}
+
+#discountsModal select:focus,
+#manageDiscountTypesModal select:focus {
+  background-color: rgba(15, 23, 41, 0.95) !important;
+  color: #e2e8f0 !important;
+  border-color: rgba(239, 68, 68, 0.5) !important;
+  outline: none !important;
+}
+
+#discountsModal select:hover,
+#manageDiscountTypesModal select:hover {
+  background-color: rgba(15, 23, 41, 0.98) !important;
+  border-color: rgba(255, 255, 255, 0.3) !important;
+}
+
+/* For browsers that support styling select dropdown */
+#discountsModal select::-ms-expand,
+#manageDiscountTypesModal select::-ms-expand {
+  display: none;
+}
+
+/* Force statistics content to be visible when not hidden */
+#statisticsReportsContent:not(.hidden) {
+  display: block !important;
+  visibility: visible !important;
+  opacity: 1 !important;
+}
+
+#currentPeriodStats {
+  display: grid !important;
+  visibility: visible !important;
+  opacity: 1 !important;
+}
+
+/* Webkit browsers (Chrome, Safari) */
+#discountsModal select::-webkit-scrollbar,
+#manageDiscountTypesModal select::-webkit-scrollbar {
+  width: 8px;
+}
+
+#discountsModal select::-webkit-scrollbar-track,
+#manageDiscountTypesModal select::-webkit-scrollbar-track {
+  background: rgba(15, 23, 41, 0.5);
+}
+
+#discountsModal select::-webkit-scrollbar-thumb,
+#manageDiscountTypesModal select::-webkit-scrollbar-thumb {
+  background: rgba(64, 224, 208, 0.5);
+  border-radius: 4px;
+}
+
+#discountsModal select::-webkit-scrollbar-thumb:hover,
+#manageDiscountTypesModal select::-webkit-scrollbar-thumb:hover {
+  background: rgba(64, 224, 208, 0.7);
+}
+
+/* Discount Modal Date Input Styling - Dark Theme */
+#discountsModal input[type="date"],
+#manageDiscountTypesModal input[type="date"] {
+  background-color: rgba(15, 23, 41, 0.95) !important;
+  color: #e2e8f0 !important;
+  border-color: rgba(255, 255, 255, 0.2) !important;
+}
+
+#discountsModal input[type="date"]::-webkit-calendar-picker-indicator,
+#manageDiscountTypesModal input[type="date"]::-webkit-calendar-picker-indicator {
+  filter: invert(1);
+  cursor: pointer;
+}
+
+#discountsModal input[type="date"]:focus,
+#manageDiscountTypesModal input[type="date"]:focus {
+  background-color: rgba(15, 23, 41, 0.95) !important;
+  color: #e2e8f0 !important;
+  border-color: rgba(239, 68, 68, 0.5) !important;
+  outline: none !important;
+}
+
+#discountsModal input[type="date"]:hover,
+#manageDiscountTypesModal input[type="date"]:hover {
+  background-color: rgba(15, 23, 41, 0.98) !important;
+  border-color: rgba(255, 255, 255, 0.3) !important;
+}
+
+/* الوضع الفاتح: نافذة إدارة الخصومات ونافذة أنواع الخصومات */
+[data-theme="light"] #discountsModal,
+[data-theme="light"] #manageDiscountTypesModal,
+[data-theme="light"] #mostDiscountsDetailModal {
+  color-scheme: light;
+}
+[data-theme="light"] #discountsModal .glass.rounded-xl,
+[data-theme="light"] #discountsModal .glass.sm\:rounded-2xl,
+[data-theme="light"] #manageDiscountTypesModal .glass.rounded-xl,
+[data-theme="light"] #manageDiscountTypesModal .glass.sm\:rounded-2xl,
+[data-theme="light"] #mostDiscountsDetailModal .glass.rounded-xl,
+[data-theme="light"] #mostDiscountsDetailModal .glass.sm\:rounded-2xl {
+  background: linear-gradient(135deg, #f8fafc 0%, #f1f5f9 50%, #e2e8f0 100%) !important;
+  border-color: rgba(239, 68, 68, 0.5) !important;
+  box-shadow: 0 20px 60px rgba(0, 0, 0, 0.12) !important;
+}
+[data-theme="light"] #discountsModal .border-b.border-white\/10,
+[data-theme="light"] #discountsModal .border-t.border-white\/10,
+[data-theme="light"] #discountsModal .border.border-white\/10,
+[data-theme="light"] #manageDiscountTypesModal .border-b.border-white\/10,
+[data-theme="light"] #manageDiscountTypesModal .border-t.border-white\/10,
+[data-theme="light"] #manageDiscountTypesModal .border.border-white\/10,
+[data-theme="light"] #mostDiscountsDetailModal .border-b.border-white\/10 {
+  border-color: rgba(100, 116, 139, 0.25) !important;
+}
+[data-theme="light"] #discountsModal .text-red-400,
+[data-theme="light"] #manageDiscountTypesModal .text-red-400,
+[data-theme="light"] #mostDiscountsDetailModal .text-red-400 {
+  color: #b91c1c !important;
+}
+[data-theme="light"] #discountsModal .text-gray-200,
+[data-theme="light"] #discountsModal .text-gray-400,
+[data-theme="light"] #manageDiscountTypesModal .text-gray-200,
+[data-theme="light"] #manageDiscountTypesModal .text-gray-400,
+[data-theme="light"] #mostDiscountsDetailModal .text-gray-200 {
+  color: #334155 !important;
+}
+[data-theme="light"] #discountsModal .text-white,
+[data-theme="light"] #manageDiscountTypesModal .text-white,
+[data-theme="light"] #mostDiscountsDetailModal .text-white {
+  color: #0f172a !important;
+}
+[data-theme="light"] #discountsModal .text-turquoise,
+[data-theme="light"] #manageDiscountTypesModal .text-turquoise {
+  color: #0f766e !important;
+}
+[data-theme="light"] #discountsModal button.text-gray-400:hover,
+[data-theme="light"] #manageDiscountTypesModal button.text-gray-400:hover,
+[data-theme="light"] #mostDiscountsDetailModal button.text-gray-400:hover {
+  color: #0f172a !important;
+  background-color: rgba(100, 116, 139, 0.15) !important;
+}
+[data-theme="light"] #discountsModal .glass,
+[data-theme="light"] #manageDiscountTypesModal .glass {
+  background: rgba(255, 255, 255, 0.7) !important;
+  border-color: rgba(100, 116, 139, 0.2) !important;
+}
+[data-theme="light"] #discountsModal select,
+[data-theme="light"] #manageDiscountTypesModal select {
+  background-color: #f8fafc !important;
+  color: #0f172a !important;
+  border-color: rgba(100, 116, 139, 0.3) !important;
+}
+[data-theme="light"] #discountsModal select:focus,
+[data-theme="light"] #manageDiscountTypesModal select:focus {
+  background-color: #fff !important;
+  color: #0f172a !important;
+  border-color: rgba(15, 118, 110, 0.6) !important;
+}
+[data-theme="light"] #discountsModal select:hover,
+[data-theme="light"] #manageDiscountTypesModal select:hover {
+  background-color: #f1f5f9 !important;
+  border-color: rgba(100, 116, 139, 0.4) !important;
+}
+[data-theme="light"] #discountsModal select option,
+[data-theme="light"] #manageDiscountTypesModal select option {
+  background-color: #fff !important;
+  color: #0f172a !important;
+}
+[data-theme="light"] #discountsModal select::-webkit-scrollbar-track,
+[data-theme="light"] #manageDiscountTypesModal select::-webkit-scrollbar-track {
+  background: rgba(100, 116, 139, 0.1);
+}
+[data-theme="light"] #discountsModal select::-webkit-scrollbar-thumb,
+[data-theme="light"] #manageDiscountTypesModal select::-webkit-scrollbar-thumb {
+  background: rgba(100, 116, 139, 0.3);
+}
+[data-theme="light"] #discountsModal select::-webkit-scrollbar-thumb:hover,
+[data-theme="light"] #manageDiscountTypesModal select::-webkit-scrollbar-thumb:hover {
+  background: rgba(100, 116, 139, 0.45);
+}
+[data-theme="light"] #discountsModal input[type="date"],
+[data-theme="light"] #discountsModal input[type="number"],
+[data-theme="light"] #manageDiscountTypesModal input[type="date"],
+[data-theme="light"] #manageDiscountTypesModal input[type="text"] {
+  background-color: #f8fafc !important;
+  color: #0f172a !important;
+  border-color: rgba(100, 116, 139, 0.3) !important;
+}
+[data-theme="light"] #discountsModal input[type="date"]:focus,
+[data-theme="light"] #discountsModal input[type="number"]:focus,
+[data-theme="light"] #manageDiscountTypesModal input[type="date"]:focus,
+[data-theme="light"] #manageDiscountTypesModal input[type="text"]:focus {
+  background-color: #fff !important;
+  border-color: rgba(15, 118, 110, 0.6) !important;
+}
+[data-theme="light"] #discountsModal input[type="date"]:hover,
+[data-theme="light"] #discountsModal input[type="number"]:hover,
+[data-theme="light"] #manageDiscountTypesModal input[type="date"]:hover,
+[data-theme="light"] #manageDiscountTypesModal input[type="text"]:hover {
+  background-color: #f1f5f9 !important;
+  border-color: rgba(100, 116, 139, 0.4) !important;
+}
+[data-theme="light"] #discountsModal input[type="date"]::-webkit-calendar-picker-indicator,
+[data-theme="light"] #manageDiscountTypesModal input[type="date"]::-webkit-calendar-picker-indicator {
+  filter: none;
+  opacity: 0.7;
+}
+[data-theme="light"] #discountsModal input::placeholder,
+[data-theme="light"] #manageDiscountTypesModal input::placeholder {
+  color: #64748b !important;
+}
+[data-theme="light"] #discountsModal button[onclick*="showManageDiscountTypesModal"] {
+  background-color: rgba(255, 255, 255, 0.8) !important;
+  color: #334155 !important;
+  border-color: rgba(100, 116, 139, 0.3) !important;
+}
+[data-theme="light"] #discountsModal button[onclick*="showManageDiscountTypesModal"]:hover {
+  background-color: #f1f5f9 !important;
+  border-color: rgba(15, 118, 110, 0.4) !important;
+  color: #0f172a !important;
+}
+[data-theme="light"] #discountsModal .btn-modern.bg-white\/\[0\.07\],
+[data-theme="light"] #discountsModal .btn-modern.bg-white\/10,
+[data-theme="light"] #manageDiscountTypesModal .btn-modern.bg-white\/10 {
+  background: rgba(248, 250, 252, 0.9) !important;
+  color: #0f766e !important;
+  border-color: rgba(100, 116, 139, 0.25) !important;
+}
+[data-theme="light"] #discountsModal .btn-modern.bg-white\/\[0\.07\]:hover,
+[data-theme="light"] #discountsModal .btn-modern.bg-white\/10:hover,
+[data-theme="light"] #manageDiscountTypesModal .btn-modern.bg-white\/10:hover {
+  background: rgba(15, 118, 110, 0.12) !important;
+  border-color: rgba(15, 118, 110, 0.4) !important;
+  color: #0f172a !important;
+}
+[data-theme="light"] #discountsModal #selectedEmployeeInfo {
+  background: linear-gradient(to right, rgba(15, 118, 110, 0.12), transparent) !important;
+  border-color: rgba(15, 118, 110, 0.35) !important;
+}
+[data-theme="light"] #discountsModal #selectedEmployeeInfo .text-turquoise {
+  color: #0f766e !important;
+}
+[data-theme="light"] #discountsModal #discountsList .glass,
+[data-theme="light"] #discountsList .glass {
+  background: rgba(255, 255, 255, 0.6) !important;
+  border-color: rgba(100, 116, 139, 0.2) !important;
+}
+
+/* Force statistics content to be visible when not hidden */
+#statisticsReportsContent:not(.hidden) {
+  display: block !important;
+  visibility: visible !important;
+  opacity: 1 !important;
+}
+
+#currentPeriodStats {
+  display: grid !important;
+  visibility: visible !important;
+  opacity: 1 !important;
+}
+
+/* زر «كيفية حساب التقييم» — نبض + توهج لجذب البصر */
+@keyframes rating-btn-pulse {
+  0%, 100% { box-shadow: 0 0 0 0 rgba(64, 224, 208, 0.5); transform: scale(1); }
+  50% { box-shadow: 0 0 0 12px rgba(64, 224, 208, 0); transform: scale(1.05); }
+}
+@keyframes rating-btn-glow {
+  0%, 100% { filter: brightness(1); }
+  50% { filter: brightness(1.3); }
+}
+.rating-explanation-btn {
+  animation: rating-btn-pulse 2s ease-in-out infinite, rating-btn-glow 2.5s ease-in-out infinite;
+}
+.rating-explanation-btn:hover {
+  animation: rating-btn-pulse 1s ease-in-out infinite, rating-btn-glow 1.2s ease-in-out infinite;
+}
+
+/* مناطق إدخال الإداريين: حد واضح + بلور خفيف + نبض للمشرف و HR */
+.admin-entry-zone {
+  position: relative;
+  border-radius: 10px;
+  -webkit-backdrop-filter: blur(4px);
+  backdrop-filter: blur(4px);
+}
+.admin-entry-supervisor {
+  border: 2px solid rgba(64, 224, 208, 0.75) !important;
+  box-shadow: 0 0 14px rgba(64, 224, 208, 0.35);
+  background: rgba(64, 224, 208, 0.08) !important;
+  animation: admin-entry-pulse-turquoise 2.5s ease-in-out infinite;
+}
+.admin-entry-hr {
+  border: 2px solid rgba(234, 179, 8, 0.75) !important;
+  box-shadow: 0 0 14px rgba(234, 179, 8, 0.35);
+  background: rgba(234, 179, 8, 0.06) !important;
+  animation: admin-entry-pulse-amber 2.5s ease-in-out infinite;
+}
+@keyframes admin-entry-pulse-turquoise {
+  0%, 100% { box-shadow: 0 0 12px rgba(64, 224, 208, 0.3); }
+  50% { box-shadow: 0 0 20px rgba(64, 224, 208, 0.5); }
+}
+@keyframes admin-entry-pulse-amber {
+  0%, 100% { box-shadow: 0 0 12px rgba(234, 179, 8, 0.3); }
+  50% { box-shadow: 0 0 20px rgba(234, 179, 8, 0.5); }
+}
+@media print {
+  .admin-entry-zone { animation: none !important; }
+  html, body { background: #fff !important; color: #000 !important; }
+  .glass { background: #fff !important; border-color: #ddd !important; box-shadow: none !important; }
+}
+
+/* مؤشر مزامنة الفترة الحية (أسفل اليمين) */
+.live-sync-indicator {
+  position: fixed;
+  bottom: 1rem;
+  right: 1rem;
+  z-index: 900;
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.5rem 0.75rem;
+  background: rgba(15, 23, 41, 0.95);
+  border: 1px solid rgba(64, 224, 208, 0.4);
+  border-radius: 0.75rem;
+  font-size: 0.75rem;
+  font-weight: 600;
+  color: rgba(64, 224, 208, 0.95);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
+  transition: opacity 0.2s ease, transform 0.2s ease;
+}
+.live-sync-spinner {
+  width: 14px;
+  height: 14px;
+  border: 2px solid rgba(64, 224, 208, 0.3);
+  border-top-color: rgba(64, 224, 208, 1);
+  border-radius: 50%;
+  animation: live-sync-spin 0.7s linear infinite;
+}
+@keyframes live-sync-spin {
+  to { transform: rotate(360deg); }
+}
+.live-sync-label {
+  white-space: nowrap;
+}
+
+/* مؤشر تحميل رابط الإداري (جدول) — شريط تقدم تدريجي */
+.admin-link-load-spinner {
+  animation: spin 0.8s linear infinite;
+  border-style: solid;
+}
+.admin-link-progress-fill {
+  animation: adminLinkProgress 1.8s ease-in-out infinite;
+}
+@keyframes adminLinkProgress {
+  0% { width: 0%; }
+  50% { width: 85%; }
+  100% { width: 0%; }
+}

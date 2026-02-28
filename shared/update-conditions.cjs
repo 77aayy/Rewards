@@ -1,0 +1,10 @@
+const fs = require('fs');
+const path = require('path');
+const p = path.join(process.cwd(), 'app', 'shared', 'conditions-content.json');
+let s = fs.readFileSync(p, 'utf8');
+s = s.replace(/"title": "مساهمة شركاء النجاح \(15%\) ورصيد النقاط"/, '"title": "مساهمة شركاء النجاح ({{supportFundPercent}}%) ورصيد النقاط"');
+s = s.replace(/"static": "بالريال \(الجدول والتقرير العادي\): يُخصم 15% من إجمالي/, '"template": "بالريال (الجدول والتقرير العادي): يُخصم {{supportFundPercent}}% من إجمالي');
+s = s.replace(/والـ 15% تظهر كـ \+ مساهمة/, 'والـ {{supportFundPercent}}% تظهر كـ + مساهمة');
+s = s.replace(/"static": "رصيد النقاط من الفترة = صافي المستحق بعد 15% معروض/, '"template": "رصيد النقاط من الفترة = صافي المستحق بعد {{supportFundPercent}}% معروض');
+fs.writeFileSync(p, s);
+console.log('Updated');
