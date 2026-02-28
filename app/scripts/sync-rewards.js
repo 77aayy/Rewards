@@ -40,6 +40,7 @@ function emptyDir(dir) {
     try {
       fs.rmSync(p, { recursive: true, maxRetries: 3, retryDelay: 100 });
     } catch (err) {
+      if (err.code === 'ENOENT') continue; // File already gone
       if (err.code === 'EPERM' || err.code === 'EBUSY') {
         try {
           if (fs.statSync(p).isDirectory()) emptyDir(p);
@@ -58,7 +59,7 @@ fs.mkdirSync(appRewardsPublic, { recursive: true });
 
 function sleep(ms) {
   const end = Date.now() + ms;
-  while (Date.now() < end) {}
+  while (Date.now() < end) { }
 }
 
 function copyFileWithRetry(src, dest, retries = 5, delayMs = 120) {
