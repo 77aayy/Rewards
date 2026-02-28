@@ -11,7 +11,6 @@ const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const appRoot = path.resolve(__dirname, '..');
 const envPath = path.join(appRoot, '.env');
 const firebaseConfigPath = path.join(appRoot, 'shared', 'firebase-config.json');
-const DEFAULT_ADMIN_KEY = 'ayman5255';
 const CHECK_SECRETS_STRICT = process.env.CHECK_SECRETS === '1';
 
 function parseEnv(content) {
@@ -25,6 +24,7 @@ function parseEnv(content) {
 
 let hasWarnings = false;
 let env = {};
+let adminKey = '';
 
 console.log('\n=== فحص قبل النشر (Pre-deploy Check) ===\n');
 
@@ -40,9 +40,9 @@ if (!fs.existsSync(envPath)) {
   }
 } else {
   env = parseEnv(fs.readFileSync(envPath, 'utf8'));
-  const adminKey = env.VITE_ADMIN_SECRET_KEY || '';
-  if (!adminKey || adminKey === DEFAULT_ADMIN_KEY) {
-    console.warn('⚠️  VITE_ADMIN_SECRET_KEY غير مضبوط أو لا يزال القيمة الافتراضية.');
+  adminKey = (env.VITE_ADMIN_SECRET_KEY || '').trim();
+  if (!adminKey) {
+    console.warn('⚠️  VITE_ADMIN_SECRET_KEY غير مضبوط في .env');
     console.warn('   غيّره في .env قبل النشر الحقيقي. راجع SECURITY.md.');
     hasWarnings = true;
   } else {
@@ -50,20 +50,9 @@ if (!fs.existsSync(envPath)) {
   }
 }
 
-// 2. Rewards admin key (يُحقَن من .env عبر inject-firebase-config عند البناء/المزامنة)
-const rewardsAppPath = path.join(appRoot, 'Rewards', 'src', 'app.js');
-if (fs.existsSync(rewardsAppPath)) {
-  const content = fs.readFileSync(rewardsAppPath, 'utf8');
-  const m = content.match(/ADMIN_SECRET_KEY\s*=\s*['"]([^'"]+)['"]/);
-  const appJsHasDefault = m && m[1] === DEFAULT_ADMIN_KEY;
-  const envHasNonDefaultKey = env.VITE_ADMIN_SECRET_KEY && env.VITE_ADMIN_SECRET_KEY !== DEFAULT_ADMIN_KEY;
-  if (appJsHasDefault && !envHasNonDefaultKey) {
-    console.warn('⚠️  ADMIN_SECRET_KEY في Rewards/src/app.js لا يزال القيمة الافتراضية.');
-    console.warn('   عدّل app.js ليقرأ من مصدر موحد أو حدّث يدوياً ثم npm run sync:rewards.');
-    hasWarnings = true;
-  } else if (appJsHasDefault && envHasNonDefaultKey) {
-    console.log('✓ مفتاح الأدمن في .env غير الافتراضي — شغّل npm run sync:rewards أو npm run build لحقن القيمة في الملفات.');
-  }
+// 2. Rewards admin key — يُحقَن من .env عبر inject-firebase-config عند البناء/المزامنة
+if (!adminKey && fs.existsSync(path.join(appRoot, 'Rewards', 'src', 'admin-config.js'))) {
+  console.warn('   شغّل npm run sync:rewards أو npm run build بعد تعبئة .env لحقن المفتاح.');
 }
 
 // 3. shared/firebase-config.json — تذكير إذا بقي apiKey التطوير
@@ -83,16 +72,7 @@ if (fs.existsSync(firebaseConfigPath)) {
   } catch (_) {}
 }
 
-// 4. تذكير: إن وُجد fallback المفتاح في adminConfig، تأكد من استخدام .env للإنتاج
-const adminConfigPath = path.join(appRoot, 'src', 'adminConfig.ts');
-if (fs.existsSync(adminConfigPath)) {
-  const ac = fs.readFileSync(adminConfigPath, 'utf8');
-  if (ac.includes("'ayman5255'") || ac.includes('"ayman5255"')) {
-    console.log('ℹ️  تذكير: adminConfig.ts يحتوي fallback للمفتاح — للإنتاج ضع VITE_ADMIN_SECRET_KEY في .env.');
-  }
-}
-
-// 5. Manual steps
+// 4. Manual steps
 console.log('\n--- خطوات يدوية (راجع PRE-DEPLOY-STEPS.md) ---');
 console.log('1. تقييد Firebase API key في Google Cloud Console (HTTP referrer)');
 console.log('2. اختبار: بوابة الأدمن → الدخول → التحليل → المكافآت');

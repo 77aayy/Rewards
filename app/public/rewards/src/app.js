@@ -986,8 +986,8 @@ function loadEmployeeCodesMap() {
 }
 
 // === Security: Admin Secret Key ===
-// يُحقَن من .env عبر inject-firebase-config.js (window.__ADMIN_SECRET_KEY__). fallback للتطوير.
-const ADMIN_SECRET_KEY = (typeof window !== 'undefined' && window.__ADMIN_SECRET_KEY__) ? window.__ADMIN_SECRET_KEY__ : 'ayman5255';
+// يُحقَن من .env عبر inject-firebase-config.js (window.__ADMIN_SECRET_KEY__). بدون .env لا وصول.
+const ADMIN_SECRET_KEY = (typeof window !== 'undefined' && window.__ADMIN_SECRET_KEY__) ? String(window.__ADMIN_SECRET_KEY__) : '';
 // ADMIN_AUTH_SESSION_KEY و ADMIN_SESSION_MAX_AGE_MS معرّفان في rewards-rbac.js — لا تُعرّفهما هنا لتجنّب "already been declared"
 if (typeof window !== 'undefined') {
   window.getAdminSecretKey = function () { return ADMIN_SECRET_KEY; };

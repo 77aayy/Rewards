@@ -31,22 +31,28 @@ if (!fs.existsSync(rewardsPublic)) {
   process.exit(1);
 }
 
-// 2) حذف الوجهة ثم نسخ كامل (تجنب ملفات قديمة)
-// على Windows: maxRetries + retryDelay تجنب ENOTEMPTY عند تعارض مع Watcher أو عمليات أخرى
-if (fs.existsSync(appRewardsPublic)) {
-  try {
-    fs.rmSync(appRewardsPublic, { recursive: true, maxRetries: 5, retryDelay: 150 });
-  } catch (err) {
-    if (err.code === 'ENOTEMPTY' || err.code === 'EBUSY') {
-      // بديل: تفريغ المحتوى دون حذف المجلد نفسه (أقل حساسية لقفل الملفات)
-      for (const name of fs.readdirSync(appRewardsPublic)) {
-        const p = path.join(appRewardsPublic, name);
-        fs.rmSync(p, { recursive: true, maxRetries: 3, retryDelay: 100 });
-      }
-    } else {
-      throw err;
+// 2) تفريغ الوجهة ثم نسخ كامل (تجنب ملفات قديمة)
+// على Windows: EPERM شائع عند تعارض مع Vite — نفريغ المحتوى (لا نحذف المجلد) أولاً
+function emptyDir(dir) {
+  if (!fs.existsSync(dir)) return;
+  for (const name of fs.readdirSync(dir)) {
+    const p = path.join(dir, name);
+    try {
+      fs.rmSync(p, { recursive: true, maxRetries: 3, retryDelay: 100 });
+    } catch (err) {
+      if (err.code === 'EPERM' || err.code === 'EBUSY') {
+        try {
+          if (fs.statSync(p).isDirectory()) emptyDir(p);
+          else fs.unlinkSync(p);
+        } catch {
+          // تجاهل — سننسخ فوق الملفات
+        }
+      } else throw err;
     }
   }
+}
+if (fs.existsSync(appRewardsPublic)) {
+  emptyDir(appRewardsPublic);
 }
 fs.mkdirSync(appRewardsPublic, { recursive: true });
 

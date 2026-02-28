@@ -8,15 +8,15 @@
   },
   "scripts": {
     "sync:rewards": "node scripts/inject-firebase-config.js && node scripts/sync-rewards.js",
-    "dev": "npm run sync:rewards && vite",
-    "build": "node scripts/inject-firebase-config.js && tsc -b && vite build",
-    "start": "serve -s dist",
+    "dev": "npm run sync:rewards && npx vite@5",
+    "build": "node scripts/inject-firebase-config.js && npx vite@5 build",
+    "start": "npx serve -s dist",
     "deploy": "npm run pre-deploy-check && npm run sync:rewards && npm run build && firebase deploy",
     "deploy:preview": "npm run pre-deploy-check && npm run sync:rewards && npm run build && firebase hosting:channel:deploy preview",
     "sync-and-push": "npm run sync:rewards && node -e \"console.log('Then: git add public/rewards && git commit -m \\\"chore: sync rewards\\\" && git push')\"",
     "lint": "eslint .",
     "pre-deploy-check": "node scripts/pre-deploy-check.js",
-    "preview": "vite preview",
+    "preview": "npx vite@5 preview",
     "deploy-github-firebase": "node scripts/deploy-github-firebase.js",
     "pull-firebase-version": "node scripts/pull-firebase-version.js"
   },
@@ -24,12 +24,12 @@
     "@tailwindcss/vite": "^4.1.18",
     "@tanstack/react-table": "^8.21.3",
     "firebase": "^12.9.0",
-    "lucide-react": "^0.563.0",
+    "lucide-react": "^0.575.0",
     "react": "^19.2.0",
     "react-dom": "^19.2.0",
+    "serve": "^14.2.0",
     "tailwindcss": "^4.1.18",
-    "xlsx": "https://cdn.sheetjs.com/xlsx-0.20.3/xlsx-0.20.3.tgz",
-    "serve": "^14.2.0"
+    "xlsx": "https://cdn.sheetjs.com/xlsx-0.20.3/xlsx-0.20.3.tgz"
   },
   "devDependencies": {
     "@eslint/js": "^9.39.1",

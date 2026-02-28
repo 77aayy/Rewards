@@ -13,7 +13,8 @@ const fs = require('fs');
 const { test, expect } = require('@playwright/test');
 
 const BASE_URL = (process.env.E2E_BASE_URL || 'https://rewards-63e43.web.app').trim().replace(/\/+$/, '');
-const ADMIN_URL = `${BASE_URL}/?admin=ayman5255`;
+const ADMIN_KEY = (process.env.VITE_ADMIN_SECRET_KEY || process.env.ADMIN_KEY || process.env.E2E_ADMIN_KEY || '').trim();
+const ADMIN_URL = ADMIN_KEY ? `${BASE_URL}/?admin=${encodeURIComponent(ADMIN_KEY)}` : '';
 const EXCEL_PATH = path.resolve(__dirname, '..', process.env.E2E_EXCEL_PATH || 'UserStatisticsReport_Ar.xlsx');
 const EXCEL_EXISTS = fs.existsSync(EXCEL_PATH);
 
@@ -27,9 +28,10 @@ const TEST_TIMEOUT_MS = 120000;
 
 test.describe('E2E Full Checklist', () => {
   test.describe.configure({ mode: 'serial', timeout: TEST_TIMEOUT_MS });
+  test.skip(!ADMIN_KEY, 'لا مفتاح أدمن. عيّن VITE_ADMIN_SECRET_KEY أو ADMIN_KEY أو E2E_ADMIN_KEY قبل التشغيل.');
 
   test('1. أدمن: رفع ملف الإكسيل + فتح إدارة الإداريين لتفعيل الروابط على Firebase', async ({ page }) => {
-    test.skip(!EXCEL_EXISTS, 'ملف الإكسيل غير موجود: ضع UserStatisticsReport_Ar.xlsx في جذر المشروع أو عيّن E2E_EXCEL_PATH');
+    test.skip(!EXCEL_EXISTS, 'ملف الإكسيل غير موجود. ضع UserStatisticsReport_Ar.xlsx في جذر المشروع أو عيّن E2E_EXCEL_PATH');
     await page.goto(ADMIN_URL, GOTO_OPTS);
     await expect(page.locator('#uploadBox')).toBeVisible({ timeout: 5000 });
     await page.locator('#fileInput').setInputFiles(EXCEL_PATH);

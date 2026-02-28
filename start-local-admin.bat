@@ -19,10 +19,18 @@ echo ========================================
 echo   Local server + Admin
 echo ========================================
 echo.
-REM Admin key: ADMIN_KEY > VITE_ADMIN_SECRET_KEY > default. Set env before running to override.
-if defined ADMIN_KEY goto :adminset
-if defined VITE_ADMIN_SECRET_KEY (set "ADMIN_KEY=%VITE_ADMIN_SECRET_KEY%") else (set "ADMIN_KEY=ayman5255")
-:adminset
+REM Admin key: من app\.env أو ADMIN_KEY أو VITE_ADMIN_SECRET_KEY. بدون مفتاح لا وصول.
+set "ADMIN_KEY=%ADMIN_KEY%"
+if "%ADMIN_KEY%"=="" set "ADMIN_KEY=%VITE_ADMIN_SECRET_KEY%"
+if "%ADMIN_KEY%"=="" (
+  for /f "usebackq delims=" %%a in (`cd /d "%~dp0app" ^&^& node scripts\read-admin-key.cjs`) do set "ADMIN_KEY=%%a"
+)
+if "%ADMIN_KEY%"=="" (
+  echo ERROR: لا يوجد مفتاح أدمن. أنشئ app\.env وضَع: VITE_ADMIN_SECRET_KEY=مفتاحك_السري
+  echo أو شغّل: set VITE_ADMIN_SECRET_KEY=مفتاحك قبل تشغيل هذا السكربت.
+  pause
+  exit /b 1
+)
 
 set "REWARDS=%~dp0app\Rewards"
 if exist "%REWARDS%\scripts\watch-and-predeploy.js" (

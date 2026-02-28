@@ -4,15 +4,25 @@
  * Admin: process.env.VITE_ADMIN_SECRET_KEY (من .env)
  * شغّل مع: npm run sync:rewards أو npm run dev
  */
-import { config as loadEnv } from 'dotenv';
 import path from 'path';
+import fs from 'fs';
 import { fileURLToPath } from 'url';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const appRoot = path.resolve(__dirname, '..');
-loadEnv({ path: path.join(appRoot, '.env'), quiet: true });
 
-import fs from 'fs';
+// تحميل .env يدوياً (بدون dotenv)
+const envPath = path.join(appRoot, '.env');
+if (fs.existsSync(envPath)) {
+  const content = fs.readFileSync(envPath, 'utf8');
+  for (const line of content.split('\n')) {
+    const m = line.match(/^\s*([A-Za-z_][A-Za-z0-9_]*)\s*=\s*(.*)$/);
+    if (m) {
+      const val = m[2].replace(/^["']|["']$/g, '').trim();
+      if (!process.env[m[1]]) process.env[m[1]] = val;
+    }
+  }
+}
 
 const sharedPath = path.join(appRoot, 'shared', 'firebase-config.json');
 
@@ -90,13 +100,13 @@ export const FIREBASE_CONFIG = {
 fs.writeFileSync(generatedPath, generatedContent, 'utf8');
 console.log('[inject-firebase-config] تم: src/firebase-config.generated.ts');
 
-// 4) Rewards/src/admin-config.js — مفتاح الأدمن من .env
-const adminKey = (process.env.VITE_ADMIN_SECRET_KEY || '').trim() || 'ayman5255';
+// 4) Rewards/src/admin-config.js — مفتاح الأدمن من .env فقط (لا fallback)
+const adminKey = (process.env.VITE_ADMIN_SECRET_KEY || '').trim();
 const adminKeyEscaped = adminKey.replace(/\\/g, '\\\\').replace(/'/g, "\\'");
 const adminConfigPath = path.join(appRoot, 'Rewards', 'src', 'admin-config.js');
 const adminConfigContent = `/**
  * مفتاح الأدمن — يُحقَن من process.env.VITE_ADMIN_SECRET_KEY عبر inject-firebase-config.js.
- * ضَع القيمة في .env (VITE_ADMIN_SECRET_KEY=...) ثم شغّل npm run sync:rewards
+ * ضَع القيمة في app/.env ثم شغّل npm run sync:rewards. لا fallback — بدون .env لا وصول.
  */
 (function () {
   if (typeof window === 'undefined') return;

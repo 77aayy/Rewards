@@ -11,9 +11,9 @@ function env(name: string, fallback: string): string {
   return (typeof v === 'string' && v.trim()) ? v.trim() : fallback;
 }
 
-export const ADMIN_SECRET_KEY = env('VITE_ADMIN_SECRET_KEY', 'ayman5255');
+export const ADMIN_SECRET_KEY = env('VITE_ADMIN_SECRET_KEY', '');
 export const ADMIN_ALLOWED_EMAILS: string[] = (() => {
-  const v = env('VITE_ADMIN_ALLOWED_EMAILS', '77aayy@gmail.com');
+  const v = env('VITE_ADMIN_ALLOWED_EMAILS', '');
   return v ? v.split(',').map((e) => e.trim()).filter(Boolean) : [];
 })();
 export const ADMIN_AUTH_SESSION_KEY = 'adora_admin_auth_session';
