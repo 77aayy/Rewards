@@ -57,8 +57,10 @@ function serveRewardsFromSource(req: IncomingMessage, res: ServerResponse, next:
   }
 }
 
+export const BASE_PATH = (import.meta as any).env?.VITE_BASE_PATH || '/Rewards/';
+
 export default defineConfig({
-  base: '/Rewards/',
+  base: './', // Use relative paths for assets to work in any subfolder or root
   build: {
     reportCompressedSize: true,
     chunkSizeWarningLimit: 600,

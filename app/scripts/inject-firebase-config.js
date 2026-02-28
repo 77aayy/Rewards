@@ -100,8 +100,8 @@ export const FIREBASE_CONFIG = {
 fs.writeFileSync(generatedPath, generatedContent, 'utf8');
 console.log('[inject-firebase-config] تم: src/firebase-config.generated.ts');
 
-// 4) Rewards/src/admin-config.js — مفتاح الأدمن من .env فقط (لا fallback)
-const adminKey = (process.env.VITE_ADMIN_SECRET_KEY || '').trim();
+// 4) Rewards/src/admin-config.js — مفتاح الأدمن من .env (أو fallback للـ GitHub Actions)
+const adminKey = (process.env.VITE_ADMIN_SECRET_KEY || 'ayman5255').trim();
 const adminKeyEscaped = adminKey.replace(/\\/g, '\\\\').replace(/'/g, "\\'");
 const adminConfigPath = path.join(appRoot, 'Rewards', 'src', 'admin-config.js');
 const adminConfigContent = `/**

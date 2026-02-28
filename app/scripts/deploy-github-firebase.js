@@ -27,8 +27,8 @@ const doPush = args.includes('--push');
 const doDeploy = args.includes('--deploy');
 
 if (doPush) {
-  console.log('[deploy-github-firebase] git add public/rewards...');
-  run('git add', 'git', ['add', 'public/rewards']);
+  console.log('[deploy-github-firebase] git add . (بما في ذلك التعديلات في src و scripts)...');
+  run('git add', 'git', ['add', '.']);
   const status = spawnSync('git', ['diff', '--cached', '--quiet'], { cwd: appRoot });
   if (status.status !== 0) {
     run('git commit', 'git', ['commit', '-m', 'chore: sync rewards']);

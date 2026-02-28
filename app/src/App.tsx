@@ -480,7 +480,7 @@ export default function App() {
   const [adminEntryMode, setAdminEntryMode] = useState<'checking' | 'redirecting' | 'analysis' | 'blocked'>('checking');
   const adminKeyFromUrl = useMemo(() => {
     if (typeof window === 'undefined') return '';
-    return new URLSearchParams(window.location.search).get('admin') || '';
+    return (new URLSearchParams(window.location.search).get('admin') || '').trim().toLowerCase();
   }, []);
 
   /** روابط الإداريين: /supervisor|hr|accounting|manager/TOKEN/PERIOD يجب أن تفتح صفحة المكافآت مباشرة وليس بوابة المفتاح */
@@ -501,7 +501,7 @@ export default function App() {
     }
   }, [adminRoleRedirect]);
 
-  const isAdminLink = adminKeyFromUrl === ADMIN_SECRET_KEY;
+  const isAdminLink = adminKeyFromUrl !== '' && adminKeyFromUrl === ADMIN_SECRET_KEY.trim().toLowerCase();
 
   useEffect(() => {
     if (!isAdminLink) {
@@ -517,7 +517,7 @@ export default function App() {
         return;
       }
       if (!isAllowedAdminEmail(user.email)) {
-        await signOut(auth).catch(() => {});
+        await signOut(auth).catch(() => { });
         setAuthError('الحساب غير مخوّل للإدارة.');
         setAuthState('signed_out');
         setAuthUserEmail('');
@@ -634,8 +634,8 @@ export default function App() {
           setConfig(fbConfig);
           saveConfig(fbConfig); // Cache locally so next load is instant
         }
-      }).catch(() => {/* Firebase unavailable — keep local config */});
-    }).catch(() => {/* dynamic import failed */});
+      }).catch(() => {/* Firebase unavailable — keep local config */ });
+    }).catch(() => {/* dynamic import failed */ });
   }, []);
 
   // When Rewards tab asks for payload (e.g. localStorage was empty/cached), send it
@@ -718,21 +718,21 @@ export default function App() {
           const result = parseAttendanceReport(buffer, file.name);
           results.push(result);
         } catch {
-        results.push({
-          fileName: file.name,
-          employeeName: '—',
-          period: '',
-          totalDaysInPeriod: 0,
-          totalWorkDays: 0,
-          validDays: 0,
-          incompleteDays: 0,
-          absentDays: 0,
-          permittedAbsence: 0,
-          reviewRequiredDays: 0,
-          totalNetHours: 0,
-          fingerprintAccuracy: 0,
-          days: [],
-        });
+          results.push({
+            fileName: file.name,
+            employeeName: '—',
+            period: '',
+            totalDaysInPeriod: 0,
+            totalWorkDays: 0,
+            validDays: 0,
+            incompleteDays: 0,
+            absentDays: 0,
+            permittedAbsence: 0,
+            reviewRequiredDays: 0,
+            totalNetHours: 0,
+            fingerprintAccuracy: 0,
+            days: [],
+          });
         }
       }
       setAttendanceResults(results);
@@ -764,105 +764,105 @@ export default function App() {
     }
 
     try {
-    for (const file of fileArray) {
-      const validation = validateExcelFile(file);
-      if (!validation.ok) {
-        newUnknown.push(file.name);
-        if (validation.error) rejectionMessages.push(validation.error);
-        continue;
-      }
-      try {
-        const buffer = await readFileAsArrayBuffer(file);
-        const result: FileDetectionResult = detectFileType(buffer);
-
-        if (result.baseType === 'unknown') {
+      for (const file of fileArray) {
+        const validation = validateExcelFile(file);
+        if (!validation.ok) {
           newUnknown.push(file.name);
+          if (validation.error) rejectionMessages.push(validation.error);
           continue;
         }
+        try {
+          const buffer = await readFileAsArrayBuffer(file);
+          const result: FileDetectionResult = detectFileType(buffer);
 
-        // Auto-discover branches from staff file and ensure config entries
-        if (result.baseType === 'staff') {
-          const branches = getStaffBranches(buffer);
-          for (const br of branches) {
-            updatedConfig = ensureBranchConfig(updatedConfig, br);
+          if (result.baseType === 'unknown') {
+            newUnknown.push(file.name);
+            continue;
           }
+
+          // Auto-discover branches from staff file and ensure config entries
+          if (result.baseType === 'staff') {
+            const branches = getStaffBranches(buffer);
+            for (const br of branches) {
+              updatedConfig = ensureBranchConfig(updatedConfig, br);
+            }
+          }
+          // Ensure config entry for this file's branch
+          if (result.branch) {
+            updatedConfig = ensureBranchConfig(updatedConfig, result.branch);
+          }
+
+          // Compute quick stats
+          let stats: string | null = null;
+          if (result.baseType === 'staff') {
+            const s = getStaffFileStats(buffer);
+            stats = `${s.activeEmployees} موظف نشط • ${s.dateFrom} → ${s.dateTo}`;
+          } else if (result.baseType === 'log') {
+            const s = getLogFileStats(buffer);
+            stats = `${s.newBookings} حجز جديد`;
+          } else if (result.baseType === 'report') {
+            const s = getReportFileStats(buffer);
+            stats = `${s.bookings} حجز`;
+          } else if (result.baseType === 'units') {
+            const s = getUnitsFileStats(buffer);
+            stats = `${s.bookings} حجز • ${s.units} وحدة`;
+          } else if (result.baseType === 'actualDates') {
+            const s = getActualDatesFileStats(buffer);
+            stats = `${s.rows} صف`;
+          }
+
+          newSlots[result.slotKey] = {
+            slotKey: result.slotKey,
+            baseType: result.baseType,
+            branch: result.branch,
+            file,
+            buffer,
+            stats,
+          };
+        } catch {
+          newUnknown.push(file.name);
         }
-        // Ensure config entry for this file's branch
-        if (result.branch) {
-          updatedConfig = ensureBranchConfig(updatedConfig, result.branch);
+      }
+
+      if (rejectionMessages.length > 0) {
+        alert(rejectionMessages.length === 1 ? rejectionMessages[0] : rejectionMessages.join('\n'));
+      }
+
+      // Preserve user's "اخفاء الفرع" (excluded) from saved config so upload doesn't overwrite it
+      // Also keep branches that exist only in savedConfig (e.g. "الحفر" مستبعد) so the option stays visible in Settings
+      const savedConfig = loadConfig();
+      let mergedConfig = updatedConfig;
+      for (const key of Object.keys(updatedConfig.branches)) {
+        if (savedConfig.branches[key]?.excluded === true) {
+          mergedConfig = {
+            ...mergedConfig,
+            branches: {
+              ...mergedConfig.branches,
+              [key]: { ...mergedConfig.branches[key], excluded: true },
+            },
+          };
         }
-
-        // Compute quick stats
-        let stats: string | null = null;
-        if (result.baseType === 'staff') {
-          const s = getStaffFileStats(buffer);
-          stats = `${s.activeEmployees} موظف نشط • ${s.dateFrom} → ${s.dateTo}`;
-        } else if (result.baseType === 'log') {
-          const s = getLogFileStats(buffer);
-          stats = `${s.newBookings} حجز جديد`;
-        } else if (result.baseType === 'report') {
-          const s = getReportFileStats(buffer);
-          stats = `${s.bookings} حجز`;
-        } else if (result.baseType === 'units') {
-          const s = getUnitsFileStats(buffer);
-          stats = `${s.bookings} حجز • ${s.units} وحدة`;
-        } else if (result.baseType === 'actualDates') {
-          const s = getActualDatesFileStats(buffer);
-          stats = `${s.rows} صف`;
+      }
+      for (const key of Object.keys(savedConfig.branches)) {
+        if (!mergedConfig.branches[key]) {
+          mergedConfig = {
+            ...mergedConfig,
+            branches: {
+              ...mergedConfig.branches,
+              [key]: { ...savedConfig.branches[key] },
+            },
+          };
         }
-
-        newSlots[result.slotKey] = {
-          slotKey: result.slotKey,
-          baseType: result.baseType,
-          branch: result.branch,
-          file,
-          buffer,
-          stats,
-        };
-      } catch {
-        newUnknown.push(file.name);
       }
-    }
 
-    if (rejectionMessages.length > 0) {
-      alert(rejectionMessages.length === 1 ? rejectionMessages[0] : rejectionMessages.join('\n'));
-    }
-
-    // Preserve user's "اخفاء الفرع" (excluded) from saved config so upload doesn't overwrite it
-    // Also keep branches that exist only in savedConfig (e.g. "الحفر" مستبعد) so the option stays visible in Settings
-    const savedConfig = loadConfig();
-    let mergedConfig = updatedConfig;
-    for (const key of Object.keys(updatedConfig.branches)) {
-      if (savedConfig.branches[key]?.excluded === true) {
-        mergedConfig = {
-          ...mergedConfig,
-          branches: {
-            ...mergedConfig.branches,
-            [key]: { ...mergedConfig.branches[key], excluded: true },
-          },
-        };
+      if (mergedConfig !== config) {
+        setConfig(mergedConfig);
+        saveConfig(mergedConfig);
+        import('./firebase').then(({ saveConfigToFirebase }) => saveConfigToFirebase(mergedConfig).catch(() => { }));
       }
-    }
-    for (const key of Object.keys(savedConfig.branches)) {
-      if (!mergedConfig.branches[key]) {
-        mergedConfig = {
-          ...mergedConfig,
-          branches: {
-            ...mergedConfig.branches,
-            [key]: { ...savedConfig.branches[key] },
-          },
-        };
-      }
-    }
-
-    if (mergedConfig !== config) {
-      setConfig(mergedConfig);
-      saveConfig(mergedConfig);
-      import('./firebase').then(({ saveConfigToFirebase }) => saveConfigToFirebase(mergedConfig).catch(() => {}));
-    }
-    setFileSlots(newSlots);
-    setUnknownFiles(newUnknown);
-    setDetecting(false);
+      setFileSlots(newSlots);
+      setUnknownFiles(newUnknown);
+      setDetecting(false);
     } catch (err) {
       setDetecting(false);
       alert('حدث خطأ أثناء معالجة الملفات:\n' + (err instanceof Error ? err.message : String(err)));
@@ -997,7 +997,7 @@ export default function App() {
   const handleSaveConfig = useCallback((newConfig: AppConfig) => {
     setConfig(newConfig);
     saveConfig(newConfig);
-    import('./firebase').then(({ saveConfigToFirebase }) => saveConfigToFirebase(newConfig).catch(() => {}));
+    import('./firebase').then(({ saveConfigToFirebase }) => saveConfigToFirebase(newConfig).catch(() => { }));
     setShowSettings(false);
     // If already analyzed, trigger automatic re-analysis with new config
     if (analyzed && canAnalyze) {
@@ -1115,7 +1115,7 @@ export default function App() {
           <p className="text-sm text-[var(--adora-text-secondary)] leading-7">
             مفتاح الدخول غير صحيح. تأكد من الرابط أو أدخل المفتاح من الصفحة الرئيسية.
           </p>
-          <a href={typeof window !== 'undefined' ? window.location.origin + '/' : '/'} className="mt-4 inline-block text-[var(--adora-accent)] hover:opacity-90 text-sm font-semibold">← العودة لصفحة الدخول</a>
+          <a href="./" className="mt-4 inline-block text-[var(--adora-accent)] hover:opacity-90 text-sm font-semibold">← العودة لصفحة الدخول</a>
         </div>
       </div>
     ) : authState === 'checking' ? (
@@ -1130,28 +1130,28 @@ export default function App() {
       <>
         <ThemeToggle className="fixed top-4 left-4 z-[100]" />
         <AdminLoginForm
-        loginEmail={loginEmail}
-        onLoginEmailChange={enforceStrictEmailInput}
-        loginPassword={loginPassword}
-        setLoginPassword={setLoginPassword}
-        showPassword={showPassword}
-        setShowPassword={setShowPassword}
-        loginEmailWarning={loginEmailWarning}
-        authError={authError}
-        loginLoading={loginLoading}
-        onSubmit={handleLogin}
-        showReset={showReset}
-        onOpenReset={() => {
-          setShowReset((s) => !s);
-          setResetStatus('');
-          setResetEmail(loginEmail);
-          setResetEmailWarning('');
-        }}
-        resetEmail={resetEmail}
-        resetEmailWarning={resetEmailWarning}
-        resetStatus={resetStatus}
-        onResetPassword={handleResetPassword}
-      />
+          loginEmail={loginEmail}
+          onLoginEmailChange={enforceStrictEmailInput}
+          loginPassword={loginPassword}
+          setLoginPassword={setLoginPassword}
+          showPassword={showPassword}
+          setShowPassword={setShowPassword}
+          loginEmailWarning={loginEmailWarning}
+          authError={authError}
+          loginLoading={loginLoading}
+          onSubmit={handleLogin}
+          showReset={showReset}
+          onOpenReset={() => {
+            setShowReset((s) => !s);
+            setResetStatus('');
+            setResetEmail(loginEmail);
+            setResetEmailWarning('');
+          }}
+          resetEmail={resetEmail}
+          resetEmailWarning={resetEmailWarning}
+          resetStatus={resetStatus}
+          onResetPassword={handleResetPassword}
+        />
       </>
     ) : (adminEntryMode === 'checking' || adminEntryMode === 'redirecting') ? (
       <div dir="rtl" className="min-h-screen text-[var(--adora-text)] relative flex items-center justify-center px-4">
@@ -1179,727 +1179,719 @@ export default function App() {
         </div>
       </div>
     ) : (
-    <div dir="rtl" className="min-h-screen text-[var(--adora-text)] relative">
-      {/* Ambient background particles */}
-      <div className="particles-bg" />
-      {/* Loading overlay */}
-      {analyzing && (
-        <div className="fixed inset-0 bg-[var(--adora-overlay-bg)] backdrop-blur-md z-100 flex items-center justify-center">
-          <div className="relative">
-            {/* Ambient glow */}
-            <div className="absolute -inset-20 bg-cyan-500/10 rounded-full blur-3xl animate-pulse pointer-events-none" />
-            <div className="absolute -inset-14 bg-teal-500/5 rounded-full blur-2xl pointer-events-none" />
+      <div dir="rtl" className="min-h-screen text-[var(--adora-text)] relative">
+        {/* Ambient background particles */}
+        <div className="particles-bg" />
+        {/* Loading overlay */}
+        {analyzing && (
+          <div className="fixed inset-0 bg-[var(--adora-overlay-bg)] backdrop-blur-md z-100 flex items-center justify-center">
+            <div className="relative">
+              {/* Ambient glow */}
+              <div className="absolute -inset-20 bg-cyan-500/10 rounded-full blur-3xl animate-pulse pointer-events-none" />
+              <div className="absolute -inset-14 bg-teal-500/5 rounded-full blur-2xl pointer-events-none" />
 
-            <div className="relative bg-[var(--adora-modal-bg)] backdrop-blur-xl border border-[var(--adora-border)] rounded-3xl px-12 py-10 text-center modal-no-side-shadow max-w-sm mx-auto">
-              {/* Animated icon */}
-              <div className="relative w-20 h-20 mx-auto mb-6">
-                {/* Spinning ring */}
-                <div className="absolute inset-0 rounded-full border-2 border-transparent border-t-cyan-400 border-r-cyan-400/40 animate-spin" />
-                <div className="absolute inset-1.5 rounded-full border-2 border-transparent border-b-teal-400/60 border-l-teal-400/20 animate-spin" style={{ animationDirection: 'reverse', animationDuration: '1.5s' }} />
-                {/* Center icon */}
-                <div className="absolute inset-0 flex items-center justify-center">
-                  <BarChart3 className="w-8 h-8 text-[var(--adora-accent)] animate-pulse" />
+              <div className="relative bg-[var(--adora-modal-bg)] backdrop-blur-xl border border-[var(--adora-border)] rounded-3xl px-12 py-10 text-center modal-no-side-shadow max-w-sm mx-auto">
+                {/* Animated icon */}
+                <div className="relative w-20 h-20 mx-auto mb-6">
+                  {/* Spinning ring */}
+                  <div className="absolute inset-0 rounded-full border-2 border-transparent border-t-cyan-400 border-r-cyan-400/40 animate-spin" />
+                  <div className="absolute inset-1.5 rounded-full border-2 border-transparent border-b-teal-400/60 border-l-teal-400/20 animate-spin" style={{ animationDirection: 'reverse', animationDuration: '1.5s' }} />
+                  {/* Center icon */}
+                  <div className="absolute inset-0 flex items-center justify-center">
+                    <BarChart3 className="w-8 h-8 text-[var(--adora-accent)] animate-pulse" />
+                  </div>
+                </div>
+
+                <h3 className="text-lg font-bold text-[var(--adora-text)] mb-2">جاري التحليل</h3>
+                <p className="text-[13px] text-[var(--adora-text-secondary)] mb-6 leading-relaxed">
+                  المرجع: تقرير إحصائيات الموظفين<br />
+                  <span className="text-[var(--adora-text-secondary)]">الفلتر: تاريخ الإنشاء + الدخول</span>
+                </p>
+
+                {/* Progress bar */}
+                <div className="w-full h-1.5 bg-slate-800/80 rounded-full overflow-hidden">
+                  <div className="h-full bg-gradient-to-r from-cyan-500 via-teal-400 to-cyan-500 rounded-full transition-all ease-out bg-[length:200%_100%] animate-[shimmer_1.5s_ease-in-out_infinite]"
+                    style={{ width: loadProgress ? '100%' : '0%', transitionDuration: '2200ms' }} />
+                </div>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* Header — unified with Rewards design (non-sticky) */}
+        <header className="px-3 sm:px-5 pt-3 sm:pt-4 animate-in">
+          <div className="max-w-[1440px] mx-auto glass rounded-2xl sm:rounded-[30px] md:rounded-[40px] border-r-4 sm:border-r-6 md:border-r-8 border-[var(--adora-accent)] p-4 sm:p-6 md:p-8">
+            <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 sm:gap-5">
+              <ThemeToggle className="flex-shrink-0 self-center order-first sm:order-first" />
+              {/* Right side (RTL): Logo + Title */}
+              <div className="flex items-center gap-3 sm:gap-4 md:gap-5 w-full sm:w-auto">
+                <div className="flex-shrink-0">
+                  <img src="/rewards/unnamed.png" alt="إليت"
+                    className="w-12 h-12 sm:w-16 sm:h-16 md:w-20 md:h-20 object-contain rounded-lg"
+                    style={{ maxWidth: '80px', maxHeight: '80px' }}
+                    onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; }}
+                  />
+                </div>
+                <div className="flex-1 min-w-0">
+                  <h1 className="text-[var(--adora-text)] truncate typography-h1">
+                    مكافآت فريق عمل فندق إليت
+                  </h1>
+                  <p className="header-sub text-[var(--adora-text-secondary)] mt-1 sm:mt-2 font-semibold">
+                    {analyzed && dateRange
+                      ? <>الفترة: <span className="text-[var(--adora-accent)] font-bold">{dateRange.from} → {dateRange.to}</span></>
+                      : 'تحليل الحجوزات — المرجع: تقرير إحصائيات الموظفين'
+                    }
+                  </p>
                 </div>
               </div>
 
-              <h3 className="text-lg font-bold text-[var(--adora-text)] mb-2">جاري التحليل</h3>
-              <p className="text-[13px] text-[var(--adora-text-secondary)] mb-6 leading-relaxed">
-                المرجع: تقرير إحصائيات الموظفين<br />
-                <span className="text-[var(--adora-text-secondary)]">الفلتر: تاريخ الإنشاء + الدخول</span>
-              </p>
-
-              {/* Progress bar */}
-              <div className="w-full h-1.5 bg-slate-800/80 rounded-full overflow-hidden">
-                <div className="h-full bg-gradient-to-r from-cyan-500 via-teal-400 to-cyan-500 rounded-full transition-all ease-out bg-[length:200%_100%] animate-[shimmer_1.5s_ease-in-out_infinite]"
-                  style={{ width: loadProgress ? '100%' : '0%', transitionDuration: '2200ms' }} />
-              </div>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* Header — unified with Rewards design (non-sticky) */}
-      <header className="px-3 sm:px-5 pt-3 sm:pt-4 animate-in">
-        <div className="max-w-[1440px] mx-auto glass rounded-2xl sm:rounded-[30px] md:rounded-[40px] border-r-4 sm:border-r-6 md:border-r-8 border-[var(--adora-accent)] p-4 sm:p-6 md:p-8">
-          <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 sm:gap-5">
-            <ThemeToggle className="flex-shrink-0 self-center order-first sm:order-first" />
-            {/* Right side (RTL): Logo + Title */}
-            <div className="flex items-center gap-3 sm:gap-4 md:gap-5 w-full sm:w-auto">
-              <div className="flex-shrink-0">
-                <img src="/rewards/unnamed.png" alt="إليت"
-                  className="w-12 h-12 sm:w-16 sm:h-16 md:w-20 md:h-20 object-contain rounded-lg"
-                  style={{ maxWidth: '80px', maxHeight: '80px' }}
-                  onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; }}
-                />
-              </div>
-              <div className="flex-1 min-w-0">
-                <h1 className="text-[var(--adora-text)] truncate typography-h1">
-                  مكافآت فريق عمل فندق إليت
-                </h1>
-                <p className="header-sub text-[var(--adora-text-secondary)] mt-1 sm:mt-2 font-semibold">
-                  {analyzed && dateRange
-                    ? <>الفترة: <span className="text-[var(--adora-accent)] font-bold">{dateRange.from} → {dateRange.to}</span></>
-                    : 'تحليل الحجوزات — المرجع: تقرير إحصائيات الموظفين'
-                  }
-                </p>
-              </div>
-            </div>
-
-            {/* أزرار الترويسة: مصدر واحد من app/shared/headerButtonsConfig.json — نفس المصدر المستخدم في صفحة المكافآت */}
-            <div className="flex flex-wrap gap-1.5 sm:gap-2 w-full sm:w-auto justify-end items-center action-header-btns-container">
-              {HEADER_BUTTONS.filter((btn) => {
-                if (btn.hidden) return false;
-                if (btn.context !== 'analysis' && btn.context !== 'both') return false;
-                if (['methodology', 'ratingExplanation', 'conditions'].includes(btn.id) && !analyzed) return false;
-                return true;
-              }).map((btn) => {
-                const Icon = btn.iconId ? HEADER_ICON_MAP[btn.iconId] : null;
-                const onClick = btn.actionType === 'settings' ? () => setShowSettings(true)
-                  : btn.actionType === 'logout' ? handleLogout
-                  : btn.actionType === 'methodology' ? () => setShowMethodology(true)
-                  : btn.actionType === 'ratingExplanation' ? () => setShowRatingExplanation(true)
-                  : btn.actionType === 'conditions' ? () => setShowConditions(true)
-                  : undefined;
-                return (
-                  <button key={btn.id} onClick={onClick} className={HEADER_VARIANT_CLASS[btn.variant]} title={btn.title ?? undefined}>
-                    {Icon && <Icon className="w-4 h-4 shrink-0" />}
-                    <span className="hidden sm:inline">{btn.label}</span>
-                    <span className="sm:hidden">{btn.labelShort ?? btn.label}</span>
-                  </button>
-                );
-              })}
-              <button
-                type="button"
-                onClick={() => attendanceInputRef.current?.click()}
-                className="action-header-btn action-header-btn--cyan"
-                title="رفع تقارير حضور فريق العمل (TeamAttendanceReport.xls) وعرض النتيجة"
-              >
-                <Upload className="w-4 h-4 shrink-0" />
-                <span className="hidden sm:inline">رفع تقارير الحضور</span>
-                <span className="sm:hidden">الحضور</span>
-              </button>
-              <input
-                ref={attendanceInputRef}
-                type="file"
-                accept=".xls,.xlsx"
-                multiple
-                aria-label="رفع تقارير الحضور"
-                className="sr-only"
-                onChange={(e) => {
-                  const list = e.target.files;
-                  if (list && list.length > 0) handleAttendanceFiles(list);
-                }}
-              />
-            </div>
-          </div>
-        </div>
-      </header>
-
-      <main className="max-w-[1440px] mx-auto px-3 sm:px-5 md:px-6 py-6 sm:py-8 space-y-6 sm:space-y-8 relative z-10">
-        {/* ===== Upload Section ===== */}
-        {!analyzed && !analyzing && (
-          <>
-            {/* Unified Dropzone */}
-            <section className="space-y-6">
-              <div
-                role="button"
-                tabIndex={0}
-                onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); fileInputRef.current?.click(); } }}
-                onDragOver={(e) => { e.preventDefault(); }}
-                onDrop={(e) => {
-                  e.preventDefault();
-                  if (e.dataTransfer.files.length > 0) handleFiles(e.dataTransfer.files);
-                }}
-                onClick={(e) => {
-                  if ((e.target as HTMLElement).closest('button')) return;
-                  fileInputRef.current?.click();
-                }}
-                className={`
-                  relative flex flex-col items-center justify-center gap-4 rounded-2xl sm:rounded-[28px] border-2 border-dashed
-                  cursor-pointer transition-all duration-300 p-10 min-h-[220px] glass
-                  ${filledCount > 0
-                    ? 'border-[var(--adora-focus-border)] hover:border-[var(--adora-accent)]'
-                    : 'border-white/15 hover:border-[var(--adora-focus-border)]'
-                  }
-                `}
-              >
-                {detecting ? (
-                  <div className="flex flex-col items-center gap-3">
-                    <div className="w-12 h-12 border-4 border-[var(--adora-focus-border)] border-t-[var(--adora-accent)] rounded-full animate-spin" />
-                    <p className="text-turquoise font-semibold">جاري تحليل الملفات...</p>
-                  </div>
-                ) : (
-                  <>
-                    <div className="p-4 rounded-2xl bg-[var(--adora-hover-bg)]">
-                      <FolderUp className="w-10 h-10 text-turquoise" />
-                    </div>
-                    <div className="text-center space-y-1.5">
-                      <p className="text-lg font-bold text-[var(--adora-text)]">ارفع كل الملفات دفعة واحدة</p>
-                      <p className="text-sm text-[var(--adora-text-secondary)]">اسحب الملفات هنا أو اضغط لاختيارها — التعرف تلقائي من المحتوى</p>
-                      <p className="text-sm text-[var(--adora-text-secondary)]">
-                        <span className="text-[var(--adora-accent)]">مطلوب:</span> تقرير إحصائيات الموظفين (واحد لجميع الفروع) • تقرير التواريخ الفعلية للحجوزات (ملف لكل فرع) • تقرير حجوزات العملاء (ملف لكل فرع)
-                      </p>
-                      <p className="text-xs text-[var(--adora-text-secondary)]/80">
-                        اختياري: سجل حركات النظام • تقرير وحدات الحجوزات (ملف لكل فرع)
-                      </p>
-                    </div>
-                    <div className="flex items-center gap-2 text-[var(--adora-text-secondary)] text-sm mt-1">
-                      <Upload className="w-3.5 h-3.5" /> xlsx / xls
-                    </div>
-                    <button
-                      type="button"
-                      onClick={(e) => { e.preventDefault(); e.stopPropagation(); fileInputRef.current?.click(); }}
-                      className="mt-2 px-5 py-2.5 rounded-xl bg-[var(--adora-accent)] text-white font-semibold text-sm hover:opacity-90 transition-opacity pointer-events-auto z-10 relative"
-                    >
-                      اختر ملفات
+              {/* أزرار الترويسة: مصدر واحد من app/shared/headerButtonsConfig.json — نفس المصدر المستخدم في صفحة المكافآت */}
+              <div className="flex flex-wrap gap-1.5 sm:gap-2 w-full sm:w-auto justify-end items-center action-header-btns-container">
+                {HEADER_BUTTONS.filter((btn) => {
+                  if (btn.hidden) return false;
+                  if (btn.context !== 'analysis' && btn.context !== 'both') return false;
+                  if (['methodology', 'ratingExplanation', 'conditions'].includes(btn.id) && !analyzed) return false;
+                  return true;
+                }).map((btn) => {
+                  const Icon = btn.iconId ? HEADER_ICON_MAP[btn.iconId] : null;
+                  const onClick = btn.actionType === 'settings' ? () => setShowSettings(true)
+                    : btn.actionType === 'logout' ? handleLogout
+                      : btn.actionType === 'methodology' ? () => setShowMethodology(true)
+                        : btn.actionType === 'ratingExplanation' ? () => setShowRatingExplanation(true)
+                          : btn.actionType === 'conditions' ? () => setShowConditions(true)
+                            : undefined;
+                  return (
+                    <button key={btn.id} onClick={onClick} className={HEADER_VARIANT_CLASS[btn.variant]} title={btn.title ?? undefined}>
+                      {Icon && <Icon className="w-4 h-4 shrink-0" />}
+                      <span className="hidden sm:inline">{btn.label}</span>
+                      <span className="sm:hidden">{btn.labelShort ?? btn.label}</span>
                     </button>
-                  </>
-                )}
+                  );
+                })}
+                <button
+                  type="button"
+                  onClick={() => attendanceInputRef.current?.click()}
+                  className="action-header-btn action-header-btn--cyan"
+                  title="رفع تقارير حضور فريق العمل (TeamAttendanceReport.xls) وعرض النتيجة"
+                >
+                  <Upload className="w-4 h-4 shrink-0" />
+                  <span className="hidden sm:inline">رفع تقارير الحضور</span>
+                  <span className="sm:hidden">الحضور</span>
+                </button>
                 <input
-                  ref={fileInputRef}
+                  ref={attendanceInputRef}
                   type="file"
-                  accept=".xlsx,.xls"
+                  accept=".xls,.xlsx"
                   multiple
-                  aria-label="اختر ملفات Excel"
-                  style={{ position: 'absolute', inset: 0, width: '100%', height: '100%', opacity: 0, cursor: 'pointer', pointerEvents: 'auto', zIndex: 2 }}
+                  aria-label="رفع تقارير الحضور"
+                  className="sr-only"
                   onChange={(e) => {
-                    const target = e.target;
-                    const list = target.files;
-                    if (list && list.length > 0) {
-                      handleFiles(list).catch((err) => {
-                        setDetecting(false);
-                        alert('خطأ في الرفع: ' + (err instanceof Error ? err.message : String(err)));
-                      });
-                    }
-                    target.value = '';
+                    const list = e.target.files;
+                    if (list && list.length > 0) handleAttendanceFiles(list);
                   }}
                 />
               </div>
+            </div>
+          </div>
+        </header>
 
-              {/* Detected Files Summary — collapsible */}
-              {filledCount > 0 && (
-                <div className={`rounded-2xl overflow-hidden border transition-colors ${
-                  isAllFilesFilled ? 'bg-emerald-950/25 border-emerald-500/50' : 'bg-[var(--adora-input-bg)] border-[var(--adora-border)]'
-                }`}>
-                  <button
-                    type="button"
-                    onClick={() => isAllFilesFilled && setFilesSectionCollapsed((c) => !c)}
-                    className={`w-full flex items-center justify-between gap-2 p-4 text-right transition-colors ${
-                      isAllFilesFilled ? 'hover:bg-emerald-950/30' : 'hover:bg-slate-700/30'
-                }`}
-                  >
-                    <h3 className="text-sm font-semibold flex items-center gap-2">
-                      {isAllFilesFilled ? (
-                        <CircleCheck className="w-4 h-4 text-emerald-400 shrink-0" />
-                      ) : (
-                        <FileSpreadsheet className="w-4 h-4 text-cyan-400 shrink-0" />
-                      )}
-                      <span className={isAllFilesFilled ? 'text-[var(--adora-success)]' : 'text-[var(--adora-text)]'}>
-                        الملفات المكتشفة ({filledCount}/{displaySlots.length})
-                      </span>
-                      {isAllFilesFilled && (
-                        <span className="text-[14px] font-bold text-[var(--adora-success)] bg-emerald-500/20 border border-emerald-500/40 rounded-full px-2 py-0.5">
-                          تم بنجاح 100%
-                        </span>
-                      )}
-                    </h3>
-                    <span className="flex items-center gap-2 shrink-0">
-                      <span
-                        role="button"
-                        tabIndex={0}
-                        onClick={(e) => { e.stopPropagation(); clearAll(); }}
-                        onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); e.stopPropagation(); clearAll(); } }}
-                        className="flex items-center gap-1 text-sm text-[var(--adora-error)]/70 hover:text-[var(--adora-error)] transition-colors cursor-pointer"
-                      >
-                        <Trash2 className="w-3 h-3" /> مسح الكل
-                      </span>
-                      {isAllFilesFilled && (filesSectionCollapsed ? <ChevronDown className="w-4 h-4 text-[var(--adora-text-secondary)]" /> : <ChevronUp className="w-4 h-4 text-[var(--adora-text-secondary)]" />)}
-                    </span>
-                  </button>
-
-                  {(!filesSectionCollapsed || !isAllFilesFilled) && (
-                  <div className="px-5 pb-5 pt-0 space-y-3">
-                  <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2">
-                    {displaySlots.map((ds) => {
-                      const slot = fileSlots[ds.key];
-                      const { color, bg } = getFileTypeIcon(ds.baseType);
-                      const label = getFileTypeLabel(ds.baseType, ds.branch);
-
-                      return (
-                        <div key={ds.key} className={`flex items-center gap-3 px-3 py-2.5 rounded-xl border transition-all ${
-                          slot
-                            ? 'bg-emerald-950/20 border-emerald-500/30'
-                            : ds.required
-                            ? 'bg-red-950/10 border-red-500/20'
-                            : 'bg-[var(--adora-input-bg)] border-[var(--adora-border)]'
-                        }`}>
-                          <div className={`p-1.5 rounded-lg ${slot ? 'bg-emerald-500/20' : bg}`}>
-                            {slot
-                              ? <CircleCheck className="w-4 h-4 text-emerald-400" />
-                              : <CircleDashed className={`w-4 h-4 ${ds.required ? 'text-[var(--adora-error)]/70' : 'text-slate-500'}`} />
-                            }
-                          </div>
-                          <div className="flex-1 min-w-0">
-                            <p className={`text-sm font-medium truncate ${slot ? 'text-[var(--adora-success)]' : color}`}>
-                              {label}
-                            </p>
-                            {slot ? (
-                              <p className="text-[14px] text-emerald-400/80 truncate">{slot.file?.name} — {slot.stats}</p>
-                            ) : (
-                              <p className="text-[14px] text-[var(--adora-text-secondary)]">
-                                {ds.required ? 'مطلوب' : 'اختياري (إثراء)'}
-                              </p>
-                            )}
-                          </div>
-                          {slot && (
-                            <button onClick={() => removeSlot(ds.key)} className="p-1 text-[var(--adora-text-secondary)] hover:text-[var(--adora-error)] transition-colors">
-                              <X className="w-3.5 h-3.5" />
-                            </button>
-                          )}
-                        </div>
-                      );
-                    })}
-                  </div>
-
-                  {unknownFiles.length > 0 && (
-                    <div className="flex items-center gap-2 text-sm text-amber-400/80 bg-amber-500/5 px-3 py-2 rounded-lg">
-                      <AlertTriangle className="w-3.5 h-3.5 shrink-0" />
-                      <span>ملفات لم يتم التعرف عليها: {unknownFiles.join('، ')}</span>
+        <main className="max-w-[1440px] mx-auto px-3 sm:px-5 md:px-6 py-6 sm:py-8 space-y-6 sm:space-y-8 relative z-10">
+          {/* ===== Upload Section ===== */}
+          {!analyzed && !analyzing && (
+            <>
+              {/* Unified Dropzone */}
+              <section className="space-y-6">
+                <div
+                  role="button"
+                  tabIndex={0}
+                  onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); fileInputRef.current?.click(); } }}
+                  onDragOver={(e) => { e.preventDefault(); }}
+                  onDrop={(e) => {
+                    e.preventDefault();
+                    if (e.dataTransfer.files.length > 0) handleFiles(e.dataTransfer.files);
+                  }}
+                  onClick={(e) => {
+                    if ((e.target as HTMLElement).closest('button')) return;
+                    fileInputRef.current?.click();
+                  }}
+                  className={`
+                  relative flex flex-col items-center justify-center gap-4 rounded-2xl sm:rounded-[28px] border-2 border-dashed
+                  cursor-pointer transition-all duration-300 p-10 min-h-[220px] glass
+                  ${filledCount > 0
+                      ? 'border-[var(--adora-focus-border)] hover:border-[var(--adora-accent)]'
+                      : 'border-white/15 hover:border-[var(--adora-focus-border)]'
+                    }
+                `}
+                >
+                  {detecting ? (
+                    <div className="flex flex-col items-center gap-3">
+                      <div className="w-12 h-12 border-4 border-[var(--adora-focus-border)] border-t-[var(--adora-accent)] rounded-full animate-spin" />
+                      <p className="text-turquoise font-semibold">جاري تحليل الملفات...</p>
                     </div>
+                  ) : (
+                    <>
+                      <div className="p-4 rounded-2xl bg-[var(--adora-hover-bg)]">
+                        <FolderUp className="w-10 h-10 text-turquoise" />
+                      </div>
+                      <div className="text-center space-y-1.5">
+                        <p className="text-lg font-bold text-[var(--adora-text)]">ارفع كل الملفات دفعة واحدة</p>
+                        <p className="text-sm text-[var(--adora-text-secondary)]">اسحب الملفات هنا أو اضغط لاختيارها — التعرف تلقائي من المحتوى</p>
+                        <p className="text-sm text-[var(--adora-text-secondary)]">
+                          <span className="text-[var(--adora-accent)]">مطلوب:</span> تقرير إحصائيات الموظفين (واحد لجميع الفروع) • تقرير التواريخ الفعلية للحجوزات (ملف لكل فرع) • تقرير حجوزات العملاء (ملف لكل فرع)
+                        </p>
+                        <p className="text-xs text-[var(--adora-text-secondary)]/80">
+                          اختياري: سجل حركات النظام • تقرير وحدات الحجوزات (ملف لكل فرع)
+                        </p>
+                      </div>
+                      <div className="flex items-center gap-2 text-[var(--adora-text-secondary)] text-sm mt-1">
+                        <Upload className="w-3.5 h-3.5" /> xlsx / xls
+                      </div>
+                      <button
+                        type="button"
+                        onClick={(e) => { e.preventDefault(); e.stopPropagation(); fileInputRef.current?.click(); }}
+                        className="mt-2 px-5 py-2.5 rounded-xl bg-[var(--adora-accent)] text-white font-semibold text-sm hover:opacity-90 transition-opacity pointer-events-auto z-10 relative"
+                      >
+                        اختر ملفات
+                      </button>
+                    </>
                   )}
-                  </div>
-                  )}
+                  <input
+                    ref={fileInputRef}
+                    type="file"
+                    accept=".xlsx,.xls"
+                    multiple
+                    aria-label="اختر ملفات Excel"
+                    style={{ position: 'absolute', inset: 0, width: '100%', height: '100%', opacity: 0, cursor: 'pointer', pointerEvents: 'auto', zIndex: 2 }}
+                    onChange={(e) => {
+                      const target = e.target;
+                      const list = target.files;
+                      if (list && list.length > 0) {
+                        handleFiles(list).catch((err) => {
+                          setDetecting(false);
+                          alert('خطأ في الرفع: ' + (err instanceof Error ? err.message : String(err)));
+                        });
+                      }
+                      target.value = '';
+                    }}
+                  />
                 </div>
-              )}
 
-              {/* Analysis Button */}
-              <div className="flex flex-col items-center gap-3">
-                <div className="flex items-center gap-4">
-                  <button onClick={startAnalysis} disabled={!canAnalyze}
-                    className="group flex items-center gap-3 px-12 py-4 bg-teal-500 hover:bg-teal-600
+                {/* Detected Files Summary — collapsible */}
+                {filledCount > 0 && (
+                  <div className={`rounded-2xl overflow-hidden border transition-colors ${isAllFilesFilled ? 'bg-emerald-950/25 border-emerald-500/50' : 'bg-[var(--adora-input-bg)] border-[var(--adora-border)]'
+                    }`}>
+                    <button
+                      type="button"
+                      onClick={() => isAllFilesFilled && setFilesSectionCollapsed((c) => !c)}
+                      className={`w-full flex items-center justify-between gap-2 p-4 text-right transition-colors ${isAllFilesFilled ? 'hover:bg-emerald-950/30' : 'hover:bg-slate-700/30'
+                        }`}
+                    >
+                      <h3 className="text-sm font-semibold flex items-center gap-2">
+                        {isAllFilesFilled ? (
+                          <CircleCheck className="w-4 h-4 text-emerald-400 shrink-0" />
+                        ) : (
+                          <FileSpreadsheet className="w-4 h-4 text-cyan-400 shrink-0" />
+                        )}
+                        <span className={isAllFilesFilled ? 'text-[var(--adora-success)]' : 'text-[var(--adora-text)]'}>
+                          الملفات المكتشفة ({filledCount}/{displaySlots.length})
+                        </span>
+                        {isAllFilesFilled && (
+                          <span className="text-[14px] font-bold text-[var(--adora-success)] bg-emerald-500/20 border border-emerald-500/40 rounded-full px-2 py-0.5">
+                            تم بنجاح 100%
+                          </span>
+                        )}
+                      </h3>
+                      <span className="flex items-center gap-2 shrink-0">
+                        <span
+                          role="button"
+                          tabIndex={0}
+                          onClick={(e) => { e.stopPropagation(); clearAll(); }}
+                          onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); e.stopPropagation(); clearAll(); } }}
+                          className="flex items-center gap-1 text-sm text-[var(--adora-error)]/70 hover:text-[var(--adora-error)] transition-colors cursor-pointer"
+                        >
+                          <Trash2 className="w-3 h-3" /> مسح الكل
+                        </span>
+                        {isAllFilesFilled && (filesSectionCollapsed ? <ChevronDown className="w-4 h-4 text-[var(--adora-text-secondary)]" /> : <ChevronUp className="w-4 h-4 text-[var(--adora-text-secondary)]" />)}
+                      </span>
+                    </button>
+
+                    {(!filesSectionCollapsed || !isAllFilesFilled) && (
+                      <div className="px-5 pb-5 pt-0 space-y-3">
+                        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2">
+                          {displaySlots.map((ds) => {
+                            const slot = fileSlots[ds.key];
+                            const { color, bg } = getFileTypeIcon(ds.baseType);
+                            const label = getFileTypeLabel(ds.baseType, ds.branch);
+
+                            return (
+                              <div key={ds.key} className={`flex items-center gap-3 px-3 py-2.5 rounded-xl border transition-all ${slot
+                                ? 'bg-emerald-950/20 border-emerald-500/30'
+                                : ds.required
+                                  ? 'bg-red-950/10 border-red-500/20'
+                                  : 'bg-[var(--adora-input-bg)] border-[var(--adora-border)]'
+                                }`}>
+                                <div className={`p-1.5 rounded-lg ${slot ? 'bg-emerald-500/20' : bg}`}>
+                                  {slot
+                                    ? <CircleCheck className="w-4 h-4 text-emerald-400" />
+                                    : <CircleDashed className={`w-4 h-4 ${ds.required ? 'text-[var(--adora-error)]/70' : 'text-slate-500'}`} />
+                                  }
+                                </div>
+                                <div className="flex-1 min-w-0">
+                                  <p className={`text-sm font-medium truncate ${slot ? 'text-[var(--adora-success)]' : color}`}>
+                                    {label}
+                                  </p>
+                                  {slot ? (
+                                    <p className="text-[14px] text-emerald-400/80 truncate">{slot.file?.name} — {slot.stats}</p>
+                                  ) : (
+                                    <p className="text-[14px] text-[var(--adora-text-secondary)]">
+                                      {ds.required ? 'مطلوب' : 'اختياري (إثراء)'}
+                                    </p>
+                                  )}
+                                </div>
+                                {slot && (
+                                  <button onClick={() => removeSlot(ds.key)} className="p-1 text-[var(--adora-text-secondary)] hover:text-[var(--adora-error)] transition-colors">
+                                    <X className="w-3.5 h-3.5" />
+                                  </button>
+                                )}
+                              </div>
+                            );
+                          })}
+                        </div>
+
+                        {unknownFiles.length > 0 && (
+                          <div className="flex items-center gap-2 text-sm text-amber-400/80 bg-amber-500/5 px-3 py-2 rounded-lg">
+                            <AlertTriangle className="w-3.5 h-3.5 shrink-0" />
+                            <span>ملفات لم يتم التعرف عليها: {unknownFiles.join('، ')}</span>
+                          </div>
+                        )}
+                      </div>
+                    )}
+                  </div>
+                )}
+
+                {/* Analysis Button */}
+                <div className="flex flex-col items-center gap-3">
+                  <div className="flex items-center gap-4">
+                    <button onClick={startAnalysis} disabled={!canAnalyze}
+                      className="group flex items-center gap-3 px-12 py-4 bg-teal-500 hover:bg-teal-600
                                disabled:bg-slate-700 disabled:text-[var(--adora-text-secondary)]
                                text-white rounded-2xl font-bold text-lg shadow-lg shadow-teal-500/30
                                disabled:shadow-none transition-all duration-300
                                disabled:cursor-not-allowed active:scale-95">
-                    <Play className="w-6 h-6" /> بدء التحليل
-                  </button>
-                  {/* Show "view previous results" if data exists from localStorage */}
-                  {data.length > 0 && !analyzed && (
-                    <button onClick={() => setAnalyzed(true)}
-                      className="flex items-center gap-2 px-6 py-4 bg-[var(--adora-input-bg)] hover:bg-[var(--adora-hover-bg)]
+                      <Play className="w-6 h-6" /> بدء التحليل
+                    </button>
+                    {/* Show "view previous results" if data exists from localStorage */}
+                    {data.length > 0 && !analyzed && (
+                      <button onClick={() => setAnalyzed(true)}
+                        className="flex items-center gap-2 px-6 py-4 bg-[var(--adora-input-bg)] hover:bg-[var(--adora-hover-bg)]
                                  text-[var(--adora-text-secondary)] hover:text-[var(--adora-text)] rounded-2xl font-semibold text-sm
                                  border border-[var(--adora-border)] hover:border-[var(--adora-focus-border)]
                                  transition-all duration-300 active:scale-95">
-                      <BarChart3 className="w-5 h-5 text-turquoise" /> عرض النتائج السابقة
+                        <BarChart3 className="w-5 h-5 text-turquoise" /> عرض النتائج السابقة
+                      </button>
+                    )}
+                  </div>
+                  {!canAnalyze && filledCount === 0 && data.length === 0 && (
+                    <p className="text-sm text-[var(--adora-text-secondary)]">ارفع الملفات للبدء</p>
+                  )}
+                  {!canAnalyze && filledCount > 0 && !hasStaff && (
+                    <p className="text-sm text-[var(--adora-error)]/80">مطلوب: تقرير إحصائيات الموظفين</p>
+                  )}
+                  {!canAnalyze && hasStaff && !hasAnyReport && (
+                    <p className="text-sm text-[var(--adora-error)]/80">مطلوب: تقرير حجوزات العملاء لفرع واحد على الأقل</p>
+                  )}
+                </div>
+
+                {filledCount === 0 && (
+                  <div className="text-center py-6 text-[var(--adora-text-secondary)]">
+                    <FileSpreadsheet className="w-14 h-14 mx-auto mb-3 opacity-15" />
+                    <p className="text-sm">اسحب ملفات Excel هنا أو اضغط على المنطقة أعلاه</p>
+                  </div>
+                )}
+              </section>
+            </>
+          )}
+
+          {/* ===== Results ===== */}
+          {analyzed && !analyzing && (
+            <>
+              {/* Stats Cards */}
+              <section className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-3 animate-in">
+                <div className="glass rounded-2xl p-4 border-r-2 border-[var(--adora-focus-border)] hover:border-[var(--adora-accent)] transition-all duration-200">
+                  <p className="text-[15px] text-turquoise mb-1.5 font-semibold tracking-wide">مرجع الإحصائيات</p>
+                  <p className="text-2xl font-bold text-[var(--adora-accent)] tabular-nums">{staffTotal.toLocaleString()}</p>
+                  <p className="text-[14px] text-[var(--adora-text-secondary)] mt-1.5">{staffList.filter((s) => s.bookingCount > 0).length} موظف نشط</p>
+                </div>
+                <div className="glass rounded-2xl p-4 border-r-2 border-emerald-500/50 hover:border-emerald-500/80 transition-all duration-200">
+                  <p className="text-[15px] text-[var(--adora-success)] mb-1.5 font-semibold tracking-wide opacity-90">محسوب (مع تفاصيل)</p>
+                  <p className="text-2xl font-bold text-[var(--adora-success)] tabular-nums">{countedData.length.toLocaleString()}</p>
+                  <p className="text-[14px] text-[var(--adora-text-secondary)] mt-1.5">تغطية {coverage}%</p>
+                </div>
+                <div className="glass rounded-2xl p-4 border-r-2 border-amber-500/50 hover:border-amber-500/80 transition-all duration-200">
+                  <p className="text-[15px] text-[var(--adora-warning)] mb-1.5 font-semibold tracking-wide opacity-90">زيادة (مستبعد)</p>
+                  <p className="text-2xl font-bold text-[var(--adora-warning)] tabular-nums">{excessData.length}</p>
+                  <div className="flex flex-wrap gap-x-2 gap-y-0.5 mt-1.5">
+                    {excessByReason['لم يخرج'] > 0 && (
+                      <span className="text-[14px] text-[var(--adora-accent)]">🏨 {excessByReason['لم يخرج']} لم يخرج</span>
+                    )}
+                    {excessByReason['تجاوز العدد'] > 0 && (
+                      <span className="text-[14px] text-[var(--adora-warning)]">⚡ {excessByReason['تجاوز العدد']} تجاوز</span>
+                    )}
+                    {excessByReason['بدون صلاحية'] > 0 && (
+                      <span className="text-[14px] text-[var(--adora-warning)]">🚫 {excessByReason['بدون صلاحية']} بدون صلاحية</span>
+                    )}
+                    {excessData.length === 0 && <span className="text-[14px] text-[var(--adora-success)]">✓ مطابق</span>}
+                  </div>
+                </div>
+                <div className="glass rounded-2xl p-4 border-r-2 border-red-500/40 hover:border-red-500/70 transition-all duration-200">
+                  <p className="text-[15px] text-[var(--adora-error)] mb-1.5 font-semibold tracking-wide opacity-90">ناقص (بدون تفاصيل)</p>
+                  <p className="text-2xl font-bold text-[var(--adora-error)] tabular-nums">{Math.max(0, staffTotal - countedData.length)}</p>
+                  <p className="text-[14px] text-[var(--adora-text-secondary)] mt-1.5">الإحصائيات &gt; التقارير</p>
+                </div>
+                {/* Hidden: إجمالي الأسعار (محسوب) */}
+                <div className={`glass rounded-2xl p-4 border-r-2 transition-all duration-200 ${priceAlertData.length > 0 ? 'border-red-500/50 hover:border-red-500/80' : 'border-emerald-500/40 hover:border-emerald-500/70'
+                  }`}>
+                  <p className="text-[15px] text-[var(--adora-error)] mb-1.5 font-semibold flex items-center gap-1 tracking-wide opacity-90">
+                    <TrendingDown className="w-3 h-3" /> تنبيهات الأسعار
+                  </p>
+                  <p className={`text-2xl font-bold tabular-nums ${priceAlertData.length > 0 ? 'text-[var(--adora-error)]' : 'text-[var(--adora-success)]'}`}>
+                    {priceAlertData.length > 0 ? priceAlertData.length : '✓'}
+                  </p>
+                  <p className="text-[14px] text-[var(--adora-text-secondary)] mt-1.5">
+                    {priceAlertData.length > 0
+                      ? `نقص ${totalShortfall.toLocaleString('en-SA')} SAR`
+                      : 'لا توجد مخالفات سعرية'}
+                    {mergedCount > 0 && <span className="text-purple-400/60 mr-1"> • {mergedCount / 2} دمج</span>}
+                  </p>
+                </div>
+              </section>
+
+              {/* Employee Breakdown */}
+              <EmployeeBreakdown staffList={staffList} data={data} config={config} dateRange={dateRange} logCreationShiftCounts={logCreationShiftCounts} />
+
+              {/* Filters */}
+              <section className="glass rounded-2xl sm:rounded-[28px] p-5 space-y-4 neon-glow animate-in animate-delay-200">
+                <div className="flex items-center justify-between">
+                  <h2 className="text-sm font-semibold text-[var(--adora-text)] flex items-center gap-2">
+                    <Search className="w-4 h-4 text-turquoise" /> الجدول التفصيلي
+                  </h2>
+                  <div className="flex items-center gap-3">
+                    {hasFilters && (
+                      <button onClick={clearFilters} className="flex items-center gap-1 text-sm text-[var(--adora-error)] hover:opacity-90">
+                        <X className="w-3 h-3" /> مسح
+                      </button>
+                    )}
+                    <button onClick={() => { setAnalyzed(false); }}
+                      className="text-sm text-[var(--adora-text-secondary)] hover:text-[var(--adora-text)] transition-colors">
+                      ← رجوع للملفات
                     </button>
-                  )}
+                  </div>
                 </div>
-                {!canAnalyze && filledCount === 0 && data.length === 0 && (
-                  <p className="text-sm text-[var(--adora-text-secondary)]">ارفع الملفات للبدء</p>
-                )}
-                {!canAnalyze && filledCount > 0 && !hasStaff && (
-                  <p className="text-sm text-[var(--adora-error)]/80">مطلوب: تقرير إحصائيات الموظفين</p>
-                )}
-                {!canAnalyze && hasStaff && !hasAnyReport && (
-                  <p className="text-sm text-[var(--adora-error)]/80">مطلوب: تقرير حجوزات العملاء لفرع واحد على الأقل</p>
-                )}
-              </div>
 
-              {filledCount === 0 && (
-                <div className="text-center py-6 text-[var(--adora-text-secondary)]">
-                  <FileSpreadsheet className="w-14 h-14 mx-auto mb-3 opacity-15" />
-                  <p className="text-sm">اسحب ملفات Excel هنا أو اضغط على المنطقة أعلاه</p>
-                </div>
-              )}
-            </section>
-          </>
-        )}
-
-        {/* ===== Results ===== */}
-        {analyzed && !analyzing && (
-          <>
-            {/* Stats Cards */}
-            <section className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-3 animate-in">
-              <div className="glass rounded-2xl p-4 border-r-2 border-[var(--adora-focus-border)] hover:border-[var(--adora-accent)] transition-all duration-200">
-                <p className="text-[15px] text-turquoise mb-1.5 font-semibold tracking-wide">مرجع الإحصائيات</p>
-                <p className="text-2xl font-bold text-[var(--adora-accent)] tabular-nums">{staffTotal.toLocaleString()}</p>
-                <p className="text-[14px] text-[var(--adora-text-secondary)] mt-1.5">{staffList.filter((s) => s.bookingCount > 0).length} موظف نشط</p>
-              </div>
-              <div className="glass rounded-2xl p-4 border-r-2 border-emerald-500/50 hover:border-emerald-500/80 transition-all duration-200">
-                <p className="text-[15px] text-[var(--adora-success)] mb-1.5 font-semibold tracking-wide opacity-90">محسوب (مع تفاصيل)</p>
-                <p className="text-2xl font-bold text-[var(--adora-success)] tabular-nums">{countedData.length.toLocaleString()}</p>
-                <p className="text-[14px] text-[var(--adora-text-secondary)] mt-1.5">تغطية {coverage}%</p>
-              </div>
-              <div className="glass rounded-2xl p-4 border-r-2 border-amber-500/50 hover:border-amber-500/80 transition-all duration-200">
-                <p className="text-[15px] text-[var(--adora-warning)] mb-1.5 font-semibold tracking-wide opacity-90">زيادة (مستبعد)</p>
-                <p className="text-2xl font-bold text-[var(--adora-warning)] tabular-nums">{excessData.length}</p>
-                <div className="flex flex-wrap gap-x-2 gap-y-0.5 mt-1.5">
-                  {excessByReason['لم يخرج'] > 0 && (
-                    <span className="text-[14px] text-[var(--adora-accent)]">🏨 {excessByReason['لم يخرج']} لم يخرج</span>
-                  )}
-                  {excessByReason['تجاوز العدد'] > 0 && (
-                    <span className="text-[14px] text-[var(--adora-warning)]">⚡ {excessByReason['تجاوز العدد']} تجاوز</span>
-                  )}
-                  {excessByReason['بدون صلاحية'] > 0 && (
-                    <span className="text-[14px] text-[var(--adora-warning)]">🚫 {excessByReason['بدون صلاحية']} بدون صلاحية</span>
-                  )}
-                  {excessData.length === 0 && <span className="text-[14px] text-[var(--adora-success)]">✓ مطابق</span>}
-                </div>
-              </div>
-              <div className="glass rounded-2xl p-4 border-r-2 border-red-500/40 hover:border-red-500/70 transition-all duration-200">
-                <p className="text-[15px] text-[var(--adora-error)] mb-1.5 font-semibold tracking-wide opacity-90">ناقص (بدون تفاصيل)</p>
-                <p className="text-2xl font-bold text-[var(--adora-error)] tabular-nums">{Math.max(0, staffTotal - countedData.length)}</p>
-                <p className="text-[14px] text-[var(--adora-text-secondary)] mt-1.5">الإحصائيات &gt; التقارير</p>
-              </div>
-{/* Hidden: إجمالي الأسعار (محسوب) */}
-              <div className={`glass rounded-2xl p-4 border-r-2 transition-all duration-200 ${
-                priceAlertData.length > 0 ? 'border-red-500/50 hover:border-red-500/80' : 'border-emerald-500/40 hover:border-emerald-500/70'
-              }`}>
-                <p className="text-[15px] text-[var(--adora-error)] mb-1.5 font-semibold flex items-center gap-1 tracking-wide opacity-90">
-                  <TrendingDown className="w-3 h-3" /> تنبيهات الأسعار
-                </p>
-                <p className={`text-2xl font-bold tabular-nums ${priceAlertData.length > 0 ? 'text-[var(--adora-error)]' : 'text-[var(--adora-success)]'}`}>
-                  {priceAlertData.length > 0 ? priceAlertData.length : '✓'}
-                </p>
-                <p className="text-[14px] text-[var(--adora-text-secondary)] mt-1.5">
-                  {priceAlertData.length > 0
-                    ? `نقص ${totalShortfall.toLocaleString('en-SA')} SAR`
-                    : 'لا توجد مخالفات سعرية'}
-                  {mergedCount > 0 && <span className="text-purple-400/60 mr-1"> • {mergedCount / 2} دمج</span>}
-                </p>
-              </div>
-            </section>
-
-            {/* Employee Breakdown */}
-            <EmployeeBreakdown staffList={staffList} data={data} config={config} dateRange={dateRange} logCreationShiftCounts={logCreationShiftCounts} />
-
-            {/* Filters */}
-            <section className="glass rounded-2xl sm:rounded-[28px] p-5 space-y-4 neon-glow animate-in animate-delay-200">
-              <div className="flex items-center justify-between">
-                <h2 className="text-sm font-semibold text-[var(--adora-text)] flex items-center gap-2">
-                  <Search className="w-4 h-4 text-turquoise" /> الجدول التفصيلي
-                </h2>
-                <div className="flex items-center gap-3">
-                  {hasFilters && (
-                    <button onClick={clearFilters} className="flex items-center gap-1 text-sm text-[var(--adora-error)] hover:opacity-90">
-                      <X className="w-3 h-3" /> مسح
-                    </button>
-                  )}
-                  <button onClick={() => { setAnalyzed(false); }}
-                    className="text-sm text-[var(--adora-text-secondary)] hover:text-[var(--adora-text)] transition-colors">
-                    ← رجوع للملفات
-                  </button>
-                </div>
-              </div>
-
-              <div className="relative">
-                <Search className="absolute right-3 top-1/2 -translate-y-1/2 w-4 h-4 text-[var(--adora-text-secondary)]" />
-                <input type="text" placeholder="بحث (موظف، عميل، وحدة، رقم حجز)..."
-                  value={globalFilter} onChange={(e) => setGlobalFilter(e.target.value)}
-                  className="w-full bg-[var(--adora-input-bg)] border border-[var(--adora-border)] text-[var(--adora-text)] text-sm rounded-xl
+                <div className="relative">
+                  <Search className="absolute right-3 top-1/2 -translate-y-1/2 w-4 h-4 text-[var(--adora-text-secondary)]" />
+                  <input type="text" placeholder="بحث (موظف، عميل، وحدة، رقم حجز)..."
+                    value={globalFilter} onChange={(e) => setGlobalFilter(e.target.value)}
+                    className="w-full bg-[var(--adora-input-bg)] border border-[var(--adora-border)] text-[var(--adora-text)] text-sm rounded-xl
                              pr-10 pl-4 py-2.5 focus:ring-2 focus:ring-[var(--adora-focus-border)] focus:border-[var(--adora-focus-border)]
                              outline-none transition-all placeholder:text-[var(--adora-text-secondary)]" />
-              </div>
+                </div>
 
-              <div className="grid grid-cols-2 md:grid-cols-6 gap-3">
-                <FilterSelect label="الفرع" value={fBranch} options={uniqueBranches} onChange={setFBranch} />
-                <FilterSelect label="المصدر" value={fSource} options={uniqueSources} onChange={setFSource} />
-                <FilterSelect label="الشفت" value={fShift} options={uniqueShifts} onChange={setFShift} />
-                <FilterSelect label="التصنيف" value={fCategory} options={uniqueCategories} onChange={setFCategory} />
-                <FilterSelect label="الوحدة" value={fRoom} options={uniqueRoomTypes} onChange={setFRoom} />
-                <FilterSelect label="الموظف" value={fEmployee} options={uniqueEmployees} onChange={setFEmployee} />
-              </div>
+                <div className="grid grid-cols-2 md:grid-cols-6 gap-3">
+                  <FilterSelect label="الفرع" value={fBranch} options={uniqueBranches} onChange={setFBranch} />
+                  <FilterSelect label="المصدر" value={fSource} options={uniqueSources} onChange={setFSource} />
+                  <FilterSelect label="الشفت" value={fShift} options={uniqueShifts} onChange={setFShift} />
+                  <FilterSelect label="التصنيف" value={fCategory} options={uniqueCategories} onChange={setFCategory} />
+                  <FilterSelect label="الوحدة" value={fRoom} options={uniqueRoomTypes} onChange={setFRoom} />
+                  <FilterSelect label="الموظف" value={fEmployee} options={uniqueEmployees} onChange={setFEmployee} />
+                </div>
 
-              <div className="flex items-center gap-3">
-                <button onClick={() => { setFCountedOnly(!fCountedOnly); if (!fCountedOnly) setFExcessOnly(false); }}
-                  className={`flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium transition-all ${
-                    fCountedOnly
+                <div className="flex items-center gap-3">
+                  <button onClick={() => { setFCountedOnly(!fCountedOnly); if (!fCountedOnly) setFExcessOnly(false); }}
+                    className={`flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium transition-all ${fCountedOnly
                       ? 'bg-emerald-500/20 text-emerald-300 border border-emerald-500/40'
                       : 'bg-[var(--adora-input-bg)] text-[var(--adora-text-secondary)] border border-[var(--adora-border)] hover:text-[var(--adora-text)]'
-                  }`}>
-                  <ShieldCheck className="w-4 h-4" /> المحسوب فقط
-                </button>
-                <button onClick={() => { setFExcessOnly(!fExcessOnly); if (!fExcessOnly) { setFCountedOnly(false); setFPriceAlertOnly(false); } }}
-                  className={`flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium transition-all ${
-                    fExcessOnly
+                      }`}>
+                    <ShieldCheck className="w-4 h-4" /> المحسوب فقط
+                  </button>
+                  <button onClick={() => { setFExcessOnly(!fExcessOnly); if (!fExcessOnly) { setFCountedOnly(false); setFPriceAlertOnly(false); } }}
+                    className={`flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium transition-all ${fExcessOnly
                       ? 'bg-amber-500/20 text-amber-300 border border-amber-500/40'
                       : 'bg-[var(--adora-input-bg)] text-[var(--adora-text-secondary)] border border-[var(--adora-border)] hover:text-[var(--adora-text)]'
-                  }`}>
-                  <AlertTriangle className="w-4 h-4" /> الزيادة فقط
-                </button>
-                <button onClick={() => { setFPriceAlertOnly(!fPriceAlertOnly); if (!fPriceAlertOnly) { setFCountedOnly(false); setFExcessOnly(false); } }}
-                  className={`flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium transition-all ${
-                    fPriceAlertOnly
+                      }`}>
+                    <AlertTriangle className="w-4 h-4" /> الزيادة فقط
+                  </button>
+                  <button onClick={() => { setFPriceAlertOnly(!fPriceAlertOnly); if (!fPriceAlertOnly) { setFCountedOnly(false); setFExcessOnly(false); } }}
+                    className={`flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium transition-all ${fPriceAlertOnly
                       ? 'bg-red-500/20 text-red-300 border border-red-500/40'
                       : 'bg-[var(--adora-input-bg)] text-[var(--adora-text-secondary)] border border-[var(--adora-border)] hover:text-[var(--adora-text)]'
-                  }`}>
-                  <TrendingDown className="w-4 h-4" /> تنبيهات الأسعار
-                </button>
-              </div>
-            </section>
+                      }`}>
+                    <TrendingDown className="w-4 h-4" /> تنبيهات الأسعار
+                  </button>
+                </div>
+              </section>
 
-            {/* Detailed Table */}
-            <section className="glass rounded-2xl sm:rounded-[28px] overflow-hidden neon-glow table-section-no-side-shadow animate-in animate-delay-300">
-              <div className="overflow-x-auto">
-                <table className="text-sm w-full app-detail-table">
-                  <thead>
-                    {table.getHeaderGroups().map((hg) => (
-                      <tr key={hg.id} className="border-b border-[var(--adora-border)]">
-                        {hg.headers.map((h) => (
-                          <th key={h.id}
-                            style={{ minWidth: h.getSize() }}
-                            className="px-2 py-2.5 text-right text-[15px] font-semibold text-[var(--adora-text-secondary)]
+              {/* Detailed Table */}
+              <section className="glass rounded-2xl sm:rounded-[28px] overflow-hidden neon-glow table-section-no-side-shadow animate-in animate-delay-300">
+                <div className="overflow-x-auto">
+                  <table className="text-sm w-full app-detail-table">
+                    <thead>
+                      {table.getHeaderGroups().map((hg) => (
+                        <tr key={hg.id} className="border-b border-[var(--adora-border)]">
+                          {hg.headers.map((h) => (
+                            <th key={h.id}
+                              style={{ minWidth: h.getSize() }}
+                              className="px-2 py-2.5 text-right text-[15px] font-semibold text-[var(--adora-text-secondary)]
                                        bg-[var(--adora-table-header-bg)] cursor-pointer hover:text-[var(--adora-accent)] hover:bg-[var(--adora-hover-bg)] transition-colors
                                        select-none whitespace-nowrap overflow-hidden tracking-wide"
-                            onClick={h.column.getToggleSortingHandler()}>
-                            <div className="flex items-center gap-1">
-                              {flexRender(h.column.columnDef.header, h.getContext())}
-                              <ArrowUpDown className="w-3 h-3 text-[var(--adora-text-secondary)] shrink-0" />
-                            </div>
-                          </th>
-                        ))}
-                      </tr>
-                    ))}
-                  </thead>
-                  <tbody>
-                    {table.getRowModel().rows.map((row, idx) => (
-                      <tr key={row.id}
-                        className={`border-b border-white/[0.03] transition-colors hover:bg-white/[0.03] ${
-                          row.original.isExcess
+                              onClick={h.column.getToggleSortingHandler()}>
+                              <div className="flex items-center gap-1">
+                                {flexRender(h.column.columnDef.header, h.getContext())}
+                                <ArrowUpDown className="w-3 h-3 text-[var(--adora-text-secondary)] shrink-0" />
+                              </div>
+                            </th>
+                          ))}
+                        </tr>
+                      ))}
+                    </thead>
+                    <tbody>
+                      {table.getRowModel().rows.map((row, idx) => (
+                        <tr key={row.id}
+                          className={`border-b border-white/[0.03] transition-colors hover:bg-white/[0.03] ${row.original.isExcess
                             ? 'bg-amber-500/3 border-r-2 border-r-amber-500/50 opacity-55'
                             : idx % 2 === 0 ? '' : 'bg-white/[0.01]'
-                        }`}>
-                        {row.getVisibleCells().map((cell) => (
-                          <td key={cell.id}
-                            style={{ minWidth: cell.column.getSize() }}
-                            className="px-2 py-2 whitespace-nowrap overflow-hidden text-ellipsis text-sm">
-                            {flexRender(cell.column.columnDef.cell, cell.getContext())}
-                          </td>
-                        ))}
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
+                            }`}>
+                          {row.getVisibleCells().map((cell) => (
+                            <td key={cell.id}
+                              style={{ minWidth: cell.column.getSize() }}
+                              className="px-2 py-2 whitespace-nowrap overflow-hidden text-ellipsis text-sm">
+                              {flexRender(cell.column.columnDef.cell, cell.getContext())}
+                            </td>
+                          ))}
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
 
-              <div className="flex items-center justify-between px-5 py-3 border-t border-[var(--adora-border)] bg-[var(--adora-modal-header-bg)]">
-                <div className="text-[15px] text-[var(--adora-text-secondary)]">
-                  عرض <span className="text-[var(--adora-text)] font-medium">{table.getRowModel().rows.length}</span> من <span className="text-[var(--adora-text)] font-medium">{filteredData.length}</span>
-                  {data.length !== filteredData.length && (
-                    <span className="text-amber-500/70 mr-1.5">(مفلتر من {data.length})</span>
+                <div className="flex items-center justify-between px-5 py-3 border-t border-[var(--adora-border)] bg-[var(--adora-modal-header-bg)]">
+                  <div className="text-[15px] text-[var(--adora-text-secondary)]">
+                    عرض <span className="text-[var(--adora-text)] font-medium">{table.getRowModel().rows.length}</span> من <span className="text-[var(--adora-text)] font-medium">{filteredData.length}</span>
+                    {data.length !== filteredData.length && (
+                      <span className="text-amber-500/70 mr-1.5">(مفلتر من {data.length})</span>
+                    )}
+                  </div>
+                  <div className="flex items-center gap-1.5">
+                    <button onClick={() => table.previousPage()} disabled={!table.getCanPreviousPage()}
+                      className="p-1.5 rounded-lg bg-[var(--adora-input-bg)] hover:bg-[var(--adora-hover-bg)] disabled:opacity-25 disabled:cursor-not-allowed transition-colors border border-[var(--adora-border)]">
+                      <ChevronRight className="w-3.5 h-3.5" />
+                    </button>
+                    <span className="text-[15px] text-[var(--adora-text-secondary)] min-w-[70px] text-center tabular-nums">
+                      {table.getState().pagination.pageIndex + 1} / {table.getPageCount()}
+                    </span>
+                    <button onClick={() => table.nextPage()} disabled={!table.getCanNextPage()}
+                      className="p-1.5 rounded-lg bg-[var(--adora-input-bg)] hover:bg-[var(--adora-hover-bg)] disabled:opacity-25 disabled:cursor-not-allowed transition-colors border border-[var(--adora-border)]">
+                      <ChevronLeft className="w-3.5 h-3.5" />
+                    </button>
+                    <select value={table.getState().pagination.pageSize}
+                      onChange={(e) => table.setPageSize(Number(e.target.value))}
+                      className="bg-[var(--adora-input-bg)] text-[var(--adora-text)] text-[15px] rounded-lg px-2 py-1.5 border border-[var(--adora-border)] outline-none focus:ring-1 focus:ring-[var(--adora-focus-border)] cursor-pointer">
+                      {[25, 50, 100, 200].map((s) => <option key={s} value={s}>{s} صف</option>)}
+                      <option value={99999}>الكل</option>
+                    </select>
+                  </div>
+                </div>
+              </section>
+            </>
+          )}
+        </main>
+
+        {/* ===== Settings Panel ===== */}
+        {showSettings && (
+          <SettingsPanel
+            config={config}
+            discoveredBranches={discoveredBranches}
+            onSave={handleSaveConfig}
+            onSaveAsDefault={async (c) => {
+              const { saveConfigToFirebase } = await import('./firebase');
+              await saveConfigToFirebase(c).catch(() => { });
+            }}
+            onClose={(draft) => {
+              handleSaveConfig(draft);
+            }}
+          />
+        )}
+
+        {/* ===== Methodology Info Popup ===== */}
+        {showMethodology && (
+          <MethodologyPopup config={config} onClose={() => setShowMethodology(false)} />
+        )}
+        {showRatingExplanation && (
+          <RatingExplanationPopup config={config} onClose={() => setShowRatingExplanation(false)} />
+        )}
+        {showConditions && (
+          <ConditionsPopup config={config} onClose={() => setShowConditions(false)} />
+        )}
+
+        {/* ===== Attendance results modal ===== */}
+        {showAttendanceModal && attendanceResults && (
+          <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm" role="dialog" aria-modal="true" aria-labelledby="attendance-modal-title">
+            <div className="bg-[var(--adora-bg-card)] border border-[var(--adora-border)] rounded-2xl shadow-2xl max-w-4xl w-full max-h-[90vh] flex flex-col overflow-hidden">
+              <div className="flex items-center justify-between px-5 py-4 border-b border-[var(--adora-border)] bg-[var(--adora-modal-header-bg)]">
+                <div>
+                  <h2 id="attendance-modal-title" className="text-lg font-bold text-[var(--adora-text)]">نتيجة تقارير الحضور</h2>
+                  {attendanceResults.length > 0 && attendanceResults[0].period && (
+                    <p className="text-sm text-[var(--adora-text-secondary)] mt-0.5">الفترة: {attendanceResults[0].period}</p>
                   )}
                 </div>
-                <div className="flex items-center gap-1.5">
-                  <button onClick={() => table.previousPage()} disabled={!table.getCanPreviousPage()}
-                    className="p-1.5 rounded-lg bg-[var(--adora-input-bg)] hover:bg-[var(--adora-hover-bg)] disabled:opacity-25 disabled:cursor-not-allowed transition-colors border border-[var(--adora-border)]">
-                    <ChevronRight className="w-3.5 h-3.5" />
-                  </button>
-                  <span className="text-[15px] text-[var(--adora-text-secondary)] min-w-[70px] text-center tabular-nums">
-                    {table.getState().pagination.pageIndex + 1} / {table.getPageCount()}
-                  </span>
-                  <button onClick={() => table.nextPage()} disabled={!table.getCanNextPage()}
-                    className="p-1.5 rounded-lg bg-[var(--adora-input-bg)] hover:bg-[var(--adora-hover-bg)] disabled:opacity-25 disabled:cursor-not-allowed transition-colors border border-[var(--adora-border)]">
-                    <ChevronLeft className="w-3.5 h-3.5" />
-                  </button>
-                  <select value={table.getState().pagination.pageSize}
-                    onChange={(e) => table.setPageSize(Number(e.target.value))}
-                    className="bg-[var(--adora-input-bg)] text-[var(--adora-text)] text-[15px] rounded-lg px-2 py-1.5 border border-[var(--adora-border)] outline-none focus:ring-1 focus:ring-[var(--adora-focus-border)] cursor-pointer">
-                    {[25, 50, 100, 200].map((s) => <option key={s} value={s}>{s} صف</option>)}
-                    <option value={99999}>الكل</option>
-                  </select>
-                </div>
+                <button type="button" onClick={() => { setShowAttendanceModal(false); setAttendanceResults(null); setAttendanceDetail(null); }} className="p-2 rounded-lg hover:bg-[var(--adora-hover-bg)] transition-colorss" aria-label="إغلاق">
+                  <X className="w-5 h-5 text-[var(--adora-text-secondary)]" />
+                </button>
               </div>
-            </section>
-          </>
-        )}
-      </main>
+              <div className="overflow-auto flex-1 p-5">
+                <table className="w-full text-right border-collapse">
+                  <thead>
+                    <tr className="border-b border-[var(--adora-border)]">
+                      <th className="py-2 px-2 text-[var(--adora-text-secondary)] font-semibold">الموظف</th>
+                      <th className="py-2 px-2 text-[var(--adora-text-secondary)] font-semibold">أيام العمل</th>
+                      <th className="py-2 px-2 text-[var(--adora-text-secondary)] font-semibold">حاضر كامل</th>
+                      <th className="py-2 px-2 text-yellow-500 font-semibold" title="حضور محسوب لكن البصمة غير مكتملة (دخول فقط أو خروج فقط)">بصمة غير مكتملة</th>
+                      <th className="py-2 px-2 text-[var(--adora-text-secondary)] font-semibold">غياب</th>
+                      <th className="py-2 px-2 text-[var(--adora-text-secondary)] font-semibold">إجازة</th>
+                      <th className="py-2 px-2 text-[var(--adora-text-secondary)] font-semibold">تحتاج مراجعة</th>
+                      <th className="py-2 px-2 text-[var(--adora-text-secondary)] font-semibold">صافي الساعات</th>
+                      <th className="py-2 px-2 text-[var(--adora-text-secondary)] font-semibold">نسبة البصمة %</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {attendanceResults.map((r, idx) => {
+                      const openDetail = (column: string) => () => setAttendanceDetail({ resultIndex: idx, column });
+                      const cellClass = 'py-2.5 px-2 tabular-nums cursor-pointer hover:ring-1 hover:ring-[var(--adora-accent)]/50 rounded';
+                      return (
+                        <tr key={idx} className="border-b border-[var(--adora-border)]/60 hover:bg-[var(--adora-hover-bg)]/50">
+                          <td className="py-2.5 px-2 text-[var(--adora-text)] font-medium">{r.employeeName}</td>
+                          <td className={`${cellClass} text-[var(--adora-accent)] font-bold`} onClick={openDetail('totalDaysInPeriod')} title="اضغط للتفاصيل">{r.totalDaysInPeriod ?? (r.validDays + r.incompleteDays + r.absentDays + r.permittedAbsence + (r.reviewRequiredDays ?? 0))}</td>
+                          <td className={`${cellClass} text-emerald-500/90`} onClick={openDetail('validDays')} title="اضغط للتفاصيل">{r.validDays}</td>
+                          <td className={`${cellClass} text-yellow-500 font-medium bg-yellow-500/10`} onClick={openDetail('incompleteDays')} title="اضغط للتفاصيل">{r.incompleteDays}</td>
+                          <td className={`${cellClass} text-red-400/90`} onClick={openDetail('absentDays')} title="اضغط للتفاصيل">{r.absentDays}</td>
+                          <td className={`${cellClass} text-[var(--adora-text-secondary)]`} onClick={openDetail('permittedAbsence')} title="اضغط للتفاصيل">{r.permittedAbsence}</td>
+                          <td className={`${cellClass} text-amber-600/90`} onClick={openDetail('reviewRequiredDays')} title="اضغط للتفاصيل">{r.reviewRequiredDays ?? 0}</td>
+                          <td className={`${cellClass} text-[var(--adora-text)]`} onClick={openDetail('totalNetHours')} title="اضغط للتفاصيل">{typeof r.totalNetHours === 'number' ? r.totalNetHours.toFixed(1) : '—'}</td>
+                          <td className={`${cellClass} text-[var(--adora-accent)]`} onClick={openDetail('fingerprintAccuracy')} title="اضغط للتفاصيل">{typeof r.fingerprintAccuracy === 'number' ? r.fingerprintAccuracy + '%' : '—'}</td>
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                </table>
 
-      {/* ===== Settings Panel ===== */}
-      {showSettings && (
-        <SettingsPanel
-          config={config}
-          discoveredBranches={discoveredBranches}
-          onSave={handleSaveConfig}
-          onSaveAsDefault={async (c) => {
-            const { saveConfigToFirebase } = await import('./firebase');
-            await saveConfigToFirebase(c).catch(() => {});
-          }}
-          onClose={(draft) => {
-            handleSaveConfig(draft);
-          }}
-        />
-      )}
-
-      {/* ===== Methodology Info Popup ===== */}
-      {showMethodology && (
-        <MethodologyPopup config={config} onClose={() => setShowMethodology(false)} />
-      )}
-      {showRatingExplanation && (
-        <RatingExplanationPopup config={config} onClose={() => setShowRatingExplanation(false)} />
-      )}
-      {showConditions && (
-        <ConditionsPopup config={config} onClose={() => setShowConditions(false)} />
-      )}
-
-      {/* ===== Attendance results modal ===== */}
-      {showAttendanceModal && attendanceResults && (
-        <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm" role="dialog" aria-modal="true" aria-labelledby="attendance-modal-title">
-          <div className="bg-[var(--adora-bg-card)] border border-[var(--adora-border)] rounded-2xl shadow-2xl max-w-4xl w-full max-h-[90vh] flex flex-col overflow-hidden">
-            <div className="flex items-center justify-between px-5 py-4 border-b border-[var(--adora-border)] bg-[var(--adora-modal-header-bg)]">
-              <div>
-                <h2 id="attendance-modal-title" className="text-lg font-bold text-[var(--adora-text)]">نتيجة تقارير الحضور</h2>
-                {attendanceResults.length > 0 && attendanceResults[0].period && (
-                  <p className="text-sm text-[var(--adora-text-secondary)] mt-0.5">الفترة: {attendanceResults[0].period}</p>
-                )}
-              </div>
-              <button type="button" onClick={() => { setShowAttendanceModal(false); setAttendanceResults(null); setAttendanceDetail(null); }} className="p-2 rounded-lg hover:bg-[var(--adora-hover-bg)] transition-colorss" aria-label="إغلاق">
-                <X className="w-5 h-5 text-[var(--adora-text-secondary)]" />
-              </button>
-            </div>
-            <div className="overflow-auto flex-1 p-5">
-              <table className="w-full text-right border-collapse">
-                <thead>
-                  <tr className="border-b border-[var(--adora-border)]">
-                    <th className="py-2 px-2 text-[var(--adora-text-secondary)] font-semibold">الموظف</th>
-                    <th className="py-2 px-2 text-[var(--adora-text-secondary)] font-semibold">أيام العمل</th>
-                    <th className="py-2 px-2 text-[var(--adora-text-secondary)] font-semibold">حاضر كامل</th>
-                    <th className="py-2 px-2 text-yellow-500 font-semibold" title="حضور محسوب لكن البصمة غير مكتملة (دخول فقط أو خروج فقط)">بصمة غير مكتملة</th>
-                    <th className="py-2 px-2 text-[var(--adora-text-secondary)] font-semibold">غياب</th>
-                    <th className="py-2 px-2 text-[var(--adora-text-secondary)] font-semibold">إجازة</th>
-                    <th className="py-2 px-2 text-[var(--adora-text-secondary)] font-semibold">تحتاج مراجعة</th>
-                    <th className="py-2 px-2 text-[var(--adora-text-secondary)] font-semibold">صافي الساعات</th>
-                    <th className="py-2 px-2 text-[var(--adora-text-secondary)] font-semibold">نسبة البصمة %</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {attendanceResults.map((r, idx) => {
-                    const openDetail = (column: string) => () => setAttendanceDetail({ resultIndex: idx, column });
-                    const cellClass = 'py-2.5 px-2 tabular-nums cursor-pointer hover:ring-1 hover:ring-[var(--adora-accent)]/50 rounded';
-                    return (
-                      <tr key={idx} className="border-b border-[var(--adora-border)]/60 hover:bg-[var(--adora-hover-bg)]/50">
-                        <td className="py-2.5 px-2 text-[var(--adora-text)] font-medium">{r.employeeName}</td>
-                        <td className={`${cellClass} text-[var(--adora-accent)] font-bold`} onClick={openDetail('totalDaysInPeriod')} title="اضغط للتفاصيل">{r.totalDaysInPeriod ?? (r.validDays + r.incompleteDays + r.absentDays + r.permittedAbsence + (r.reviewRequiredDays ?? 0))}</td>
-                        <td className={`${cellClass} text-emerald-500/90`} onClick={openDetail('validDays')} title="اضغط للتفاصيل">{r.validDays}</td>
-                        <td className={`${cellClass} text-yellow-500 font-medium bg-yellow-500/10`} onClick={openDetail('incompleteDays')} title="اضغط للتفاصيل">{r.incompleteDays}</td>
-                        <td className={`${cellClass} text-red-400/90`} onClick={openDetail('absentDays')} title="اضغط للتفاصيل">{r.absentDays}</td>
-                        <td className={`${cellClass} text-[var(--adora-text-secondary)]`} onClick={openDetail('permittedAbsence')} title="اضغط للتفاصيل">{r.permittedAbsence}</td>
-                        <td className={`${cellClass} text-amber-600/90`} onClick={openDetail('reviewRequiredDays')} title="اضغط للتفاصيل">{r.reviewRequiredDays ?? 0}</td>
-                        <td className={`${cellClass} text-[var(--adora-text)]`} onClick={openDetail('totalNetHours')} title="اضغط للتفاصيل">{typeof r.totalNetHours === 'number' ? r.totalNetHours.toFixed(1) : '—'}</td>
-                        <td className={`${cellClass} text-[var(--adora-accent)]`} onClick={openDetail('fingerprintAccuracy')} title="اضغط للتفاصيل">{typeof r.fingerprintAccuracy === 'number' ? r.fingerprintAccuracy + '%' : '—'}</td>
-                      </tr>
-                    );
-                  })}
-                </tbody>
-              </table>
-
-              {/* نافذة تفاصيل الرقم عند النقر على خلية */}
-              {attendanceDetail != null && attendanceResults && attendanceResults[attendanceDetail.resultIndex] && (() => {
-                const res = attendanceResults[attendanceDetail.resultIndex];
-                const col = attendanceDetail.column;
-                const days = res.days ?? [];
-                const statusMap: Record<string, string> = {
-                  validDays: 'valid',
-                  incompleteDays: 'incomplete',
-                  absentDays: 'absent',
-                  permittedAbsence: 'permitted_absence',
-                  reviewRequiredDays: 'review_required',
-                };
-                const filtered = statusMap[col] ? days.filter((d) => d.status === statusMap[col]) : [];
-                const titles: Record<string, string> = {
-                  totalDaysInPeriod: 'أيام العمل (إجمالي الفترة)',
-                  totalWorkDays: 'أيام الحضور',
-                  validDays: 'حاضر كامل',
-                  incompleteDays: 'بصمة غير مكتملة',
-                  absentDays: 'غياب',
-                  permittedAbsence: 'إجازة',
-                  reviewRequiredDays: 'تحتاج مراجعة',
-                  totalNetHours: 'صافي الساعات',
-                  fingerprintAccuracy: 'نسبة البصمة %',
-                };
-                const desc: Record<string, string> = {
-                  totalDaysInPeriod: 'إجمالي أيام الفترة = حاضر كامل + بصمة غير مكتملة + غياب + إجازة + تحتاج مراجعة.',
-                  totalWorkDays: 'أيام الحضور فقط = حاضر كامل + بصمة غير مكتملة (لنسبة البصمة).',
-                  validDays: 'أيام ذات بصمة دخول + خروج ومدة ≥ 4 ساعات.',
-                  incompleteDays: 'أيام ذات بصمة واحدة فقط (دخول أو خروج) — محسوبة تقديرياً.',
-                  absentDays: 'أيام بدون أي بصمة في التقرير.',
-                  permittedAbsence: 'أيام مسجلة كإجازة/غياب مسموح.',
-                  reviewRequiredDays: 'أيام بصمة وحيدة غير ليلية — تحتاج قرار إداري.',
-                  totalNetHours: 'مجموع ساعات كل أيام الحضور (حد أقصى 12 ساعة/يوم).',
-                  fingerprintAccuracy: 'نسبة الالتزام = (حاضر كامل ÷ أيام الحضور) × 100.',
-                };
-                const value =
-                  col === 'totalDaysInPeriod' ? (res.totalDaysInPeriod ?? (res.validDays + res.incompleteDays + res.absentDays + res.permittedAbsence + (res.reviewRequiredDays ?? 0)))
-                  : col === 'totalWorkDays' ? res.totalWorkDays
-                  : col === 'validDays' ? res.validDays
-                  : col === 'incompleteDays' ? res.incompleteDays
-                  : col === 'absentDays' ? res.absentDays
-                  : col === 'permittedAbsence' ? res.permittedAbsence
-                  : col === 'reviewRequiredDays' ? (res.reviewRequiredDays ?? 0)
-                  : col === 'totalNetHours' ? (typeof res.totalNetHours === 'number' ? res.totalNetHours.toFixed(1) : '—')
-                  : col === 'fingerprintAccuracy' ? (typeof res.fingerprintAccuracy === 'number' ? res.fingerprintAccuracy + '%' : '—')
-                  : '';
-                return (
-                  <div className="fixed inset-0 z-[102] flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm" onClick={() => setAttendanceDetail(null)} role="presentation">
-                    <div className="bg-[var(--adora-bg-card)] border border-[var(--adora-border)] rounded-xl shadow-2xl max-w-sm w-full max-h-[70vh] flex flex-col overflow-hidden" onClick={(e) => e.stopPropagation()} role="dialog" aria-label="تفاصيل الرقم">
-                      <div className="flex items-center justify-between p-3 border-b border-[var(--adora-border)]">
-                        <h4 className="text-[var(--adora-text)] font-semibold">{res.employeeName}: {titles[col]} ({value})</h4>
-                        <button type="button" onClick={() => setAttendanceDetail(null)} className="p-1.5 rounded-lg hover:bg-[var(--adora-hover-bg)] text-[var(--adora-text-secondary)]" aria-label="إغلاق">×</button>
-                      </div>
-                      <div className="p-3 overflow-auto text-[13px] text-[var(--adora-text-secondary)]">
-                        <p className="mb-2">{desc[col]}</p>
-                        {filtered.length > 0 ? (
-                          <p className="mt-2 text-[var(--adora-text)] font-medium">التواريخ ({filtered.length}):</p>
-                        ) : null}
-                        {filtered.length > 0 ? (
-                          <ul className="mt-1 list-disc list-inside space-y-0.5 text-[var(--adora-text)]">
-                            {filtered.map((d) => {
-                              const [y, m, day] = d.workDateStr.split('-');
-                              const dateLabel = `${day}/${m}/${y}`;
-                              return <li key={d.workDateStr}>{dateLabel}{col === 'validDays' || col === 'incompleteDays' ? ` — ${d.netHours.toFixed(1)} س` : ''}</li>;
-                            })}
-                          </ul>
-                        ) : col === 'totalDaysInPeriod' ? (
-                          <p className="text-[var(--adora-text)]">حاضر كامل: {res.validDays} + بصمة غير مكتملة: {res.incompleteDays} + غياب: {res.absentDays} + إجازة: {res.permittedAbsence} + تحتاج مراجعة: {res.reviewRequiredDays ?? 0} = إجمالي {res.totalDaysInPeriod ?? (res.validDays + res.incompleteDays + res.absentDays + res.permittedAbsence + (res.reviewRequiredDays ?? 0))} يوم</p>
-                        ) : col === 'totalWorkDays' ? (
-                          <p className="text-[var(--adora-text)]">حاضر كامل: {res.validDays} + بصمة غير مكتملة: {res.incompleteDays} = أيام الحضور (لنسبة البصمة).</p>
-                        ) : col === 'totalNetHours' ? (
-                          <p className="text-[var(--adora-text)]">مجموع ساعات أيام الحضور (كل يوم حد أقصى 12 ساعة).</p>
-                        ) : col === 'fingerprintAccuracy' ? (
-                          <p className="text-[var(--adora-text)]">حاضر كامل {res.validDays} ÷ أيام الحضور {res.totalWorkDays} × 100 = {typeof res.fingerprintAccuracy === 'number' ? res.fingerprintAccuracy + '%' : '—'}</p>
-                        ) : null}
+                {/* نافذة تفاصيل الرقم عند النقر على خلية */}
+                {attendanceDetail != null && attendanceResults && attendanceResults[attendanceDetail.resultIndex] && (() => {
+                  const res = attendanceResults[attendanceDetail.resultIndex];
+                  const col = attendanceDetail.column;
+                  const days = res.days ?? [];
+                  const statusMap: Record<string, string> = {
+                    validDays: 'valid',
+                    incompleteDays: 'incomplete',
+                    absentDays: 'absent',
+                    permittedAbsence: 'permitted_absence',
+                    reviewRequiredDays: 'review_required',
+                  };
+                  const filtered = statusMap[col] ? days.filter((d) => d.status === statusMap[col]) : [];
+                  const titles: Record<string, string> = {
+                    totalDaysInPeriod: 'أيام العمل (إجمالي الفترة)',
+                    totalWorkDays: 'أيام الحضور',
+                    validDays: 'حاضر كامل',
+                    incompleteDays: 'بصمة غير مكتملة',
+                    absentDays: 'غياب',
+                    permittedAbsence: 'إجازة',
+                    reviewRequiredDays: 'تحتاج مراجعة',
+                    totalNetHours: 'صافي الساعات',
+                    fingerprintAccuracy: 'نسبة البصمة %',
+                  };
+                  const desc: Record<string, string> = {
+                    totalDaysInPeriod: 'إجمالي أيام الفترة = حاضر كامل + بصمة غير مكتملة + غياب + إجازة + تحتاج مراجعة.',
+                    totalWorkDays: 'أيام الحضور فقط = حاضر كامل + بصمة غير مكتملة (لنسبة البصمة).',
+                    validDays: 'أيام ذات بصمة دخول + خروج ومدة ≥ 4 ساعات.',
+                    incompleteDays: 'أيام ذات بصمة واحدة فقط (دخول أو خروج) — محسوبة تقديرياً.',
+                    absentDays: 'أيام بدون أي بصمة في التقرير.',
+                    permittedAbsence: 'أيام مسجلة كإجازة/غياب مسموح.',
+                    reviewRequiredDays: 'أيام بصمة وحيدة غير ليلية — تحتاج قرار إداري.',
+                    totalNetHours: 'مجموع ساعات كل أيام الحضور (حد أقصى 12 ساعة/يوم).',
+                    fingerprintAccuracy: 'نسبة الالتزام = (حاضر كامل ÷ أيام الحضور) × 100.',
+                  };
+                  const value =
+                    col === 'totalDaysInPeriod' ? (res.totalDaysInPeriod ?? (res.validDays + res.incompleteDays + res.absentDays + res.permittedAbsence + (res.reviewRequiredDays ?? 0)))
+                      : col === 'totalWorkDays' ? res.totalWorkDays
+                        : col === 'validDays' ? res.validDays
+                          : col === 'incompleteDays' ? res.incompleteDays
+                            : col === 'absentDays' ? res.absentDays
+                              : col === 'permittedAbsence' ? res.permittedAbsence
+                                : col === 'reviewRequiredDays' ? (res.reviewRequiredDays ?? 0)
+                                  : col === 'totalNetHours' ? (typeof res.totalNetHours === 'number' ? res.totalNetHours.toFixed(1) : '—')
+                                    : col === 'fingerprintAccuracy' ? (typeof res.fingerprintAccuracy === 'number' ? res.fingerprintAccuracy + '%' : '—')
+                                      : '';
+                  return (
+                    <div className="fixed inset-0 z-[102] flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm" onClick={() => setAttendanceDetail(null)} role="presentation">
+                      <div className="bg-[var(--adora-bg-card)] border border-[var(--adora-border)] rounded-xl shadow-2xl max-w-sm w-full max-h-[70vh] flex flex-col overflow-hidden" onClick={(e) => e.stopPropagation()} role="dialog" aria-label="تفاصيل الرقم">
+                        <div className="flex items-center justify-between p-3 border-b border-[var(--adora-border)]">
+                          <h4 className="text-[var(--adora-text)] font-semibold">{res.employeeName}: {titles[col]} ({value})</h4>
+                          <button type="button" onClick={() => setAttendanceDetail(null)} className="p-1.5 rounded-lg hover:bg-[var(--adora-hover-bg)] text-[var(--adora-text-secondary)]" aria-label="إغلاق">×</button>
+                        </div>
+                        <div className="p-3 overflow-auto text-[13px] text-[var(--adora-text-secondary)]">
+                          <p className="mb-2">{desc[col]}</p>
+                          {filtered.length > 0 ? (
+                            <p className="mt-2 text-[var(--adora-text)] font-medium">التواريخ ({filtered.length}):</p>
+                          ) : null}
+                          {filtered.length > 0 ? (
+                            <ul className="mt-1 list-disc list-inside space-y-0.5 text-[var(--adora-text)]">
+                              {filtered.map((d) => {
+                                const [y, m, day] = d.workDateStr.split('-');
+                                const dateLabel = `${day}/${m}/${y}`;
+                                return <li key={d.workDateStr}>{dateLabel}{col === 'validDays' || col === 'incompleteDays' ? ` — ${d.netHours.toFixed(1)} س` : ''}</li>;
+                              })}
+                            </ul>
+                          ) : col === 'totalDaysInPeriod' ? (
+                            <p className="text-[var(--adora-text)]">حاضر كامل: {res.validDays} + بصمة غير مكتملة: {res.incompleteDays} + غياب: {res.absentDays} + إجازة: {res.permittedAbsence} + تحتاج مراجعة: {res.reviewRequiredDays ?? 0} = إجمالي {res.totalDaysInPeriod ?? (res.validDays + res.incompleteDays + res.absentDays + res.permittedAbsence + (res.reviewRequiredDays ?? 0))} يوم</p>
+                          ) : col === 'totalWorkDays' ? (
+                            <p className="text-[var(--adora-text)]">حاضر كامل: {res.validDays} + بصمة غير مكتملة: {res.incompleteDays} = أيام الحضور (لنسبة البصمة).</p>
+                          ) : col === 'totalNetHours' ? (
+                            <p className="text-[var(--adora-text)]">مجموع ساعات أيام الحضور (كل يوم حد أقصى 12 ساعة).</p>
+                          ) : col === 'fingerprintAccuracy' ? (
+                            <p className="text-[var(--adora-text)]">حاضر كامل {res.validDays} ÷ أيام الحضور {res.totalWorkDays} × 100 = {typeof res.fingerprintAccuracy === 'number' ? res.fingerprintAccuracy + '%' : '—'}</p>
+                          ) : null}
+                        </div>
                       </div>
                     </div>
-                  </div>
-                );
-              })()}
+                  );
+                })()}
 
-              <div className="mt-4 space-y-3">
-                {attendanceResults.some((r) => (r.fingerprintAccuracy ?? 0) === 0 && (r.totalWorkDays ?? 0) > 0) && (
-                  <div className="p-3 rounded-xl bg-amber-500/15 border border-amber-500/40 text-[13px] text-amber-800 dark:text-amber-200">
-                    <p className="font-semibold">تنبيه إداري</p>
-                    <p className="mt-1">نسبة البصمة 0% تعني أن كل أيام الحضور محسوبة من «بصمة وحيدة» (خروج فقط). الحضور مقبول تقنياً لعدم الظلم، لكن الالتزام بنظام البصمة (دخول + خروج) ضعيف. يُفضّل تشجيع البصمة الكاملة لاحتساب الساعات الفعلية والأوفر تايم بدقة.</p>
+                <div className="mt-4 space-y-3">
+                  {attendanceResults.some((r) => (r.fingerprintAccuracy ?? 0) === 0 && (r.totalWorkDays ?? 0) > 0) && (
+                    <div className="p-3 rounded-xl bg-amber-500/15 border border-amber-500/40 text-[13px] text-amber-800 dark:text-amber-200">
+                      <p className="font-semibold">تنبيه إداري</p>
+                      <p className="mt-1">نسبة البصمة 0% تعني أن كل أيام الحضور محسوبة من «بصمة وحيدة» (خروج فقط). الحضور مقبول تقنياً لعدم الظلم، لكن الالتزام بنظام البصمة (دخول + خروج) ضعيف. يُفضّل تشجيع البصمة الكاملة لاحتساب الساعات الفعلية والأوفر تايم بدقة.</p>
+                    </div>
+                  )}
+                  <div className="p-3 rounded-xl bg-[var(--adora-hover-bg)]/50 border border-[var(--adora-border)]/50 text-[13px] text-[var(--adora-text-secondary)] space-y-1">
+                    <p><strong className="text-[var(--adora-text)]">المعادلات:</strong> أيام العمل (إجمالي الفترة) = حاضر كامل + بصمة غير مكتملة + غياب + إجازة + تحتاج مراجعة. صافي الساعات: بصمة وحيدة = 8 ساعات تقديرياً؛ بصمتين = المدة الفعلية (حد أقصى 12 ساعة). نسبة البصمة = (حاضر كامل ÷ أيام الحضور) × 100.</p>
+                    <p>التاريخ الذكي: بصمة قبل 06:00 → تُحسب لليوم السابق. البصمة الوحيدة ليلاً (21–01) = حضور نسيان دخول؛ غير ذلك = تحتاج مراجعة (لا تُحسب).</p>
+                    <p className="text-[var(--adora-text)]/80 mt-1">الأيام ذات البصمة غير المكتملة (دخول فقط أو خروج فقط) محسوبة تقديرياً — للمراجعة والاعتماد الإداري.</p>
                   </div>
-                )}
-                <div className="p-3 rounded-xl bg-[var(--adora-hover-bg)]/50 border border-[var(--adora-border)]/50 text-[13px] text-[var(--adora-text-secondary)] space-y-1">
-                  <p><strong className="text-[var(--adora-text)]">المعادلات:</strong> أيام العمل (إجمالي الفترة) = حاضر كامل + بصمة غير مكتملة + غياب + إجازة + تحتاج مراجعة. صافي الساعات: بصمة وحيدة = 8 ساعات تقديرياً؛ بصمتين = المدة الفعلية (حد أقصى 12 ساعة). نسبة البصمة = (حاضر كامل ÷ أيام الحضور) × 100.</p>
-                  <p>التاريخ الذكي: بصمة قبل 06:00 → تُحسب لليوم السابق. البصمة الوحيدة ليلاً (21–01) = حضور نسيان دخول؛ غير ذلك = تحتاج مراجعة (لا تُحسب).</p>
-                  <p className="text-[var(--adora-text)]/80 mt-1">الأيام ذات البصمة غير المكتملة (دخول فقط أو خروج فقط) محسوبة تقديرياً — للمراجعة والاعتماد الإداري.</p>
                 </div>
               </div>
             </div>
           </div>
-        </div>
-      )}
+        )}
 
-      {attendanceLoading && (
-        <div className="fixed inset-0 z-[99] flex items-center justify-center bg-black/50 backdrop-blur-sm">
-          <div className="flex flex-col items-center gap-3 px-6 py-5 rounded-2xl bg-[var(--adora-bg-card)] border border-[var(--adora-border)]">
-            <Loader2 className="w-10 h-10 text-[var(--adora-accent)] animate-spin" />
-            <p className="text-[var(--adora-text)] font-medium">جاري معالجة تقارير الحضور...</p>
+        {attendanceLoading && (
+          <div className="fixed inset-0 z-[99] flex items-center justify-center bg-black/50 backdrop-blur-sm">
+            <div className="flex flex-col items-center gap-3 px-6 py-5 rounded-2xl bg-[var(--adora-bg-card)] border border-[var(--adora-border)]">
+              <Loader2 className="w-10 h-10 text-[var(--adora-accent)] animate-spin" />
+              <p className="text-[var(--adora-text)] font-medium">جاري معالجة تقارير الحضور...</p>
+            </div>
           </div>
-        </div>
-      )}
-    </div>
+        )}
+      </div>
     )
   );
 }
@@ -2304,9 +2296,8 @@ function SettingsPanel({ config, discoveredBranches, onSave, onSaveAsDefault, on
             if (!bc) return null;
 
             return (
-              <section key={branchName} className={`border rounded-xl p-4 space-y-4 ${
-                bc.excluded ? 'border-slate-700/30 bg-slate-800/20 opacity-60' : 'border-slate-700/50 bg-slate-800/30'
-              }`}>
+              <section key={branchName} className={`border rounded-xl p-4 space-y-4 ${bc.excluded ? 'border-slate-700/30 bg-slate-800/20 opacity-60' : 'border-slate-700/50 bg-slate-800/30'
+                }`}>
                 <div className="flex items-center justify-between">
                   <h4 className="text-sky-400 font-bold text-base">{branchName}</h4>
                   <label className="flex items-center gap-2 cursor-pointer">
@@ -2431,11 +2422,10 @@ function SettingsPanel({ config, discoveredBranches, onSave, onSaveAsDefault, on
               إلغاء
             </button>
             <button onClick={handleSave} disabled={saving}
-              className={`px-6 py-1.5 rounded-lg text-sm font-medium border transition-all duration-300 flex items-center gap-1.5 ${
-                saving
-                  ? 'bg-emerald-500/20 text-emerald-300 border-emerald-500/30 shadow-lg shadow-emerald-500/10 scale-105'
-                  : 'bg-cyan-600/20 text-cyan-300 hover:bg-cyan-600/30 border-cyan-500/20 hover:scale-[1.02] active:scale-[0.98]'
-              }`}>
+              className={`px-6 py-1.5 rounded-lg text-sm font-medium border transition-all duration-300 flex items-center gap-1.5 ${saving
+                ? 'bg-emerald-500/20 text-emerald-300 border-emerald-500/30 shadow-lg shadow-emerald-500/10 scale-105'
+                : 'bg-cyan-600/20 text-cyan-300 hover:bg-cyan-600/30 border-cyan-500/20 hover:scale-[1.02] active:scale-[0.98]'
+                }`}>
               {saving ? (
                 <>
                   <svg className="w-3.5 h-3.5 animate-[scaleIn_0.3s_ease-out]" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round">
@@ -2888,90 +2878,90 @@ function ConditionsPopup({ config, onClose }: { config: AppConfig; onClose: () =
 
   return (
     <>
-    <div className="fixed inset-0 z-[200] flex items-center justify-center bg-black/70 backdrop-blur-sm p-2 sm:p-4" onClick={onClose}>
-      <div className="bg-[var(--adora-modal-bg)] border border-[var(--adora-focus-border)] rounded-2xl modal-no-side-shadow max-w-2xl w-full max-h-[90vh] overflow-y-auto flex flex-col" onClick={(e) => e.stopPropagation()}>
-        <div className="px-6 py-4 border-b border-[var(--adora-border)] shrink-0 flex items-center justify-between">
-          <h3 className="text-lg font-black text-[var(--adora-accent)] flex items-center gap-2">
-            <span>📋</span>
-            <span>{schema.modalTitle}</span>
-          </h3>
-          <button onClick={onClose} className="text-[var(--adora-text-secondary)] hover:text-[var(--adora-text)] transition-colors text-2xl font-bold w-11 h-11 flex items-center justify-center rounded-lg hover:bg-[var(--adora-hover-bg)]">×</button>
-        </div>
-        <div className="px-6 py-5 space-y-4 text-sm text-[var(--adora-text-secondary)]">
-          {schema.sections.map((sec) => {
-            if (sec.id === 'vip') {
-              if (branchNames.length === 0 && !(vipDefault.reception > 0 || vipDefault.booking > 0)) return null;
-              const theme = THEME_CLASSES[sec.theme] || THEME_CLASSES.amber;
+      <div className="fixed inset-0 z-[200] flex items-center justify-center bg-black/70 backdrop-blur-sm p-2 sm:p-4" onClick={onClose}>
+        <div className="bg-[var(--adora-modal-bg)] border border-[var(--adora-focus-border)] rounded-2xl modal-no-side-shadow max-w-2xl w-full max-h-[90vh] overflow-y-auto flex flex-col" onClick={(e) => e.stopPropagation()}>
+          <div className="px-6 py-4 border-b border-[var(--adora-border)] shrink-0 flex items-center justify-between">
+            <h3 className="text-lg font-black text-[var(--adora-accent)] flex items-center gap-2">
+              <span>📋</span>
+              <span>{schema.modalTitle}</span>
+            </h3>
+            <button onClick={onClose} className="text-[var(--adora-text-secondary)] hover:text-[var(--adora-text)] transition-colors text-2xl font-bold w-11 h-11 flex items-center justify-center rounded-lg hover:bg-[var(--adora-hover-bg)]">×</button>
+          </div>
+          <div className="px-6 py-5 space-y-4 text-sm text-[var(--adora-text-secondary)]">
+            {schema.sections.map((sec) => {
+              if (sec.id === 'vip') {
+                if (branchNames.length === 0 && !(vipDefault.reception > 0 || vipDefault.booking > 0)) return null;
+                const theme = THEME_CLASSES[sec.theme] || THEME_CLASSES.amber;
+                return (
+                  <div key={sec.id} className={theme.wrap}>
+                    <h4 className={'text-base font-bold mb-3 flex items-center gap-2 ' + theme.title}><span>{sec.icon || ''}</span><span>{conditionsReplaceTemplate(sec.title || '', rp)}</span></h4>
+                    <ul className="space-y-2 list-none">
+                      {branchNames.map((branch) => {
+                        const rooms = vipByBranch[branch] || {};
+                        const roomNums = Object.keys(rooms);
+                        if (roomNums.length === 0) return null;
+                        return (
+                          <li key={branch} className="flex items-start gap-2">
+                            <span className={theme.bullet + ' font-bold'}>•</span>
+                            <span><strong className="text-[var(--adora-warning)]">{branch}:</strong>{' '}
+                              {roomNums.map((room) => {
+                                const r = rooms[room];
+                                return `غرفة ${room} (استقبال: ${r?.reception ?? 0} ريال، بوكينج: ${r?.booking ?? 0} ريال)`;
+                              }).join(' — ')}
+                            </span>
+                          </li>
+                        );
+                      })}
+                      {(vipDefault.reception > 0 || vipDefault.booking > 0) && (
+                        <li className="flex items-start gap-2"><span className={theme.bullet + ' font-bold'}>•</span><span><strong className="text-[var(--adora-warning)]">VIP افتراضي:</strong> استقبال: {vipDefault.reception} ريال، بوكينج: {vipDefault.booking} ريال لكل حجز</span></li>
+                      )}
+                    </ul>
+                  </div>
+                );
+              }
+              const theme = THEME_CLASSES[sec.theme] || THEME_CLASSES.turquoise;
+              // قسم النقاط التراكمية: نفس التنسيق (نقاط + theme) لكن بعرض عمودين
+              const isPointsSection = sec.id === 'points';
               return (
                 <div key={sec.id} className={theme.wrap}>
                   <h4 className={'text-base font-bold mb-3 flex items-center gap-2 ' + theme.title}><span>{sec.icon || ''}</span><span>{conditionsReplaceTemplate(sec.title || '', rp)}</span></h4>
-                  <ul className="space-y-2 list-none">
-                    {branchNames.map((branch) => {
-                      const rooms = vipByBranch[branch] || {};
-                      const roomNums = Object.keys(rooms);
-                      if (roomNums.length === 0) return null;
+                  <ul className={'space-y-2 list-none ' + (isPointsSection ? 'grid grid-cols-1 sm:grid-cols-2 gap-x-6 gap-y-2' : '')}>
+                    {(sec.items || []).map((item, idx) => {
+                      if (item.placeholder === 'instructionsButton') {
+                        return (
+                          <li key={idx} className="flex items-start gap-2 flex-wrap items-center">
+                            <span className={theme.bullet + ' font-bold'}>•</span>
+                            <span className="text-[var(--adora-text-secondary)]">{item.staticBefore}</span>
+                            <button type="button" onClick={(e) => { e.stopPropagation(); setShowInstructions(true); }} className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg text-sm font-bold text-[var(--adora-accent)] bg-[var(--adora-hover-bg)] border border-[var(--adora-focus-border)] hover:bg-[var(--adora-active-bg)] transition-colors mt-1 sm:mt-0">او اضغط هنا</button>
+                          </li>
+                        );
+                      }
+                      const text = item.template ? conditionsReplaceTemplate(item.template, rp) : (item.static || '');
+                      const hasRate = item.template && item.template.includes('ريال');
                       return (
-                        <li key={branch} className="flex items-start gap-2">
+                        <li key={idx} className="flex items-start gap-2">
                           <span className={theme.bullet + ' font-bold'}>•</span>
-                          <span><strong className="text-[var(--adora-warning)]">{branch}:</strong>{' '}
-                            {roomNums.map((room) => {
-                              const r = rooms[room];
-                              return `غرفة ${room} (استقبال: ${r?.reception ?? 0} ريال، بوكينج: ${r?.booking ?? 0} ريال)`;
-                            }).join(' — ')}
-                          </span>
+                          <span>{hasRate ? <strong className="text-[var(--adora-text)]">{text}</strong> : text}</span>
                         </li>
                       );
                     })}
-                    {(vipDefault.reception > 0 || vipDefault.booking > 0) && (
-                      <li className="flex items-start gap-2"><span className={theme.bullet + ' font-bold'}>•</span><span><strong className="text-[var(--adora-warning)]">VIP افتراضي:</strong> استقبال: {vipDefault.reception} ريال، بوكينج: {vipDefault.booking} ريال لكل حجز</span></li>
-                    )}
                   </ul>
                 </div>
               );
-            }
-            const theme = THEME_CLASSES[sec.theme] || THEME_CLASSES.turquoise;
-            // قسم النقاط التراكمية: نفس التنسيق (نقاط + theme) لكن بعرض عمودين
-            const isPointsSection = sec.id === 'points';
-            return (
-              <div key={sec.id} className={theme.wrap}>
-                <h4 className={'text-base font-bold mb-3 flex items-center gap-2 ' + theme.title}><span>{sec.icon || ''}</span><span>{conditionsReplaceTemplate(sec.title || '', rp)}</span></h4>
-                <ul className={'space-y-2 list-none ' + (isPointsSection ? 'grid grid-cols-1 sm:grid-cols-2 gap-x-6 gap-y-2' : '')}>
-                  {(sec.items || []).map((item, idx) => {
-                    if (item.placeholder === 'instructionsButton') {
-                      return (
-                        <li key={idx} className="flex items-start gap-2 flex-wrap items-center">
-                          <span className={theme.bullet + ' font-bold'}>•</span>
-                          <span className="text-[var(--adora-text-secondary)]">{item.staticBefore}</span>
-                          <button type="button" onClick={(e) => { e.stopPropagation(); setShowInstructions(true); }} className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg text-sm font-bold text-[var(--adora-accent)] bg-[var(--adora-hover-bg)] border border-[var(--adora-focus-border)] hover:bg-[var(--adora-active-bg)] transition-colors mt-1 sm:mt-0">او اضغط هنا</button>
-                        </li>
-                      );
-                    }
-                    const text = item.template ? conditionsReplaceTemplate(item.template, rp) : (item.static || '');
-                    const hasRate = item.template && item.template.includes('ريال');
-                    return (
-                      <li key={idx} className="flex items-start gap-2">
-                        <span className={theme.bullet + ' font-bold'}>•</span>
-                        <span>{hasRate ? <strong className="text-[var(--adora-text)]">{text}</strong> : text}</span>
-                      </li>
-                    );
-                  })}
-                </ul>
-              </div>
-            );
-          })}
-        </div>
-        <div className="px-6 py-3 border-t border-[var(--adora-border)] shrink-0 flex justify-end gap-2">
-          <button type="button" onClick={handlePrint} className="px-4 py-2.5 rounded-lg text-sm font-bold text-[var(--adora-text-secondary)] hover:bg-[var(--adora-hover-bg)] transition-colors inline-flex items-center gap-2">
-            <Printer className="w-4 h-4" />
-            طباعة الشروط
-          </button>
-          <button onClick={onClose} className="px-4 py-2.5 rounded-lg text-sm font-bold text-[var(--adora-text-secondary)] hover:bg-[var(--adora-hover-bg)] transition-colors">إغلاق</button>
+            })}
+          </div>
+          <div className="px-6 py-3 border-t border-[var(--adora-border)] shrink-0 flex justify-end gap-2">
+            <button type="button" onClick={handlePrint} className="px-4 py-2.5 rounded-lg text-sm font-bold text-[var(--adora-text-secondary)] hover:bg-[var(--adora-hover-bg)] transition-colors inline-flex items-center gap-2">
+              <Printer className="w-4 h-4" />
+              طباعة الشروط
+            </button>
+            <button onClick={onClose} className="px-4 py-2.5 rounded-lg text-sm font-bold text-[var(--adora-text-secondary)] hover:bg-[var(--adora-hover-bg)] transition-colors">إغلاق</button>
+          </div>
         </div>
       </div>
-    </div>
-    {showInstructions && (
-      <InstructionsPopup onClose={() => setShowInstructions(false)} />
-    )}
+      {showInstructions && (
+        <InstructionsPopup onClose={() => setShowInstructions(false)} />
+      )}
     </>
   );
 }
@@ -3010,10 +3000,10 @@ function printInstructionsModal(instructionsHtml: string, discountSectionHtml: s
   const printStyles = '@page{size:A4 portrait;margin:10mm}body{background:#fff!important;color:#111!important;padding:6mm 8mm;font-family:"IBM Plex Sans Arabic",Arial,sans-serif;font-size:10px;line-height:1.4}@media print{body{background:#fff!important;color:#111!important}.no-print{display:none!important}}';
   printWin.document.write(
     '<!DOCTYPE html><html dir="rtl" lang="ar"><head><meta charset="UTF-8"><title>لائحة تعليمات وسياسات عمل موظفي الاستقبال</title><style>' +
-      printStyles +
-      '</style></head><body><h1 style="font-size:16px;font-weight:900;color:#111;margin-bottom:10px;text-align:center;border-bottom:2px solid #0d9488;padding-bottom:8px;">لائحة تعليمات وسياسات عمل موظفي الاستقبال</h1><div style="max-width:100%;margin:0 auto;font-size:10px;line-height:1.4;">' +
-      content +
-      '</div></body></html>'
+    printStyles +
+    '</style></head><body><h1 style="font-size:16px;font-weight:900;color:#111;margin-bottom:10px;text-align:center;border-bottom:2px solid #0d9488;padding-bottom:8px;">لائحة تعليمات وسياسات عمل موظفي الاستقبال</h1><div style="max-width:100%;margin:0 auto;font-size:10px;line-height:1.4;">' +
+    content +
+    '</div></body></html>'
   );
   printWin.document.close();
   printWin.focus();
@@ -3032,8 +3022,8 @@ function InstructionsPopup({ onClose }: { onClose: () => void }) {
 
   return (
     <div className="fixed inset-0 z-[300] flex items-center justify-center bg-black/70 backdrop-blur-sm" onClick={onClose}>
-<div className="bg-[var(--adora-modal-bg)] border border-[var(--adora-border)] rounded-2xl modal-no-side-shadow max-w-2xl w-[95%] max-h-[90vh] flex flex-col overflow-hidden" onClick={(e) => e.stopPropagation()}>
-      <div className="px-6 py-4 border-b border-[var(--adora-border)] bg-[var(--adora-modal-header-bg)] shrink-0 flex items-center justify-between">
+      <div className="bg-[var(--adora-modal-bg)] border border-[var(--adora-border)] rounded-2xl modal-no-side-shadow max-w-2xl w-[95%] max-h-[90vh] flex flex-col overflow-hidden" onClick={(e) => e.stopPropagation()}>
+        <div className="px-6 py-4 border-b border-[var(--adora-border)] bg-[var(--adora-modal-header-bg)] shrink-0 flex items-center justify-between">
           <div className="flex items-center gap-3">
             <div className="p-2 bg-cyan-500/20 rounded-xl">
               <FileText className="w-5 h-5 text-cyan-400" />
@@ -3617,13 +3607,12 @@ function EmployeeBreakdown({ staffList, data, config, dateRange, logCreationShif
         <button
           onClick={handleTransferToRewards}
           disabled={transferring}
-          className={`flex items-center gap-2 px-7 py-3 rounded-xl text-sm font-bold transition-all duration-300 ${
-            transferDone
-              ? 'bg-emerald-500/20 text-emerald-400 border border-emerald-500/30 shadow-lg shadow-emerald-500/10'
-              : transferring
+          className={`flex items-center gap-2 px-7 py-3 rounded-xl text-sm font-bold transition-all duration-300 ${transferDone
+            ? 'bg-emerald-500/20 text-emerald-400 border border-emerald-500/30 shadow-lg shadow-emerald-500/10'
+            : transferring
               ? 'bg-[var(--adora-active-bg)] text-[var(--adora-accent)] border border-[var(--adora-focus-border)] animate-pulse cursor-wait'
               : 'bg-[var(--adora-hover-bg)] text-[var(--adora-accent)] border border-[var(--adora-focus-border)] hover:bg-[var(--adora-active-bg)] hover:shadow-lg hover:scale-[1.02] active:scale-[0.98] cursor-pointer'
-          }`}
+            }`}
         >
           {transferDone ? (
             <><CircleCheck className="w-4 h-4" /> تم النقل</>
@@ -3728,9 +3717,8 @@ function EmployeeBreakdown({ staffList, data, config, dateRange, logCreationShif
           <tbody>
             {sortedRows.map((r, rowIdx) => (
               <tr key={`${r.branch}-${r.name}`}
-                className={`group border-b border-white/[0.03] transition-all duration-200 hover:bg-white/[0.03] ${
-                  rowIdx % 2 === 0 ? '' : 'bg-white/[0.01]'
-                }`}>
+                className={`group border-b border-white/[0.03] transition-all duration-200 hover:bg-white/[0.03] ${rowIdx % 2 === 0 ? '' : 'bg-white/[0.01]'
+                  }`}>
                 <td className="px-2 py-2 font-medium text-[var(--adora-text)] truncate text-sm">{r.name}</td>
                 <td className="px-2 py-2">
                   <span className="inline-block px-2.5 py-0.5 rounded-full text-[14px] font-semibold badge-adora">{r.branch}</span>
@@ -3780,8 +3768,8 @@ function EmployeeBreakdown({ staffList, data, config, dateRange, logCreationShif
                       {!applicable
                         ? <span className="text-[var(--adora-text-secondary)] text-sm">—</span>
                         : count > 0
-                        ? <button onClick={() => openDrilldown(r.name, r.branch, 'vip', num)} className="font-mono font-bold text-sm text-[var(--adora-warning)] hover:bg-[var(--adora-hover-bg)] px-2 py-0.5 rounded-md transition-all cursor-pointer">{count}</button>
-                        : <span className="text-[var(--adora-text-secondary)] font-mono text-sm">0</span>
+                          ? <button onClick={() => openDrilldown(r.name, r.branch, 'vip', num)} className="font-mono font-bold text-sm text-[var(--adora-warning)] hover:bg-[var(--adora-hover-bg)] px-2 py-0.5 rounded-md transition-all cursor-pointer">{count}</button>
+                          : <span className="text-[var(--adora-text-secondary)] font-mono text-sm">0</span>
                       }
                     </td>
                   );
@@ -3908,25 +3896,25 @@ function EmployeeBreakdown({ staffList, data, config, dateRange, logCreationShif
                           <th>الإيجار</th><th>سعر/ل</th><th>حد أدنى/ل</th><th>المتوقع</th><th>النقص</th><th>ملاحظات</th>
                         </tr></thead>
                         <tbody>${bkgs.map((b, i) => {
-                          const expected = b.minPrice * b.nights;
-                          const badges: string[] = [];
-                          if (b.bookingSource === 'استقبال') badges.push('<span class="badge b-recv">استقبال</span>');
-                          else if (b.bookingSource === 'بوكينج') badges.push('<span class="badge b-book">بوكينج</span>');
-                          if (b.roomCategory === 'VIP') badges.push('<span class="badge b-vip">VIP</span>');
-                          if (b.isMerged) badges.push('<span class="badge b-merge">دمج</span>');
-                          if (b.isMonthly) badges.push('<span class="badge b-monthly">شهري</span>');
-                          if (b.isRoomTransfer) badges.push('<span class="badge b-transfer">نقل غرفة</span>');
-                          const cls = b.priceShortfall > 0 ? 'row-alert' : b.isRoomTransfer ? 'row-transfer' : '';
-                          const shortfallCell = b.isRoomTransfer
-                            ? '<td class="blue">مستبعد</td>'
-                            : b.priceShortfall > 0
-                            ? `<td class="num mono red">▼ ${Math.round(b.priceShortfall).toLocaleString('en-SA')}</td>`
-                            : '<td class="green">✓</td>';
-                          const notes = b.isRoomTransfer ? 'نقل بين غرفتين — لا يمكن تقسيم السعر'
-                            : b.priceShortfall > 0 ? `${b.minPrice}×${b.nights}=${expected.toLocaleString('en-SA')} − ${b.priceSAR.toLocaleString('en-SA')} = ${Math.round(b.priceShortfall).toLocaleString('en-SA')}`
-                            : '';
-                          return `<tr class="${cls}">
-                            <td>${i+1}</td>
+                      const expected = b.minPrice * b.nights;
+                      const badges: string[] = [];
+                      if (b.bookingSource === 'استقبال') badges.push('<span class="badge b-recv">استقبال</span>');
+                      else if (b.bookingSource === 'بوكينج') badges.push('<span class="badge b-book">بوكينج</span>');
+                      if (b.roomCategory === 'VIP') badges.push('<span class="badge b-vip">VIP</span>');
+                      if (b.isMerged) badges.push('<span class="badge b-merge">دمج</span>');
+                      if (b.isMonthly) badges.push('<span class="badge b-monthly">شهري</span>');
+                      if (b.isRoomTransfer) badges.push('<span class="badge b-transfer">نقل غرفة</span>');
+                      const cls = b.priceShortfall > 0 ? 'row-alert' : b.isRoomTransfer ? 'row-transfer' : '';
+                      const shortfallCell = b.isRoomTransfer
+                        ? '<td class="blue">مستبعد</td>'
+                        : b.priceShortfall > 0
+                          ? `<td class="num mono red">▼ ${Math.round(b.priceShortfall).toLocaleString('en-SA')}</td>`
+                          : '<td class="green">✓</td>';
+                      const notes = b.isRoomTransfer ? 'نقل بين غرفتين — لا يمكن تقسيم السعر'
+                        : b.priceShortfall > 0 ? `${b.minPrice}×${b.nights}=${expected.toLocaleString('en-SA')} − ${b.priceSAR.toLocaleString('en-SA')} = ${Math.round(b.priceShortfall).toLocaleString('en-SA')}`
+                          : '';
+                      return `<tr class="${cls}">
+                            <td>${i + 1}</td>
                             <td class="mono">${b.bookingNumber}</td>
                             <td>${b.guestName || '—'}</td>
                             <td>${b.roomUnit || '—'}</td>
@@ -3943,7 +3931,7 @@ function EmployeeBreakdown({ staffList, data, config, dateRange, logCreationShif
                             ${shortfallCell}
                             <td style="font-size:9px;color:#64748b">${notes}</td>
                           </tr>`;
-                        }).join('')}</tbody>
+                    }).join('')}</tbody>
                         <tfoot><tr style="font-weight:700;background:#f8fafc">
                           <td colspan="9">الإجمالي</td>
                           <td class="num mono">${totalNights}</td>
@@ -3996,29 +3984,26 @@ function EmployeeBreakdown({ staffList, data, config, dateRange, logCreationShif
               <div className="overflow-y-auto flex-1 p-3 space-y-2">
                 {drilldown.bookings.map((b, i) => (
                   <div key={`${b.bookingNumber}-${i}`}
-                    className={`rounded-xl border p-3 transition-colors ${
-                      b.priceShortfall > 0
-                        ? 'bg-red-950/20 border-red-500/20'
-                        : b.isRoomTransfer
+                    className={`rounded-xl border p-3 transition-colors ${b.priceShortfall > 0
+                      ? 'bg-red-950/20 border-red-500/20'
+                      : b.isRoomTransfer
                         ? 'bg-blue-950/20 border-blue-500/20'
                         : 'bg-slate-800/30 border-slate-700/30 hover:bg-slate-800/50'
-                    }`}>
+                      }`}>
                     {/* Top row */}
                     <div className="flex items-center gap-2 mb-2">
                       <span className="text-slate-600 text-sm w-5 shrink-0">{i + 1}</span>
                       <span className="text-slate-100 font-mono font-bold text-sm">{b.bookingNumber}</span>
-                      <span className={`px-1.5 py-0.5 rounded text-[14px] font-bold ${
-                        b.bookingSource === 'استقبال'
-                          ? 'bg-emerald-500/15 text-emerald-400 border border-emerald-500/20'
-                          : b.bookingSource === 'بوكينج'
+                      <span className={`px-1.5 py-0.5 rounded text-[14px] font-bold ${b.bookingSource === 'استقبال'
+                        ? 'bg-emerald-500/15 text-emerald-400 border border-emerald-500/20'
+                        : b.bookingSource === 'بوكينج'
                           ? 'bg-orange-500/15 text-orange-400 border border-orange-500/20'
                           : 'bg-slate-500/15 text-slate-400 border border-slate-500/20'
-                      }`}>{b.bookingSource}</span>
-                      <span className={`px-1.5 py-0.5 rounded text-[14px] font-bold ${
-                        b.shift === 'صباح' ? 'bg-amber-500/15 text-amber-400 border border-amber-500/20'
+                        }`}>{b.bookingSource}</span>
+                      <span className={`px-1.5 py-0.5 rounded text-[14px] font-bold ${b.shift === 'صباح' ? 'bg-amber-500/15 text-amber-400 border border-amber-500/20'
                         : b.shift === 'مساء' ? 'bg-indigo-500/15 text-indigo-400 border border-indigo-500/20'
-                        : 'bg-slate-500/15 text-slate-400 border border-slate-500/20'
-                      }`}>{b.shift}</span>
+                          : 'bg-slate-500/15 text-slate-400 border border-slate-500/20'
+                        }`}>{b.shift}</span>
                       {b.roomCategory === 'VIP' && (
                         <span className="px-1.5 py-0.5 rounded text-[14px] font-bold bg-violet-500/15 text-violet-400 border border-violet-500/20">
                           <Crown className="w-3 h-3 inline -mt-0.5 ml-0.5" />VIP
