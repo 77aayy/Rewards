@@ -58,6 +58,7 @@ function serveRewardsFromSource(req: IncomingMessage, res: ServerResponse, next:
 }
 
 export default defineConfig({
+  base: '/Rewards/',
   build: {
     reportCompressedSize: true,
     chunkSizeWarningLimit: 600,
