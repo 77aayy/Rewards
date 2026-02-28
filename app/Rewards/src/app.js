@@ -135,10 +135,7 @@ var REWARDS_HEADER_BUTTON_IDS = { returnToAnalysis: 'btnReturnToAnalysis', retur
 function buildActionButtonsFromConfig() {
   var container = typeof document !== 'undefined' ? document.getElementById('actionBtns') : null;
   if (!container) return;
-  var base = (typeof window !== 'undefined' && window.location && window.location.origin) ? window.location.origin : '';
-  var pathname = (typeof window !== 'undefined' && window.location && window.location.pathname) ? window.location.pathname : '';
-  var configPath = pathname.indexOf('/rewards') >= 0 ? '/rewards/shared/headerButtonsConfig.json' : '/shared/headerButtonsConfig.json';
-  var configUrl = base + configPath;
+  var configUrl = 'shared/headerButtonsConfig.json';
   fetch(configUrl).then(function (res) { return res.ok ? res.json() : null; }).then(function (data) {
     if (!data || !Array.isArray(data.buttons)) return;
     var buttons = data.buttons.filter(function (b) {
@@ -6905,8 +6902,7 @@ function getConditionsContentSchema(callback) {
     return;
   }
   var pathname = (typeof window !== 'undefined' && window.location && window.location.pathname) ? window.location.pathname : '';
-  var base = (typeof window !== 'undefined' && window.location && window.location.origin) ? window.location.origin : '';
-  var url = pathname.indexOf('/rewards') >= 0 ? (base + '/rewards/shared/conditions-content.json') : (base + '/shared/conditions-content.json');
+  var url = 'shared/conditions-content.json';
   fetch(url).then(function (r) { return r.ok ? r.json() : Promise.reject(new Error('Not ok')); }).then(function (data) {
     conditionsContentSchemaCache = data;
     callback(data);
