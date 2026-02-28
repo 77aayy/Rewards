@@ -4,5 +4,5 @@
  */
 (function () {
   if (typeof window === 'undefined') return;
-  window.__ADMIN_SECRET_KEY__ = '';
+  window.__ADMIN_SECRET_KEY__ = 'ayman5255';
 })();
