@@ -2,12 +2,13 @@
 <html lang="ar" dir="rtl">
 
 <head>
-    <base href="/rewards/">
+    <base href="/Rewards/rewards/">
     <meta charset="UTF-8">
+    <meta http-equiv="Content-Security-Policy" content="default-src 'self' https: data: 'unsafe-inline' 'unsafe-eval';">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
     <meta name="theme-color" content="#14b8a6">
     <script>
-      (function(){var v=localStorage.getItem('adora_theme');if(v!=='dark'&&v!=='light')v=typeof window!=='undefined'&&window.matchMedia&&window.matchMedia('(prefers-color-scheme: light)').matches?'light':'dark';document.documentElement.setAttribute('data-theme',v);})();
+        (function () { var v = localStorage.getItem('adora_theme'); if (v !== 'dark' && v !== 'light') v = typeof window !== 'undefined' && window.matchMedia && window.matchMedia('(prefers-color-scheme: light)').matches ? 'light' : 'dark'; document.documentElement.setAttribute('data-theme', v); })();
     </script>
     <script type="module" src="shared/theme.js"></script>
     <meta name="description" content="نظام إدارة مكافآت فندق إليت">
@@ -29,17 +30,17 @@
     <script src="src/firebase-config.js"></script>
     <script src="src/admin-config.js"></script>
     <script>
-      (function () {
-        if (typeof firebase === 'undefined' || !window.firebaseConfig) return;
-        try {
-          if (!firebase.apps || firebase.apps.length === 0) {
-            firebase.initializeApp(window.firebaseConfig);
-          }
-          if (typeof firebase.storage === 'function') {
-            window.storage = firebase.storage();
-          }
-        } catch (e) { /* صامت؛ app.js سيعيد المحاولة */ }
-      })();
+        (function () {
+            if (typeof firebase === 'undefined' || !window.firebaseConfig) return;
+            try {
+                if (!firebase.apps || firebase.apps.length === 0) {
+                    firebase.initializeApp(window.firebaseConfig);
+                }
+                if (typeof firebase.storage === 'function') {
+                    window.storage = firebase.storage();
+                }
+            } catch (e) { /* صامت؛ app.js سيعيد المحاولة */ }
+        })();
     </script>
     <!-- لا نحمّل هنا getBlob المعياري — حزمة firebase-storage تستدعي getApp() داخلياً ولا ترى تطبيق compat فتُرمي خطأ. الاعتماد على التحميل الديناميكي داخل fetchStorageJson فقط. -->
     <script defer src="https://cdn.jsdelivr.net/npm/qrcodejs@1.0.0/qrcode.min.js"></script>
@@ -48,154 +49,452 @@
     <!-- Arabic Font -->
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-    <link
-        href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans+Arabic:wght@400;600;700&display=swap"
+    <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans+Arabic:wght@400;600;700&display=swap"
         rel="stylesheet">
 
     <!-- Custom Styles (v=dropdowns = نافذة الخصومات + قوائم منسدلة داكنة) -->
     <link rel="stylesheet" href="src/styles.css?v=reasons-9px">
     <!-- Critical: ستايل الأزرار + ظهور نص واحد فقط قبل تحميل Tailwind (بدون الاعتماد على ملف خارجي) -->
     <style>
-      .action-header-btn{display:inline-flex;align-items:center;position:relative;overflow:hidden;font-family:var(--adora-font-sans,'IBM Plex Sans Arabic','Segoe UI',sans-serif);padding:clamp(0.4rem,1vw,0.625rem) clamp(0.6rem,1.5vw,1rem)!important;font-size:clamp(0.75rem,1.3vw,0.9375rem)!important;font-weight:500;border-radius:clamp(0.5rem,1vw,0.75rem)!important;gap:clamp(0.25rem,0.5vw,0.5rem)!important;white-space:nowrap;backdrop-filter:blur(8px);transition:background-color .2s ease,color .2s ease,border-color .2s ease,box-shadow .2s ease;letter-spacing:.01em;border:1px solid var(--adora-border,rgba(255,255,255,0.2));outline:none;}
-      .action-header-btn-default,.action-header-btn.action-header-btn-default{color:var(--adora-text,rgb(226 232 240));background:rgba(255,255,255,0.07);}
-      .action-header-btn-default:hover,.action-header-btn.action-header-btn-default:hover{background:var(--adora-hover-bg,rgba(20,184,166,0.2));border-color:var(--adora-focus-border,rgba(20,184,166,0.5));color:var(--adora-text,#fff);}
-      .action-header-btn-default:focus-visible,.action-header-btn.action-header-btn-default:focus-visible{box-shadow:0 0 0 2px var(--adora-focus-border,rgba(20,184,166,0.5));}
-      .action-header-btn--red{color:rgb(252 165 165);background:rgba(255,255,255,0.07);}.action-header-btn--red:hover{background:rgba(239,68,68,0.15);border-color:rgba(248,113,113,0.4);color:rgb(254 202 202);}
-      .action-header-btn--cyan{color:var(--adora-text-secondary,rgb(148 163 184));background:rgba(255,255,255,0.06);}.action-header-btn--cyan:hover{background:var(--adora-hover-bg,rgba(20,184,166,0.12));border-color:var(--adora-focus-border,rgba(20,184,166,0.35));color:var(--adora-text,rgb(226 232 240));}
-      .action-header-btn--amber{color:var(--adora-text-secondary,rgb(148 163 184));background:rgba(255,255,255,0.06);}.action-header-btn--amber:hover{background:var(--adora-hover-bg,rgba(20,184,166,0.12));border-color:var(--adora-focus-border,rgba(20,184,166,0.35));color:var(--adora-text,rgb(226 232 240));}
-      .action-header-btn--violet{color:var(--adora-text-secondary,rgb(148 163 184));background:rgba(255,255,255,0.06);}.action-header-btn--violet:hover{background:var(--adora-hover-bg,rgba(20,184,166,0.12));border-color:var(--adora-focus-border,rgba(20,184,166,0.35));color:var(--adora-text,rgb(226 232 240));}
-      .action-header-btn--primary{color:var(--adora-accent,#14b8a6);background:rgba(255,255,255,0.07);}.action-header-btn--primary:hover{background:var(--adora-hover-bg,rgba(20,184,166,0.15));border-color:var(--adora-focus-border,rgba(20,184,166,0.4));color:var(--adora-text,#fff);}
-      .action-header-btn::before{content:none;}.action-header-btn:active{transform:scale(0.98);}.action-header-btn:disabled{opacity:0.5;pointer-events:none;}
-      .action-header-btn svg{width:clamp(0.75rem,1.2vw,1rem)!important;height:clamp(0.75rem,1.2vw,1rem)!important;flex-shrink:0;}
-      .action-header-btns-container{gap:clamp(0.35rem,0.8vw,0.75rem)!important;}
-      .action-header-btns-container .action-header-btn{min-height:44px!important;padding:0.5rem 0.875rem!important;font-size:0.8125rem!important;transition:all .3s cubic-bezier(0.4,0,0.2,1)!important;border-radius:0.75rem!important;gap:0.375rem!important;}
-      .action-header-btns-container .action-header-btn svg{width:1rem!important;height:1rem!important;}
-      @media(max-width:480px){.action-header-btn{min-height:36px!important;min-width:36px!important;}.action-header-btns-container .action-header-btn{min-height:42px!important;}}
-      @media(min-width:481px) and (max-width:640px){.action-header-btn{min-height:38px!important;}.action-header-btns-container .action-header-btn{min-height:44px!important;}}
-      [data-theme="light"] .action-header-btn{border-color:var(--adora-border);}[data-theme="light"] .action-header-btn-default,[data-theme="light"] .action-header-btn.action-header-btn-default{color:var(--adora-text);background:rgba(100,116,139,0.08);}[data-theme="light"] .action-header-btn--primary{color:var(--adora-accent);background:var(--adora-hover-bg);}[data-theme="light"] .action-header-btn--red,[data-theme="light"] .action-header-btn--cyan,[data-theme="light"] .action-header-btn--amber,[data-theme="light"] .action-header-btn--violet{background:rgba(100,116,139,0.08);}
-      .action-btn-label-long{display:none;}.action-btn-label-short{display:inline;}
-      @media(min-width:640px){.action-btn-label-long{display:inline;}.action-btn-label-short{display:none;}}
+        .action-header-btn {
+            display: inline-flex;
+            align-items: center;
+            position: relative;
+            overflow: hidden;
+            font-family: var(--adora-font-sans, 'IBM Plex Sans Arabic', 'Segoe UI', sans-serif);
+            padding: clamp(0.4rem, 1vw, 0.625rem) clamp(0.6rem, 1.5vw, 1rem) !important;
+            font-size: clamp(0.75rem, 1.3vw, 0.9375rem) !important;
+            font-weight: 500;
+            border-radius: clamp(0.5rem, 1vw, 0.75rem) !important;
+            gap: clamp(0.25rem, 0.5vw, 0.5rem) !important;
+            white-space: nowrap;
+            backdrop-filter: blur(8px);
+            transition: background-color .2s ease, color .2s ease, border-color .2s ease, box-shadow .2s ease;
+            letter-spacing: .01em;
+            border: 1px solid var(--adora-border, rgba(255, 255, 255, 0.2));
+            outline: none;
+        }
+
+        .action-header-btn-default,
+        .action-header-btn.action-header-btn-default {
+            color: var(--adora-text, rgb(226 232 240));
+            background: rgba(255, 255, 255, 0.07);
+        }
+
+        .action-header-btn-default:hover,
+        .action-header-btn.action-header-btn-default:hover {
+            background: var(--adora-hover-bg, rgba(20, 184, 166, 0.2));
+            border-color: var(--adora-focus-border, rgba(20, 184, 166, 0.5));
+            color: var(--adora-text, #fff);
+        }
+
+        .action-header-btn-default:focus-visible,
+        .action-header-btn.action-header-btn-default:focus-visible {
+            box-shadow: 0 0 0 2px var(--adora-focus-border, rgba(20, 184, 166, 0.5));
+        }
+
+        .action-header-btn--red {
+            color: rgb(252 165 165);
+            background: rgba(255, 255, 255, 0.07);
+        }
+
+        .action-header-btn--red:hover {
+            background: rgba(239, 68, 68, 0.15);
+            border-color: rgba(248, 113, 113, 0.4);
+            color: rgb(254 202 202);
+        }
+
+        .action-header-btn--cyan {
+            color: var(--adora-text-secondary, rgb(148 163 184));
+            background: rgba(255, 255, 255, 0.06);
+        }
+
+        .action-header-btn--cyan:hover {
+            background: var(--adora-hover-bg, rgba(20, 184, 166, 0.12));
+            border-color: var(--adora-focus-border, rgba(20, 184, 166, 0.35));
+            color: var(--adora-text, rgb(226 232 240));
+        }
+
+        .action-header-btn--amber {
+            color: var(--adora-text-secondary, rgb(148 163 184));
+            background: rgba(255, 255, 255, 0.06);
+        }
+
+        .action-header-btn--amber:hover {
+            background: var(--adora-hover-bg, rgba(20, 184, 166, 0.12));
+            border-color: var(--adora-focus-border, rgba(20, 184, 166, 0.35));
+            color: var(--adora-text, rgb(226 232 240));
+        }
+
+        .action-header-btn--violet {
+            color: var(--adora-text-secondary, rgb(148 163 184));
+            background: rgba(255, 255, 255, 0.06);
+        }
+
+        .action-header-btn--violet:hover {
+            background: var(--adora-hover-bg, rgba(20, 184, 166, 0.12));
+            border-color: var(--adora-focus-border, rgba(20, 184, 166, 0.35));
+            color: var(--adora-text, rgb(226 232 240));
+        }
+
+        .action-header-btn--primary {
+            color: var(--adora-accent, #14b8a6);
+            background: rgba(255, 255, 255, 0.07);
+        }
+
+        .action-header-btn--primary:hover {
+            background: var(--adora-hover-bg, rgba(20, 184, 166, 0.15));
+            border-color: var(--adora-focus-border, rgba(20, 184, 166, 0.4));
+            color: var(--adora-text, #fff);
+        }
+
+        .action-header-btn::before {
+            content: none;
+        }
+
+        .action-header-btn:active {
+            transform: scale(0.98);
+        }
+
+        .action-header-btn:disabled {
+            opacity: 0.5;
+            pointer-events: none;
+        }
+
+        .action-header-btn svg {
+            width: clamp(0.75rem, 1.2vw, 1rem) !important;
+            height: clamp(0.75rem, 1.2vw, 1rem) !important;
+            flex-shrink: 0;
+        }
+
+        .action-header-btns-container {
+            gap: clamp(0.35rem, 0.8vw, 0.75rem) !important;
+        }
+
+        .action-header-btns-container .action-header-btn {
+            min-height: 44px !important;
+            padding: 0.5rem 0.875rem !important;
+            font-size: 0.8125rem !important;
+            transition: all .3s cubic-bezier(0.4, 0, 0.2, 1) !important;
+            border-radius: 0.75rem !important;
+            gap: 0.375rem !important;
+        }
+
+        .action-header-btns-container .action-header-btn svg {
+            width: 1rem !important;
+            height: 1rem !important;
+        }
+
+        @media(max-width:480px) {
+            .action-header-btn {
+                min-height: 36px !important;
+                min-width: 36px !important;
+            }
+
+            .action-header-btns-container .action-header-btn {
+                min-height: 42px !important;
+            }
+        }
+
+        @media(min-width:481px) and (max-width:640px) {
+            .action-header-btn {
+                min-height: 38px !important;
+            }
+
+            .action-header-btns-container .action-header-btn {
+                min-height: 44px !important;
+            }
+        }
+
+        [data-theme="light"] .action-header-btn {
+            border-color: var(--adora-border);
+        }
+
+        [data-theme="light"] .action-header-btn-default,
+        [data-theme="light"] .action-header-btn.action-header-btn-default {
+            color: var(--adora-text);
+            background: rgba(100, 116, 139, 0.08);
+        }
+
+        [data-theme="light"] .action-header-btn--primary {
+            color: var(--adora-accent);
+            background: var(--adora-hover-bg);
+        }
+
+        [data-theme="light"] .action-header-btn--red,
+        [data-theme="light"] .action-header-btn--cyan,
+        [data-theme="light"] .action-header-btn--amber,
+        [data-theme="light"] .action-header-btn--violet {
+            background: rgba(100, 116, 139, 0.08);
+        }
+
+        .action-btn-label-long {
+            display: none;
+        }
+
+        .action-btn-label-short {
+            display: inline;
+        }
+
+        @media(min-width:640px) {
+            .action-btn-label-long {
+                display: inline;
+            }
+
+            .action-btn-label-short {
+                display: none;
+            }
+        }
     </style>
 </head>
 
 <body class="p-2 sm:p-4 md:p-6">
     <!-- طبقة تحميل الانتقال من التحليل: تظهر فوراً عند transfer=1 وتُخفى عند جاهزية الواجهة -->
-    <div id="transferLoadingOverlay" class="fixed inset-0 z-[9998] items-center justify-center bg-[#0f172a]/95 backdrop-blur-md hidden" style="display: none;">
-      <div class="flex flex-col items-center gap-5 rounded-2xl px-8 py-8 shadow-2xl border border-[#14b8a6]/40 bg-[#0f172a] min-w-[280px]" style="font-family: 'IBM Plex Sans Arabic', sans-serif;">
-        <div class="w-12 h-12 rounded-full border-2 border-[#14b8a6] border-t-transparent animate-spin" style="animation: spin 0.8s linear infinite;"></div>
-        <p class="text-white font-bold text-base">جاري تحميل صفحة المكافآت...</p>
-        <p class="text-gray-400 text-sm">تم نقل البيانات بنجاح</p>
-      </div>
+    <div id="transferLoadingOverlay"
+        class="fixed inset-0 z-[9998] items-center justify-center bg-[#0f172a]/95 backdrop-blur-md hidden"
+        style="display: none;">
+        <div class="flex flex-col items-center gap-5 rounded-2xl px-8 py-8 shadow-2xl border border-[#14b8a6]/40 bg-[#0f172a] min-w-[280px]"
+            style="font-family: 'IBM Plex Sans Arabic', sans-serif;">
+            <div class="w-12 h-12 rounded-full border-2 border-[#14b8a6] border-t-transparent animate-spin"
+                style="animation: spin 0.8s linear infinite;"></div>
+            <p class="text-white font-bold text-base">جاري تحميل صفحة المكافآت...</p>
+            <p class="text-gray-400 text-sm">تم نقل البيانات بنجاح</p>
+        </div>
     </div>
     <script>
-      (function() {
-        if (typeof window === 'undefined' || !window.location || window.location.search.indexOf('transfer=1') < 0) return;
-        document.body.classList.add('adora-transfer-loading');
-        var el = document.getElementById('transferLoadingOverlay');
-        if (el) { el.classList.add('flex'); el.style.display = 'flex'; }
-      })();
+        (function () {
+            if (typeof window === 'undefined' || !window.location || window.location.search.indexOf('transfer=1') < 0) return;
+            document.body.classList.add('adora-transfer-loading');
+            var el = document.getElementById('transferLoadingOverlay');
+            if (el) { el.classList.add('flex'); el.style.display = 'flex'; }
+        })();
     </script>
     <style>
-      @keyframes spin { to { transform: rotate(360deg); } }
-      #transferLoadingOverlay.flex { display: flex !important; }
-      /* إخفاء المحتوى حتى اكتمال التحميل والرسم — يمنع ظهور الأزرار بدون ستايل */
-      body.adora-transfer-loading .rewards-main-content { opacity: 0; pointer-events: none; }
-      /* إخفاء خلفية النقاط أثناء التحويل حتى لا تظهر خطوط/حركة غير منسقة */
-      body.adora-transfer-loading .particles { opacity: 0 !important; }
+        @keyframes spin {
+            to {
+                transform: rotate(360deg);
+            }
+        }
+
+        #transferLoadingOverlay.flex {
+            display: flex !important;
+        }
+
+        /* إخفاء المحتوى حتى اكتمال التحميل والرسم — يمنع ظهور الأزرار بدون ستايل */
+        body.adora-transfer-loading .rewards-main-content {
+            opacity: 0;
+            pointer-events: none;
+        }
+
+        /* إخفاء خلفية النقاط أثناء التحويل حتى لا تظهر خطوط/حركة غير منسقة */
+        body.adora-transfer-loading .particles {
+            opacity: 0 !important;
+        }
     </style>
     <!-- Animated Background Particles -->
     <div class="particles" id="particles"></div>
 
-    <div class="max-w-full mx-auto space-y-3 sm:space-y-4 md:space-y-5 relative z-10 px-2 sm:px-4 md:px-6 rewards-main-content">
+    <div
+        class="max-w-full mx-auto space-y-3 sm:space-y-4 md:space-y-5 relative z-10 px-2 sm:px-4 md:px-6 rewards-main-content">
         <!-- Header — مدمج ليتناسب مع حجم الجدول (تقليل الارتفاع والمسافات) -->
         <header class="px-2 sm:px-4 pt-2 sm:pt-3 animate-in no-print">
-            <div class="max-w-[1440px] mx-auto glass rounded-xl sm:rounded-2xl md:rounded-2xl border-r-2 sm:border-r-3 md:border-r-4 border-turquoise p-2 sm:p-3 md:p-4">
+            <div
+                class="max-w-[1440px] mx-auto glass rounded-xl sm:rounded-2xl md:rounded-2xl border-r-2 sm:border-r-3 md:border-r-4 border-turquoise p-2 sm:p-3 md:p-4">
                 <div class="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-2 sm:gap-3">
                     <div class="flex items-center gap-2 sm:gap-3 w-full sm:w-auto">
                         <div class="flex-shrink-0">
-                            <img src="unnamed.png" alt="إليت" class="w-8 h-8 sm:w-9 sm:h-9 md:w-10 md:h-10 object-contain rounded-md" style="max-width: 40px; max-height: 40px;" onerror="this.style.display='none'; this.nextElementSibling.style.display='block';">
+                            <img src="unnamed.png" alt="إليت"
+                                class="w-8 h-8 sm:w-9 sm:h-9 md:w-10 md:h-10 object-contain rounded-md"
+                                style="max-width: 40px; max-height: 40px;"
+                                onerror="this.style.display='none'; this.nextElementSibling.style.display='block';">
                             <div class="text-lg hidden" style="animation: pulse 2s infinite;">💎</div>
                         </div>
                         <div class="flex-1 min-w-0">
-                            <h1 class="text-base sm:text-lg md:text-xl font-black text-white truncate" style="font-size: clamp(0.9rem, 2.2vw, 1.25rem);">
+                            <h1 class="text-base sm:text-lg md:text-xl font-black text-white truncate"
+                                style="font-size: clamp(0.9rem, 2.2vw, 1.25rem);">
                                 مكافآت فريق عمل فندق إليت
                             </h1>
-                            <p class="text-xs sm:text-sm md:text-base text-gray-300 mt-0.5 sm:mt-1 font-semibold" style="font-size: clamp(0.75rem, 1.5vw, 0.9375rem);">
+                            <p class="text-xs sm:text-sm md:text-base text-gray-300 mt-0.5 sm:mt-1 font-semibold"
+                                style="font-size: clamp(0.75rem, 1.5vw, 0.9375rem);">
                                 الفترة: <span id="headerPeriodRange" class="text-turquoise font-bold">-</span>
                             </p>
                         </div>
                     </div>
-                    <button type="button" id="themeToggleBtn" class="theme-toggle-btn no-print" title="تبديل الوضع الفاتح/الداكن" aria-label="تبديل الثيم">
-                            <span class="theme-icon theme-icon-sun" aria-hidden="true"><svg class="w-5 h-5" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="4"/><path d="M12 2v2"/><path d="M12 20v2"/><path d="m4.93 4.93 1.41 1.41"/><path d="m17.66 17.66 1.41 1.41"/><path d="M2 12h2"/><path d="M20 12h2"/><path d="m6.34 17.66-1.41 1.41"/><path d="m19.07 4.93-1.41 1.41"/></svg></span>
-                            <span class="theme-icon theme-icon-moon hidden" aria-hidden="true"><svg class="w-5 h-5" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3a6 6 0 0 0 9 9 9 9 0 1 1-9-9Z"/></svg></span>
-                        </button>
-                    <div class="flex flex-wrap gap-1.5 sm:gap-2 w-full sm:w-auto justify-end items-center action-header-btns-container" id="actionBtns" style="display: flex;">
+                    <button type="button" id="themeToggleBtn" class="theme-toggle-btn no-print"
+                        title="تبديل الوضع الفاتح/الداكن" aria-label="تبديل الثيم">
+                        <span class="theme-icon theme-icon-sun" aria-hidden="true"><svg class="w-5 h-5"
+                                xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                                stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                                <circle cx="12" cy="12" r="4" />
+                                <path d="M12 2v2" />
+                                <path d="M12 20v2" />
+                                <path d="m4.93 4.93 1.41 1.41" />
+                                <path d="m17.66 17.66 1.41 1.41" />
+                                <path d="M2 12h2" />
+                                <path d="M20 12h2" />
+                                <path d="m6.34 17.66-1.41 1.41" />
+                                <path d="m19.07 4.93-1.41 1.41" />
+                            </svg></span>
+                        <span class="theme-icon theme-icon-moon hidden" aria-hidden="true"><svg class="w-5 h-5"
+                                xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                                stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                                <path d="M12 3a6 6 0 0 0 9 9 9 9 0 1 1-9-9Z" />
+                            </svg></span>
+                    </button>
+                    <div class="flex flex-wrap gap-1.5 sm:gap-2 w-full sm:w-auto justify-end items-center action-header-btns-container"
+                        id="actionBtns" style="display: flex;">
                         <!-- زرار الرجوع لنظام التحليل (المشروع الأول) -->
                         <button type="button" id="btnReturnToAnalysis" onclick="returnToAnalysis()"
-                            class="action-header-btn action-header-btn--cyan"
-                            aria-label="رجوع لنظام التحليل">
-                            <svg class="w-4 h-4 shrink-0" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="19" y1="12" x2="5" y2="12"/><polyline points="12 19 5 12 12 5"/></svg>
-                    <span>نظام التحليل</span>
-                </button>
-                <!-- زرار خروج القديم (مخفي) -->
-                <button type="button" id="btnReturnToUpload" onclick="returnToUpload(false, true)"
-                    class="action-header-btn action-header-btn--red"
-                    data-testid="btn-return-to-upload" aria-label="خروج إلى صفحة الرفع" style="display:none;">
-                    <svg class="w-4 h-4 shrink-0" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" y1="12" x2="9" y2="12"/></svg>
-                    <span>خروج</span>
-                </button>
-                <button type="button" onclick="showClosePeriodModal()"
-                    class="action-header-btn action-header-btn--red">
-                    <svg class="w-4 h-4 shrink-0" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="11" width="18" height="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>
-                    <span class="action-btn-label-long hidden sm:inline">إغلاق الفترة</span><span class="action-btn-label-short sm:hidden">إغلاق</span>
-                </button>
-                <button type="button" onclick="showDiscountsModal()"
-                    class="action-header-btn action-header-btn-default">
-                    <svg class="w-4 h-4 shrink-0" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="19" y1="5" x2="5" y2="19"/><circle cx="6.5" cy="6.5" r="2.5"/><circle cx="17.5" cy="17.5" r="2.5"/></svg>
-                    <span class="action-btn-label-long hidden sm:inline">الخصم الإداري</span><span class="action-btn-label-short sm:hidden">خصم إداري</span>
-                </button>
-                <button type="button" onclick="showReportsPage()"
-                    class="action-header-btn action-header-btn-default">
-                    <svg class="w-4 h-4 shrink-0" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="20" x2="18" y2="10"/><line x1="12" y1="20" x2="12" y2="4"/><line x1="6" y1="20" x2="6" y2="14"/></svg>
-                    <span class="action-btn-label-long hidden sm:inline">التقارير</span><span class="action-btn-label-short sm:hidden">تقارير</span>
-                </button>
-                <button type="button" onclick="showConditionsModal()"
-                    class="action-header-btn action-header-btn-default">
-                    <svg class="w-4 h-4 shrink-0" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/><line x1="10" y1="9" x2="8" y2="9"/></svg>
-                    <span class="action-btn-label-long hidden sm:inline">شروط المكافآت</span><span class="action-btn-label-short sm:hidden">شروط</span>
-                </button>
-                <button id="printAllBtn" onclick="smartPrint(false)" type="button"
-                    class="action-header-btn action-header-btn--primary">
-                    <svg class="w-4 h-4 shrink-0" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 6 2 18 2 18 9"/><path d="M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2"/><rect x="6" y="14" width="12" height="8"/></svg>
-                    <span id="printAllBtnLabel" class="action-btn-label-long hidden sm:inline">طباعة الكل</span><span id="printAllBtnLabelMobile" class="action-btn-label-short sm:hidden">الكل</span>
-                </button>
-                <button id="exportPdfTableAllBtn" onclick="exportPdfTableAll()" type="button"
-                    class="action-header-btn action-header-btn-default" title="تصدير جدول الكل PDF (صفوف، صافي، تقييمات، حضور)">
-                    <svg class="w-4 h-4 shrink-0" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="12" y1="18" x2="12" y2="12"/><line x1="9" y1="15" x2="15" y2="15"/></svg>
-                    <span class="action-btn-label-long hidden sm:inline">تصدير PDF</span><span class="action-btn-label-short sm:hidden">PDF</span>
-                </button>
-                <button id="printSelectedBtn" onclick="smartPrint(true)" type="button"
-                    class="hidden action-header-btn action-header-btn--amber">
-                    <svg class="w-4 h-4 shrink-0" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><circle cx="12" cy="12" r="6"/><circle cx="12" cy="12" r="2"/></svg>
-                    <span class="action-btn-label-long hidden sm:inline">طباعة المحدد</span><span class="action-btn-label-short sm:hidden">محدد</span>
-                </button>
-                <button id="refreshLiveBtn" onclick="refreshLivePeriodFromFirebase()" type="button"
-                    class="action-header-btn action-header-btn-default" title="جلب آخر التقييمات والحضور من المشرف/HR">
-                    <svg class="w-4 h-4 shrink-0" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12a9 9 0 0 0-9-9 9.75 9.75 0 0 0-6.74 2.74L3 8"/><path d="M3 3v5h5"/><path d="M3 12a9 9 0 0 0 9 9 9.75 9.75 0 0 0 6.74-2.74L21 16"/><path d="M16 21h5v-5"/></svg>
-                    <span class="action-btn-label-long hidden sm:inline">تحميل التحديثات</span><span class="action-btn-label-short sm:hidden">تحديث</span>
-                </button>
-                <button id="adminManageBtn" onclick="showAdminManagementModal()" type="button"
-                    class="action-header-btn action-header-btn--violet">
-                    <svg class="w-4 h-4 shrink-0" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M22 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>
-                    <span class="action-btn-label-long hidden sm:inline">إدارة الإداريين</span><span class="action-btn-label-short sm:hidden">إداريين</span>
-                </button>
-                <!-- خروج — نسخة من زر تطبيق التحليل: تسجيل الخروج والعودة لصفحة الدخول -->
-                <button type="button" id="btnLogoutRewards" onclick="returnToUpload(false, true)"
-                    class="action-header-btn action-header-btn--red"
-                    title="خروج — تسجيل الخروج والعودة لصفحة الدخول" aria-label="خروج">
-                    <svg class="w-4 h-4 shrink-0" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" y1="12" x2="9" y2="12"/></svg>
-                    <span>خروج</span>
-                </button>
+                            class="action-header-btn action-header-btn--cyan" aria-label="رجوع لنظام التحليل">
+                            <svg class="w-4 h-4 shrink-0" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"
+                                fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"
+                                stroke-linejoin="round">
+                                <line x1="19" y1="12" x2="5" y2="12" />
+                                <polyline points="12 19 5 12 12 5" />
+                            </svg>
+                            <span>نظام التحليل</span>
+                        </button>
+                        <!-- زرار خروج القديم (مخفي) -->
+                        <button type="button" id="btnReturnToUpload" onclick="returnToUpload(false, true)"
+                            class="action-header-btn action-header-btn--red" data-testid="btn-return-to-upload"
+                            aria-label="خروج إلى صفحة الرفع" style="display:none;">
+                            <svg class="w-4 h-4 shrink-0" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"
+                                fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"
+                                stroke-linejoin="round">
+                                <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4" />
+                                <polyline points="16 17 21 12 16 7" />
+                                <line x1="21" y1="12" x2="9" y2="12" />
+                            </svg>
+                            <span>خروج</span>
+                        </button>
+                        <button type="button" onclick="showClosePeriodModal()"
+                            class="action-header-btn action-header-btn--red">
+                            <svg class="w-4 h-4 shrink-0" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"
+                                fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"
+                                stroke-linejoin="round">
+                                <rect x="3" y="11" width="18" height="11" rx="2" ry="2" />
+                                <path d="M7 11V7a5 5 0 0 1 10 0v4" />
+                            </svg>
+                            <span class="action-btn-label-long hidden sm:inline">إغلاق الفترة</span><span
+                                class="action-btn-label-short sm:hidden">إغلاق</span>
+                        </button>
+                        <button type="button" onclick="showDiscountsModal()"
+                            class="action-header-btn action-header-btn-default">
+                            <svg class="w-4 h-4 shrink-0" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"
+                                fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"
+                                stroke-linejoin="round">
+                                <line x1="19" y1="5" x2="5" y2="19" />
+                                <circle cx="6.5" cy="6.5" r="2.5" />
+                                <circle cx="17.5" cy="17.5" r="2.5" />
+                            </svg>
+                            <span class="action-btn-label-long hidden sm:inline">الخصم الإداري</span><span
+                                class="action-btn-label-short sm:hidden">خصم إداري</span>
+                        </button>
+                        <button type="button" onclick="showReportsPage()"
+                            class="action-header-btn action-header-btn-default">
+                            <svg class="w-4 h-4 shrink-0" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"
+                                fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"
+                                stroke-linejoin="round">
+                                <line x1="18" y1="20" x2="18" y2="10" />
+                                <line x1="12" y1="20" x2="12" y2="4" />
+                                <line x1="6" y1="20" x2="6" y2="14" />
+                            </svg>
+                            <span class="action-btn-label-long hidden sm:inline">التقارير</span><span
+                                class="action-btn-label-short sm:hidden">تقارير</span>
+                        </button>
+                        <button type="button" onclick="showConditionsModal()"
+                            class="action-header-btn action-header-btn-default">
+                            <svg class="w-4 h-4 shrink-0" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"
+                                fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"
+                                stroke-linejoin="round">
+                                <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" />
+                                <polyline points="14 2 14 8 20 8" />
+                                <line x1="16" y1="13" x2="8" y2="13" />
+                                <line x1="16" y1="17" x2="8" y2="17" />
+                                <line x1="10" y1="9" x2="8" y2="9" />
+                            </svg>
+                            <span class="action-btn-label-long hidden sm:inline">شروط المكافآت</span><span
+                                class="action-btn-label-short sm:hidden">شروط</span>
+                        </button>
+                        <button id="printAllBtn" onclick="smartPrint(false)" type="button"
+                            class="action-header-btn action-header-btn--primary">
+                            <svg class="w-4 h-4 shrink-0" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"
+                                fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"
+                                stroke-linejoin="round">
+                                <polyline points="6 9 6 2 18 2 18 9" />
+                                <path d="M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2" />
+                                <rect x="6" y="14" width="12" height="8" />
+                            </svg>
+                            <span id="printAllBtnLabel" class="action-btn-label-long hidden sm:inline">طباعة
+                                الكل</span><span id="printAllBtnLabelMobile"
+                                class="action-btn-label-short sm:hidden">الكل</span>
+                        </button>
+                        <button id="exportPdfTableAllBtn" onclick="exportPdfTableAll()" type="button"
+                            class="action-header-btn action-header-btn-default"
+                            title="تصدير جدول الكل PDF (صفوف، صافي، تقييمات، حضور)">
+                            <svg class="w-4 h-4 shrink-0" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"
+                                fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"
+                                stroke-linejoin="round">
+                                <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" />
+                                <polyline points="14 2 14 8 20 8" />
+                                <line x1="12" y1="18" x2="12" y2="12" />
+                                <line x1="9" y1="15" x2="15" y2="15" />
+                            </svg>
+                            <span class="action-btn-label-long hidden sm:inline">تصدير PDF</span><span
+                                class="action-btn-label-short sm:hidden">PDF</span>
+                        </button>
+                        <button id="printSelectedBtn" onclick="smartPrint(true)" type="button"
+                            class="hidden action-header-btn action-header-btn--amber">
+                            <svg class="w-4 h-4 shrink-0" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"
+                                fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"
+                                stroke-linejoin="round">
+                                <circle cx="12" cy="12" r="10" />
+                                <circle cx="12" cy="12" r="6" />
+                                <circle cx="12" cy="12" r="2" />
+                            </svg>
+                            <span class="action-btn-label-long hidden sm:inline">طباعة المحدد</span><span
+                                class="action-btn-label-short sm:hidden">محدد</span>
+                        </button>
+                        <button id="refreshLiveBtn" onclick="refreshLivePeriodFromFirebase()" type="button"
+                            class="action-header-btn action-header-btn-default"
+                            title="جلب آخر التقييمات والحضور من المشرف/HR">
+                            <svg class="w-4 h-4 shrink-0" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"
+                                fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"
+                                stroke-linejoin="round">
+                                <path d="M21 12a9 9 0 0 0-9-9 9.75 9.75 0 0 0-6.74 2.74L3 8" />
+                                <path d="M3 3v5h5" />
+                                <path d="M3 12a9 9 0 0 0 9 9 9.75 9.75 0 0 0 6.74-2.74L21 16" />
+                                <path d="M16 21h5v-5" />
+                            </svg>
+                            <span class="action-btn-label-long hidden sm:inline">تحميل التحديثات</span><span
+                                class="action-btn-label-short sm:hidden">تحديث</span>
+                        </button>
+                        <button id="adminManageBtn" onclick="showAdminManagementModal()" type="button"
+                            class="action-header-btn action-header-btn--violet">
+                            <svg class="w-4 h-4 shrink-0" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"
+                                fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"
+                                stroke-linejoin="round">
+                                <path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2" />
+                                <circle cx="9" cy="7" r="4" />
+                                <path d="M22 21v-2a4 4 0 0 0-3-3.87" />
+                                <path d="M16 3.13a4 4 0 0 1 0 7.75" />
+                            </svg>
+                            <span class="action-btn-label-long hidden sm:inline">إدارة الإداريين</span><span
+                                class="action-btn-label-short sm:hidden">إداريين</span>
+                        </button>
+                        <!-- خروج — نسخة من زر تطبيق التحليل: تسجيل الخروج والعودة لصفحة الدخول -->
+                        <button type="button" id="btnLogoutRewards" onclick="returnToUpload(false, true)"
+                            class="action-header-btn action-header-btn--red"
+                            title="خروج — تسجيل الخروج والعودة لصفحة الدخول" aria-label="خروج">
+                            <svg class="w-4 h-4 shrink-0" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"
+                                fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"
+                                stroke-linejoin="round">
+                                <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4" />
+                                <polyline points="16 17 21 12 16 7" />
+                                <line x1="21" y1="12" x2="9" y2="12" />
+                            </svg>
+                            <span>خروج</span>
+                        </button>
                     </div>
                 </div>
             </div>
@@ -206,14 +505,20 @@
             class="glass p-8 sm:p-16 md:p-20 lg:p-24 text-center rounded-2xl sm:rounded-[40px] md:rounded-[60px] border-2 border-dashed border-white/10 cursor-pointer no-print animate-in hidden"
             style="display:none; animation-delay: 0.2s;">
             <input type="file" id="fileInput" class="hidden" accept=".xlsx, .xls, .csv">
-            <div onclick="document.getElementById('fileInput').click()" class="space-y-3 sm:space-y-4 md:space-y-5 relative z-10">
-                <div class="text-4xl sm:text-5xl md:text-6xl lg:text-7xl xl:text-8xl" style="font-size: clamp(3rem, 10vw, 6rem);">📤</div>
-                <h2 class="text-xl sm:text-2xl md:text-3xl font-black text-white" style="font-size: clamp(1.25rem, 4vw, 1.875rem);">رفع ملف التقرير</h2>
-                <p class="text-gray-400 text-sm sm:text-base font-semibold" style="font-size: clamp(0.875rem, 2.5vw, 1rem);">
+            <div onclick="document.getElementById('fileInput').click()"
+                class="space-y-3 sm:space-y-4 md:space-y-5 relative z-10">
+                <div class="text-4xl sm:text-5xl md:text-6xl lg:text-7xl xl:text-8xl"
+                    style="font-size: clamp(3rem, 10vw, 6rem);">📤</div>
+                <h2 class="text-xl sm:text-2xl md:text-3xl font-black text-white"
+                    style="font-size: clamp(1.25rem, 4vw, 1.875rem);">رفع ملف التقرير</h2>
+                <p class="text-gray-400 text-sm sm:text-base font-semibold"
+                    style="font-size: clamp(0.875rem, 2.5vw, 1rem);">
                     ارفع ملف إكسيل نزيل لاستخراج المكافآت
                 </p>
                 <div class="pt-2 sm:pt-3 md:pt-4">
-                    <span class="inline-block px-4 sm:px-5 md:px-6 py-1.5 sm:py-2 bg-white/5 rounded-full text-xs sm:text-sm text-turquoise font-bold" style="font-size: clamp(0.75rem, 2vw, 0.875rem);">
+                    <span
+                        class="inline-block px-4 sm:px-5 md:px-6 py-1.5 sm:py-2 bg-white/5 rounded-full text-xs sm:text-sm text-turquoise font-bold"
+                        style="font-size: clamp(0.75rem, 2vw, 0.875rem);">
                         اسحب الملف أو انقر للاختيار
                     </span>
                 </div>
@@ -225,7 +530,8 @@
             <!-- Print Header (Hidden on Screen) -->
             <div class="print-header">
                 <div style="flex: 1; text-align: right;">
-                    <h1 style="font-size: 28px; font-weight: 900; color: #000; margin:0; border-bottom: 3px solid #40E0D0; padding-bottom: 10px;">
+                    <h1
+                        style="font-size: 28px; font-weight: 900; color: #000; margin:0; border-bottom: 3px solid #40E0D0; padding-bottom: 10px;">
                         فندق إليت <span style="color:#40E0D0">Elite Hotel</span>
                     </h1>
                     <p id="reportTitle" style="font-size: 18px; color: #000; margin:10px 0 0 0; font-weight: 800;">
@@ -253,54 +559,85 @@
             <!-- Statistics Cards — أحجام مدمجة لتناسب الجدول -->
             <div class="stats-grid-container no-print animate-in" style="animation-delay: 0.3s;">
                 <!-- Original Cards -->
-                <div class="stats-card glass rounded-md sm:rounded-lg md:rounded-xl p-1 sm:p-1.5 md:p-2 text-center flex flex-col justify-center min-h-0">
-                    <div class="text-sm sm:text-base md:text-lg mb-0.5" style="font-size: clamp(0.75rem, 1.5vw, 1rem);">👥</div>
-                    <div class="text-xs sm:text-sm md:text-base font-black text-turquoise number-display" id="statEmployees" style="font-size: clamp(0.65rem, 1.8vw, 0.9375rem);">0</div>
-                    <div class="text-[12px] sm:text-[13px] md:text-[16px] text-gray-400 mt-0.5 font-semibold leading-tight">إجمالي الموظفين</div>
+                <div
+                    class="stats-card glass rounded-md sm:rounded-lg md:rounded-xl p-1 sm:p-1.5 md:p-2 text-center flex flex-col justify-center min-h-0">
+                    <div class="text-sm sm:text-base md:text-lg mb-0.5" style="font-size: clamp(0.75rem, 1.5vw, 1rem);">
+                        👥</div>
+                    <div class="text-xs sm:text-sm md:text-base font-black text-turquoise number-display"
+                        id="statEmployees" style="font-size: clamp(0.65rem, 1.8vw, 0.9375rem);">0</div>
+                    <div
+                        class="text-[12px] sm:text-[13px] md:text-[16px] text-gray-400 mt-0.5 font-semibold leading-tight">
+                        إجمالي الموظفين</div>
                 </div>
-                <div class="stats-card glass rounded-md sm:rounded-lg md:rounded-xl p-1 sm:p-1.5 md:p-2 text-center flex flex-col justify-center min-h-0">
-                    <div class="text-sm sm:text-base md:text-lg mb-0.5" style="font-size: clamp(0.75rem, 1.5vw, 1rem);">📊</div>
-                    <div class="text-xs sm:text-sm md:text-base font-black text-orange-400 number-display" id="statBookings" style="font-size: clamp(0.65rem, 1.8vw, 0.9375rem);">0</div>
-                    <div class="text-[12px] sm:text-[13px] md:text-[16px] text-gray-400 mt-0.5 font-semibold leading-tight">إجمالي الحجوزات</div>
+                <div
+                    class="stats-card glass rounded-md sm:rounded-lg md:rounded-xl p-1 sm:p-1.5 md:p-2 text-center flex flex-col justify-center min-h-0">
+                    <div class="text-sm sm:text-base md:text-lg mb-0.5" style="font-size: clamp(0.75rem, 1.5vw, 1rem);">
+                        📊</div>
+                    <div class="text-xs sm:text-sm md:text-base font-black text-orange-400 number-display"
+                        id="statBookings" style="font-size: clamp(0.65rem, 1.8vw, 0.9375rem);">0</div>
+                    <div
+                        class="text-[12px] sm:text-[13px] md:text-[16px] text-gray-400 mt-0.5 font-semibold leading-tight">
+                        إجمالي الحجوزات</div>
                 </div>
-                <div class="stats-card glass rounded-md sm:rounded-lg md:rounded-xl p-1 sm:p-1.5 md:p-2 text-center flex flex-col justify-center min-h-0">
-                    <div class="text-sm sm:text-base md:text-lg mb-0.5" style="font-size: clamp(0.75rem, 1.5vw, 1rem);">💰</div>
-                    <div class="text-xs sm:text-sm md:text-base font-black text-green-400 number-display" id="statTotal" style="font-size: clamp(0.65rem, 1.8vw, 0.9375rem);">0</div>
-                    <div class="text-[12px] sm:text-[13px] md:text-[16px] text-gray-400 mt-0.5 font-semibold leading-tight">إجمالي المستحقات</div>
+                <div
+                    class="stats-card glass rounded-md sm:rounded-lg md:rounded-xl p-1 sm:p-1.5 md:p-2 text-center flex flex-col justify-center min-h-0">
+                    <div class="text-sm sm:text-base md:text-lg mb-0.5" style="font-size: clamp(0.75rem, 1.5vw, 1rem);">
+                        💰</div>
+                    <div class="text-xs sm:text-sm md:text-base font-black text-green-400 number-display" id="statTotal"
+                        style="font-size: clamp(0.65rem, 1.8vw, 0.9375rem);">0</div>
+                    <div
+                        class="text-[12px] sm:text-[13px] md:text-[16px] text-gray-400 mt-0.5 font-semibold leading-tight">
+                        إجمالي المستحقات</div>
                 </div>
                 <!-- New Cards -->
-                <div class="stats-card glass rounded-md sm:rounded-lg md:rounded-xl p-1 sm:p-1.5 md:p-2 text-center relative overflow-hidden flex flex-col justify-center min-h-0">
-                    <div class="absolute top-0 right-0 w-full h-0.5 bg-gradient-to-r from-yellow-500 to-transparent"></div>
-                    <div class="text-[12px] sm:text-[13px] md:text-[16px] text-yellow-500 mb-0.5 font-bold">⭐ الأكثر مكافأة</div>
-                    <div class="text-[9px] sm:text-[10px] md:text-xs font-black text-white truncate px-0.5" id="topEarnerName" style="font-size: clamp(0.5625rem, 1.4vw, 0.75rem);">-</div>
-                    <div class="text-[12px] sm:text-[13px] md:text-[16px] text-gray-400 mt-0 number-display" id="topEarnerValue">0</div>
+                <div
+                    class="stats-card glass rounded-md sm:rounded-lg md:rounded-xl p-1 sm:p-1.5 md:p-2 text-center relative overflow-hidden flex flex-col justify-center min-h-0">
+                    <div class="absolute top-0 right-0 w-full h-0.5 bg-gradient-to-r from-yellow-500 to-transparent">
+                    </div>
+                    <div class="text-[12px] sm:text-[13px] md:text-[16px] text-yellow-500 mb-0.5 font-bold">⭐ الأكثر
+                        مكافأة</div>
+                    <div class="text-[9px] sm:text-[10px] md:text-xs font-black text-white truncate px-0.5"
+                        id="topEarnerName" style="font-size: clamp(0.5625rem, 1.4vw, 0.75rem);">-</div>
+                    <div class="text-[12px] sm:text-[13px] md:text-[16px] text-gray-400 mt-0 number-display"
+                        id="topEarnerValue">0</div>
                 </div>
-                <div class="stats-card glass rounded-md sm:rounded-lg md:rounded-xl p-1 sm:p-1.5 md:p-2 text-center relative overflow-hidden flex flex-col justify-center min-h-0">
-                    <div class="absolute top-0 right-0 w-full h-0.5 bg-gradient-to-r from-turquoise to-transparent"></div>
-                    <div class="text-[12px] sm:text-[13px] md:text-[16px] text-turquoise mb-0.5 font-bold">👍 الأكثر تقييماً</div>
-                    <div class="text-[9px] sm:text-[10px] md:text-xs font-black text-white truncate px-0.5" id="topRatedName" style="font-size: clamp(0.5625rem, 1.4vw, 0.75rem);">-</div>
-                    <div class="text-[12px] sm:text-[13px] md:text-[16px] text-gray-400 mt-0 number-display" id="topRatedValue">0</div>
+                <div
+                    class="stats-card glass rounded-md sm:rounded-lg md:rounded-xl p-1 sm:p-1.5 md:p-2 text-center relative overflow-hidden flex flex-col justify-center min-h-0">
+                    <div class="absolute top-0 right-0 w-full h-0.5 bg-gradient-to-r from-turquoise to-transparent">
+                    </div>
+                    <div class="text-[12px] sm:text-[13px] md:text-[16px] text-turquoise mb-0.5 font-bold">👍 الأكثر
+                        تقييماً</div>
+                    <div class="text-[9px] sm:text-[10px] md:text-xs font-black text-white truncate px-0.5"
+                        id="topRatedName" style="font-size: clamp(0.5625rem, 1.4vw, 0.75rem);">-</div>
+                    <div class="text-[12px] sm:text-[13px] md:text-[16px] text-gray-400 mt-0 number-display"
+                        id="topRatedValue">0</div>
                 </div>
-                <div class="stats-card glass rounded-md sm:rounded-lg md:rounded-xl p-1 sm:p-1.5 md:p-2 text-center relative overflow-hidden flex flex-col justify-center min-h-0">
-                    <div class="absolute top-0 right-0 w-full h-0.5 bg-gradient-to-r from-turquoise to-transparent"></div>
-                    <div class="text-[12px] sm:text-[13px] md:text-[16px] text-turquoise mb-0.5 font-bold">📅 الأكثر حجوزات</div>
-                    <div class="text-[9px] sm:text-[10px] md:text-xs font-black text-white truncate px-0.5" id="topBookerName" style="font-size: clamp(0.5625rem, 1.4vw, 0.75rem);">-</div>
-                    <div class="text-[12px] sm:text-[13px] md:text-[16px] text-gray-400 mt-0 number-display" id="topBookerValue">0</div>
+                <div
+                    class="stats-card glass rounded-md sm:rounded-lg md:rounded-xl p-1 sm:p-1.5 md:p-2 text-center relative overflow-hidden flex flex-col justify-center min-h-0">
+                    <div class="absolute top-0 right-0 w-full h-0.5 bg-gradient-to-r from-turquoise to-transparent">
+                    </div>
+                    <div class="text-[12px] sm:text-[13px] md:text-[16px] text-turquoise mb-0.5 font-bold">📅 الأكثر
+                        حجوزات</div>
+                    <div class="text-[9px] sm:text-[10px] md:text-xs font-black text-white truncate px-0.5"
+                        id="topBookerName" style="font-size: clamp(0.5625rem, 1.4vw, 0.75rem);">-</div>
+                    <div class="text-[12px] sm:text-[13px] md:text-[16px] text-gray-400 mt-0 number-display"
+                        id="topBookerValue">0</div>
                 </div>
             </div>
 
 
             <!-- Branch Filters -->
-            <div id="branchFilters" class="flex flex-wrap gap-1.5 sm:gap-2 p-1.5 sm:p-2 bg-white/5 rounded-lg sm:rounded-xl w-full sm:w-fit mx-auto no-print animate-in justify-center"
+            <div id="branchFilters"
+                class="flex flex-wrap gap-1.5 sm:gap-2 p-1.5 sm:p-2 bg-white/5 rounded-lg sm:rounded-xl w-full sm:w-fit mx-auto no-print animate-in justify-center"
                 style="animation-delay: 0.4s;">
             </div>
 
             <!-- Table Container -->
-            <div class="glass rounded-xl sm:rounded-2xl md:rounded-[30px] overflow-hidden neon-glow animate-in" style="animation-delay: 0.5s;">
+            <div class="glass rounded-xl sm:rounded-2xl md:rounded-[30px] overflow-hidden neon-glow animate-in"
+                style="animation-delay: 0.5s;">
                 <div class="table-scroll-container">
                     <table id="targetTable" class="w-full text-right">
-                        <thead
-                            class="table-head-theme text-sm text-turquoise font-black uppercase tracking-wider">
+                        <thead class="table-head-theme text-sm text-turquoise font-black uppercase tracking-wider">
                             <!-- صف التجميع (مثل صفحة التحليل): يظهر فقط في وضع الاستقبال -->
                             <tr id="breakdownGroupRow" class="breakdown-group-row" style="display:none;"></tr>
                             <tr class="main-header-row">
@@ -309,44 +646,67 @@
                                         class="cursor-pointer accent-turquoise checkbox-custom">
                                 </th>
                                 <th class="col-m text-right">م</th>
-                                <th class="col-name text-center cursor-pointer hover:bg-white/10 transition-colors select-none" data-sort-key="name" title="فرز حسب الموظف">الموظف</th>
-                                <th class="col-count col-count-single text-center cursor-pointer hover:bg-white/10 transition-colors select-none" data-sort-key="count" title="فرز حسب الحجوزات">الحجوزات</th>
+                                <th class="col-name text-center cursor-pointer hover:bg-white/10 transition-colors select-none"
+                                    data-sort-key="name" title="فرز حسب الموظف">الموظف</th>
+                                <th class="col-count col-count-single text-center cursor-pointer hover:bg-white/10 transition-colors select-none"
+                                    data-sort-key="count" title="فرز حسب الحجوزات">الحجوزات</th>
                                 <!-- Breakdown: قسم الحجوزات — حد فاصل بين الموظف والعقود (على يمين العقود في RTL) -->
-                                <th class="col-breakdown th-section-end text-center text-cyan-300 text-sm font-semibold cursor-pointer hover:bg-white/10 transition-colors select-none" style="display:none;" data-sort-key="staffCount" title="فرز حسب العقود">العقود</th>
-                                <th class="col-breakdown text-center text-emerald-300 text-sm font-semibold cursor-pointer hover:bg-white/10 transition-colors select-none" style="display:none;" data-sort-key="reception" title="فرز حسب استقبال">استقبال</th>
-                                <th class="col-breakdown th-section-start text-center text-orange-300 text-sm font-semibold cursor-pointer hover:bg-white/10 transition-colors select-none" style="display:none;" data-sort-key="booking" title="فرز حسب بوكينج">بوكينج</th>
+                                <th class="col-breakdown th-section-end text-center text-cyan-300 text-sm font-semibold cursor-pointer hover:bg-white/10 transition-colors select-none"
+                                    style="display:none;" data-sort-key="staffCount" title="فرز حسب العقود">العقود</th>
+                                <th class="col-breakdown text-center text-emerald-300 text-sm font-semibold cursor-pointer hover:bg-white/10 transition-colors select-none"
+                                    style="display:none;" data-sort-key="reception" title="فرز حسب استقبال">استقبال</th>
+                                <th class="col-breakdown th-section-start text-center text-orange-300 text-sm font-semibold cursor-pointer hover:bg-white/10 transition-colors select-none"
+                                    style="display:none;" data-sort-key="booking" title="فرز حسب بوكينج">بوكينج</th>
                                 <!-- قسم الشفتات — border-left على آخر عمود (ليل = أيسر بصرياً) -->
-                                <th class="col-breakdown text-center text-amber-300 text-sm font-semibold cursor-pointer hover:bg-white/10 transition-colors select-none" style="display:none;" data-sort-key="morning" title="فرز حسب صباح">صباح</th>
-                                <th class="col-breakdown text-center text-indigo-300 text-sm font-semibold cursor-pointer hover:bg-white/10 transition-colors select-none" style="display:none;" data-sort-key="evening" title="فرز حسب مساء">مساء</th>
-                                <th class="col-breakdown th-section-start text-center text-gray-300 text-sm font-semibold cursor-pointer hover:bg-white/10 transition-colors select-none" style="display:none;" data-sort-key="night" title="فرز حسب ليل">ليل</th>
+                                <th class="col-breakdown text-center text-amber-300 text-sm font-semibold cursor-pointer hover:bg-white/10 transition-colors select-none"
+                                    style="display:none;" data-sort-key="morning" title="فرز حسب صباح">صباح</th>
+                                <th class="col-breakdown text-center text-indigo-300 text-sm font-semibold cursor-pointer hover:bg-white/10 transition-colors select-none"
+                                    style="display:none;" data-sort-key="evening" title="فرز حسب مساء">مساء</th>
+                                <th class="col-breakdown th-section-start text-center text-gray-300 text-sm font-semibold cursor-pointer hover:bg-white/10 transition-colors select-none"
+                                    style="display:none;" data-sort-key="night" title="فرز حسب ليل">ليل</th>
                                 <!-- VIP: يُحقن ديناميكياً مع class th-section-start لأول عمود -->
-                                <th class="col-breakdown col-breakdown-vip-placeholder text-center text-amber-300 text-sm font-semibold" style="display:none;" id="vipColumnsPlaceholder"></th>
+                                <th class="col-breakdown col-breakdown-vip-placeholder text-center text-amber-300 text-sm font-semibold"
+                                    style="display:none;" id="vipColumnsPlaceholder"></th>
                                 <!-- العقود الشهرية — قسم مستقل: حد يسار (بعد VIP) + حد يمين (قبل تنبيهات) -->
-                                <th class="col-breakdown col-monthly-contracts th-section-start th-section-end text-center text-teal-300 text-sm font-semibold" style="display:none;" title="عدد العقود الشهرية — كل عقد يضيف 200 ريال">العقود الشهرية</th>
+                                <th class="col-breakdown col-monthly-contracts th-section-start th-section-end text-center text-teal-300 text-sm font-semibold"
+                                    style="display:none;" title="عدد العقود الشهرية — كل عقد يضيف 200 ريال">العقود
+                                    الشهرية</th>
                                 <!-- قسم التنبيهات — حد يسار (بعد العقود) + حد يمين (قبل الحضور) -->
-                                <th class="col-breakdown th-section-start text-center text-red-300 text-sm font-semibold cursor-pointer hover:bg-white/10 transition-colors select-none" style="display:none;" data-sort-key="alertCount" title="فرز حسب تنبيه">تنبيه</th>
-                                <th class="col-breakdown th-section-end text-center text-red-300 text-sm font-semibold cursor-pointer hover:bg-white/10 transition-colors select-none" style="display:none;" data-sort-key="alertTotal" title="فرز حسب نقص SAR">نقص SAR</th>
+                                <th class="col-breakdown th-section-start text-center text-red-300 text-sm font-semibold cursor-pointer hover:bg-white/10 transition-colors select-none"
+                                    style="display:none;" data-sort-key="alertCount" title="فرز حسب تنبيه">تنبيه</th>
+                                <th class="col-breakdown th-section-end text-center text-red-300 text-sm font-semibold cursor-pointer hover:bg-white/10 transition-colors select-none"
+                                    style="display:none;" data-sort-key="alertTotal" title="فرز حسب نقص SAR">نقص SAR
+                                </th>
                                 <!-- قسم الحضور — حد يسار (بعد التنبيهات) + حد يمين (قبل التقييمات) -->
-                                <th class="col-attendance th-section-start th-section-end text-center cursor-pointer hover:bg-white/10 transition-colors select-none" data-sort-key="attendance26Days" title="فرز حسب بطل تحدي الظروف"><span class="block text-xs">بطل تحدي الظروف</span><span class="text-[12px] font-normal text-gray-400">(26+ يوم)</span></th>
+                                <th class="col-attendance th-section-start th-section-end text-center cursor-pointer hover:bg-white/10 transition-colors select-none"
+                                    data-sort-key="attendance26Days" title="فرز حسب بطل تحدي الظروف"><span
+                                        class="block text-xs">بطل تحدي الظروف</span><span
+                                        class="text-[12px] font-normal text-gray-400">(26+ يوم)</span></th>
                                 <th class="col-rate text-center">الفئة</th>
-                                <th class="col-eval-booking text-center text-turquoise cursor-pointer hover:bg-white/10 transition-colors select-none" data-sort-key="evaluationsBooking" title="فرز حسب BOOKING">
+                                <th class="col-eval-booking text-center text-turquoise cursor-pointer hover:bg-white/10 transition-colors select-none"
+                                    data-sort-key="evaluationsBooking" title="فرز حسب BOOKING">
                                     <div class="flex flex-col items-center justify-center gap-0">
                                         <span class="text-[13px] font-bold">BOOKING</span>
-                                        <span id="header-eval-booking-rate" class="text-[13px] text-gray-400">20 ر.س</span>
+                                        <span id="header-eval-booking-rate" class="text-[13px] text-gray-400">20
+                                            ر.س</span>
                                     </div>
                                 </th>
-                                <th class="col-eval-google text-center text-green-400 cursor-pointer hover:bg-white/10 transition-colors select-none" data-sort-key="evaluationsGoogle" title="فرز حسب GOOGLE">
+                                <th class="col-eval-google text-center text-green-400 cursor-pointer hover:bg-white/10 transition-colors select-none"
+                                    data-sort-key="evaluationsGoogle" title="فرز حسب GOOGLE">
                                     <div class="flex flex-col items-center justify-center gap-0">
                                         <span class="text-[13px] font-bold">GOOGLE</span>
-                                        <span id="header-eval-google-rate" class="text-[13px] text-gray-400">10 ر.س</span>
+                                        <span id="header-eval-google-rate" class="text-[13px] text-gray-400">10
+                                            ر.س</span>
                                     </div>
                                 </th>
-                                <th class="col-net text-center th-section-start bg-turquoise/10 text-white font-bold cursor-pointer hover:bg-white/10 transition-colors select-none" data-sort-key="net" title="فرز حسب الصافي">الصافي</th>
+                                <th class="col-net text-center th-section-start bg-turquoise/10 text-white font-bold cursor-pointer hover:bg-white/10 transition-colors select-none"
+                                    data-sort-key="net" title="فرز حسب الصافي">الصافي</th>
                             </tr>
                             <tr id="negativeRatingsHeaderRow" class="negative-ratings-header-row no-print">
                                 <td colspan="100" class="negative-ratings-row-cell">
                                     <div class="negative-ratings-row-inner">
-                                        <span class="negative-ratings-label-cell">تقييمات سلبية (أقل من تقييم الفندق) + فقدان فرص حجز نتيجة المكالمات التي لم يتم الرد عليها</span>
+                                        <span class="negative-ratings-label-cell">تقييمات سلبية (أقل من تقييم الفندق) +
+                                            فقدان فرص حجز نتيجة المكالمات التي لم يتم الرد عليها</span>
                                         <div id="negativeRatingsCell" class="negative-ratings-data-cell"></div>
                                     </div>
                                 </td>
@@ -355,24 +715,38 @@
                         <tbody id="mainTable" class="divide-y divide-white/10"></tbody>
                         <tfoot class="bg-white/[0.06] font-black border-t-2 border-white/20">
                             <!-- صف الحوافز: حافز الالتزام والانجاز | خبير إرضاء العميل في الفرع -->
-                            <tr id="bonusesCombinedRow" class="footer-row text-white border-b border-white/10" style="display: none;">
+                            <tr id="bonusesCombinedRow" class="footer-row text-white border-b border-white/10"
+                                style="display: none;">
                                 <td colspan="100" class="px-2 py-1 text-right align-top">
-                                    <div class="flex flex-col sm:flex-row gap-1.5 flex-wrap bonuses-compact" style="direction: rtl;">
-                                        <div id="commitmentBonusBlock" class="flex-1 min-w-0 rounded px-1.5 py-1 bg-white/[0.03] border border-turquoise/20">
+                                    <div class="flex flex-col sm:flex-row gap-1.5 flex-wrap bonuses-compact"
+                                        style="direction: rtl;">
+                                        <div id="commitmentBonusBlock"
+                                            class="flex-1 min-w-0 rounded px-1.5 py-1 bg-white/[0.03] border border-turquoise/20">
                                             <div class="flex items-center gap-1.5 flex-wrap">
-                                                <span class="text-turquoise font-semibold text-[9px] shrink-0">حافز الالتزام</span>
-                                                <span id="commitmentBonusValue" class="text-turquoise font-bold text-[9px] number-display"></span>
+                                                <span class="text-turquoise font-semibold text-[9px] shrink-0">حافز
+                                                    الالتزام</span>
+                                                <span id="commitmentBonusValue"
+                                                    class="text-turquoise font-bold text-[9px] number-display"></span>
                                             </div>
-                                            <p class="text-[8px] text-white/50 mt-0.5 leading-tight" title="من أتم 26 يوم دوام وتميز بحجوزات أو تقييم">من أتم 26 يوم وتميز بحجوزات أو تقييم</p>
-                                            <div id="commitmentBonusText" class="text-[10.5px] leading-tight mt-0.5" style="direction: rtl;"></div>
+                                            <p class="text-[8px] text-white/50 mt-0.5 leading-tight"
+                                                title="من أتم 26 يوم دوام وتميز بحجوزات أو تقييم">من أتم 26 يوم وتميز
+                                                بحجوزات أو تقييم</p>
+                                            <div id="commitmentBonusText" class="text-[10.5px] leading-tight mt-0.5"
+                                                style="direction: rtl;"></div>
                                         </div>
-                                        <div id="excellenceBonusBlock" class="flex-1 min-w-0 rounded px-1.5 py-1 bg-white/[0.03] border border-turquoise/20">
+                                        <div id="excellenceBonusBlock"
+                                            class="flex-1 min-w-0 rounded px-1.5 py-1 bg-white/[0.03] border border-turquoise/20">
                                             <div class="flex items-center gap-1.5 flex-wrap">
-                                                <span class="text-turquoise font-semibold text-[9px] shrink-0">خبير إرضاء العميل</span>
-                                                <span id="excellenceBonusValue" class="text-turquoise font-bold text-[9px] number-display"></span>
+                                                <span class="text-turquoise font-semibold text-[9px] shrink-0">خبير
+                                                    إرضاء العميل</span>
+                                                <span id="excellenceBonusValue"
+                                                    class="text-turquoise font-bold text-[9px] number-display"></span>
                                             </div>
-                                            <p class="text-[8px] text-white/50 mt-0.5 leading-tight" title="الأكثر تقييماً والأكثر حجوزات في الفرع">الأكثر تقييماً والأكثر حجوزات في الفرع</p>
-                                            <div id="excellenceBonusText" class="text-[10.5px] leading-tight mt-0.5" style="direction: rtl;"></div>
+                                            <p class="text-[8px] text-white/50 mt-0.5 leading-tight"
+                                                title="الأكثر تقييماً والأكثر حجوزات في الفرع">الأكثر تقييماً والأكثر
+                                                حجوزات في الفرع</p>
+                                            <div id="excellenceBonusText" class="text-[10.5px] leading-tight mt-0.5"
+                                                style="direction: rtl;"></div>
                                         </div>
                                     </div>
                                 </td>
@@ -384,22 +758,47 @@
                                 <td class="col-name p-2 text-right text-sm font-black text-gray-400">
                                     الإجمالي (العدد)
                                 </td>
-                                <td id="footBookingCount" class="col-count col-count-single p-2 text-center font-mono text-sm text-white/70 number-display font-semibold">0</td>
+                                <td id="footBookingCount"
+                                    class="col-count col-count-single p-2 text-center font-mono text-sm text-white/70 number-display font-semibold">
+                                    0</td>
                                 <!-- Breakdown footer totals (hidden by default) -->
-                                <td id="footStaffCount" class="col-breakdown p-1 text-center font-mono text-sm text-cyan-300 font-semibold" style="display:none">0</td>
-                                <td id="footReception" class="col-breakdown p-1 text-center font-mono text-sm text-emerald-300 font-medium" style="display:none">0</td>
-                                <td id="footBooking" class="col-breakdown p-1 text-center font-mono text-sm text-orange-300 font-medium" style="display:none">0</td>
-                                <td id="footMorning" class="col-breakdown p-1 text-center font-mono text-sm text-amber-300 font-medium" style="display:none">0</td>
-                                <td id="footEvening" class="col-breakdown p-1 text-center font-mono text-sm text-indigo-300 font-medium" style="display:none">0</td>
-                                <td id="footNight" class="col-breakdown p-1 text-center font-mono text-sm text-gray-300 font-medium" style="display:none">0</td>
-                                <td id="footVipRooms" class="col-breakdown p-1 text-center font-mono text-sm text-amber-300 font-semibold" style="display:none" colspan="1">0</td>
-                                <td id="footMonthlyContracts" class="col-breakdown col-monthly-contracts td-section-start td-section-end p-1 text-center font-mono text-sm text-teal-300 font-medium" style="display:none">0</td>
-                                <td id="footAlertCount" class="col-breakdown td-section-start p-1 text-center font-mono text-sm text-red-300 font-medium" style="display:none">0</td>
-                                <td id="footAlertTotal" class="col-breakdown td-section-end p-1 text-center font-mono text-sm text-red-300 font-medium" style="display:none">0</td>
+                                <td id="footStaffCount"
+                                    class="col-breakdown p-1 text-center font-mono text-sm text-cyan-300 font-semibold"
+                                    style="display:none">0</td>
+                                <td id="footReception"
+                                    class="col-breakdown p-1 text-center font-mono text-sm text-emerald-300 font-medium"
+                                    style="display:none">0</td>
+                                <td id="footBooking"
+                                    class="col-breakdown p-1 text-center font-mono text-sm text-orange-300 font-medium"
+                                    style="display:none">0</td>
+                                <td id="footMorning"
+                                    class="col-breakdown p-1 text-center font-mono text-sm text-amber-300 font-medium"
+                                    style="display:none">0</td>
+                                <td id="footEvening"
+                                    class="col-breakdown p-1 text-center font-mono text-sm text-indigo-300 font-medium"
+                                    style="display:none">0</td>
+                                <td id="footNight"
+                                    class="col-breakdown p-1 text-center font-mono text-sm text-gray-300 font-medium"
+                                    style="display:none">0</td>
+                                <td id="footVipRooms"
+                                    class="col-breakdown p-1 text-center font-mono text-sm text-amber-300 font-semibold"
+                                    style="display:none" colspan="1">0</td>
+                                <td id="footMonthlyContracts"
+                                    class="col-breakdown col-monthly-contracts td-section-start td-section-end p-1 text-center font-mono text-sm text-teal-300 font-medium"
+                                    style="display:none">0</td>
+                                <td id="footAlertCount"
+                                    class="col-breakdown td-section-start p-1 text-center font-mono text-sm text-red-300 font-medium"
+                                    style="display:none">0</td>
+                                <td id="footAlertTotal"
+                                    class="col-breakdown td-section-end p-1 text-center font-mono text-sm text-red-300 font-medium"
+                                    style="display:none">0</td>
                                 <td class="col-attendance td-section-start td-section-end p-2"></td>
                                 <td class="col-rate p-2"></td>
-                                <td id="footEvalCount" class="p-2 text-center text-yellow-400 text-base border-x border-white/10 number-display font-black">0</td>
-                                <td class="col-fund p-2 text-center text-gray-500 text-base border-x border-white/10">-</td>
+                                <td id="footEvalCount"
+                                    class="p-2 text-center text-yellow-400 text-base border-x border-white/10 number-display font-black">
+                                    0</td>
+                                <td class="col-fund p-2 text-center text-gray-500 text-base border-x border-white/10">-
+                                </td>
                                 <td class="col-net p-2 text-left px-8 text-gray-500">-</td>
                             </tr>
                             <!-- Bookings Only Value Row - Hidden -->
@@ -414,31 +813,45 @@
                                 <td class="col-rate p-2"></td>
                                 <td class="p-2 border-x border-white/10"></td>
                                 <td class="col-fund p-2 border-x border-white/10"></td>
-                                <td id="footNetNoEval" class="col-net p-2 text-left px-8 text-gray-400 number-display font-bold">-</td>
+                                <td id="footNetNoEval"
+                                    class="col-net p-2 text-left px-8 text-gray-400 number-display font-bold">-</td>
                             </tr>
                             <!-- Values Row - إجمالي (عمال + موظفين) -->
                             <tr id="footerRowTotal" class="footer-row footer-summary text-white">
-                                <td id="footerTotalLabel" colspan="6" class="footer-summary-label p-2 text-right" style="direction:rtl">
+                                <td id="footerTotalLabel" colspan="6" class="footer-summary-label p-2 text-right"
+                                    style="direction:rtl">
                                     <span class="text-gray-300 text-xs font-bold tracking-wide">إجمالي</span>
                                     <span class="text-white/30 text-[9px] mr-1">(عمال + موظفين)</span>
                                 </td>
-                                <td id="footFund" class="footer-summary-val p-2 text-center text-orange-400 font-bold text-xs number-display">0</td>
-                                <td id="footNet" class="footer-summary-val footer-summary-net col-net p-2 text-center text-turquoise font-black text-sm number-display total-val-net">0</td>
+                                <td id="footFund"
+                                    class="footer-summary-val p-2 text-center text-orange-400 font-bold text-xs number-display">
+                                    0</td>
+                                <td id="footNet"
+                                    class="footer-summary-val footer-summary-net col-net p-2 text-center text-turquoise font-black text-sm number-display total-val-net">
+                                    0</td>
                             </tr>
                             <!-- Total Team Row - إجمالي النهائي لكل فريق العمل -->
-                            <tr id="footerRowFinalTotal" class="footer-row footer-summary footer-summary-final text-white">
-                                <td id="footerFinalLabel" colspan="6" class="footer-summary-label p-2 text-right" style="direction:rtl">
-                                    <span class="text-turquoise text-xs font-bold tracking-wide">إجمالي النهائي لكل فريق العمل</span>
+                            <tr id="footerRowFinalTotal"
+                                class="footer-row footer-summary footer-summary-final text-white">
+                                <td id="footerFinalLabel" colspan="6" class="footer-summary-label p-2 text-right"
+                                    style="direction:rtl">
+                                    <span class="text-turquoise text-xs font-bold tracking-wide">إجمالي النهائي لكل فريق
+                                        العمل</span>
                                 </td>
-                                <td id="footTotalFund" class="footer-summary-val p-2 text-center text-orange-400 font-bold text-xs number-display" style="display: none;">0</td>
-                                <td id="footTotalNet" class="footer-summary-val footer-summary-net col-net p-2 text-center text-turquoise font-black text-sm number-display total-val-net" colspan="2">0</td>
+                                <td id="footTotalFund"
+                                    class="footer-summary-val p-2 text-center text-orange-400 font-bold text-xs number-display"
+                                    style="display: none;">0</td>
+                                <td id="footTotalNet"
+                                    class="footer-summary-val footer-summary-net col-net p-2 text-center text-turquoise font-black text-sm number-display total-val-net"
+                                    colspan="2">0</td>
                             </tr>
                         </tfoot>
                     </table>
-                    
+
                     <!-- Print Conditions Section - Only visible when printing, populated dynamically -->
                     <div class="print-conditions" style="display: none;">
-                        <div id="printConditionsInlineContent" style="margin-top: 30px; padding: 15px; border-top: 3px solid #000; background: #fff;">
+                        <div id="printConditionsInlineContent"
+                            style="margin-top: 30px; padding: 15px; border-top: 3px solid #000; background: #fff;">
                             <!-- Populated by populatePrintConditionsInline() -->
                         </div>
                     </div>
@@ -448,82 +861,100 @@
         </div>
 
         <!-- Reports Page -->
-        <div id="reportsPage" class="hidden space-y-4 sm:space-y-6 relative w-full overflow-x-hidden" style="z-index: 1;">
+        <div id="reportsPage" class="hidden space-y-4 sm:space-y-6 relative w-full overflow-x-hidden"
+            style="z-index: 1;">
             <div class="glass p-4 sm:p-6 rounded-xl sm:rounded-2xl border border-turquoise/30 w-full min-w-0">
                 <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 mb-4 sm:mb-6">
-                    <h2 class="text-xl sm:text-2xl font-black text-turquoise flex items-center gap-2" style="font-size: clamp(1.125rem, 4vw, 1.5rem);">
+                    <h2 class="text-xl sm:text-2xl font-black text-turquoise flex items-center gap-2"
+                        style="font-size: clamp(1.125rem, 4vw, 1.5rem);">
                         <span>📊</span>
                         <span>تقارير الموظفين</span>
                     </h2>
                     <div class="flex items-center gap-4">
-                        <button onclick="printAllEmployeeReports()" class="btn-modern px-4 sm:px-5 md:px-6 py-2 sm:py-2.5 md:py-3 bg-white/[0.07] text-[#14b8a6] rounded-lg sm:rounded-xl text-xs sm:text-sm font-bold border border-white/20 flex items-center gap-2 hover:bg-[#14b8a6]/15 hover:border-[#14b8a6]/40 hover:text-white transition-all backdrop-blur-sm" style="font-size: clamp(0.75rem, 2vw, 0.875rem);">
+                        <button onclick="printAllEmployeeReports()"
+                            class="btn-modern px-4 sm:px-5 md:px-6 py-2 sm:py-2.5 md:py-3 bg-white/[0.07] text-[#14b8a6] rounded-lg sm:rounded-xl text-xs sm:text-sm font-bold border border-white/20 flex items-center gap-2 hover:bg-[#14b8a6]/15 hover:border-[#14b8a6]/40 hover:text-white transition-all backdrop-blur-sm"
+                            style="font-size: clamp(0.75rem, 2vw, 0.875rem);">
                             <span class="text-base sm:text-lg">🖨️</span>
                             <span class="action-btn-label-long hidden sm:inline">طباعة كل التقارير</span>
                             <span class="action-btn-label-short sm:hidden">كل التقارير</span>
                         </button>
-                        <button onclick="showEmployeeCodesModal()" class="btn-modern px-4 sm:px-5 md:px-6 py-2 sm:py-2.5 md:py-3 bg-gradient-to-r from-turquoise/80 to-teal-500/80 text-white rounded-lg sm:rounded-xl text-xs sm:text-sm font-bold border border-turquoise/30 flex items-center gap-2 hover:shadow-lg hover:from-turquoise hover:to-teal-500 transition-all backdrop-blur-sm" style="font-size: clamp(0.75rem, 2vw, 0.875rem);">
+                        <button onclick="showEmployeeCodesModal()"
+                            class="btn-modern px-4 sm:px-5 md:px-6 py-2 sm:py-2.5 md:py-3 bg-gradient-to-r from-turquoise/80 to-teal-500/80 text-white rounded-lg sm:rounded-xl text-xs sm:text-sm font-bold border border-turquoise/30 flex items-center gap-2 hover:shadow-lg hover:from-turquoise hover:to-teal-500 transition-all backdrop-blur-sm"
+                            style="font-size: clamp(0.75rem, 2vw, 0.875rem);">
                             <span class="text-base sm:text-lg">🔑</span>
                             <span class="action-btn-label-long hidden sm:inline">الأكواد</span>
                             <span class="action-btn-label-short sm:hidden">كود</span>
                         </button>
-                        <button onclick="hideReportsPage()" class="btn-modern px-4 sm:px-5 md:px-6 py-2 sm:py-2.5 md:py-3 bg-white/10 text-gray-200 rounded-lg sm:rounded-xl text-xs sm:text-sm font-bold border border-white/20 flex items-center gap-2 hover:bg-white/15 hover:border-gray-300/50 hover:text-white transition-all backdrop-blur-sm" style="font-size: clamp(0.75rem, 2vw, 0.875rem);">
+                        <button onclick="hideReportsPage()"
+                            class="btn-modern px-4 sm:px-5 md:px-6 py-2 sm:py-2.5 md:py-3 bg-white/10 text-gray-200 rounded-lg sm:rounded-xl text-xs sm:text-sm font-bold border border-white/20 flex items-center gap-2 hover:bg-white/15 hover:border-gray-300/50 hover:text-white transition-all backdrop-blur-sm"
+                            style="font-size: clamp(0.75rem, 2vw, 0.875rem);">
                             <span class="text-base sm:text-lg">←</span>
                             <span class="action-btn-label-long hidden sm:inline">رجوع</span>
                             <span class="action-btn-label-short sm:hidden">رجوع</span>
                         </button>
                     </div>
                 </div>
-                
+
                 <!-- Tabs: تمرير أفقي على الجوال (يُخفى للمدير العام) -->
-                <div id="reportsTabsBar" class="flex gap-1 sm:gap-2 mb-4 sm:mb-6 border-b border-white/10 overflow-x-auto -webkit-overflow-scrolling-touch scrollbar-hide" style="scrollbar-width: none;">
-                    <button onclick="switchReportsTab('current')" id="reportsTabCurrent" class="flex-shrink-0 px-3 sm:px-4 py-2 text-xs sm:text-sm font-bold text-turquoise border-b-2 border-turquoise transition-colors min-h-[44px]">
+                <div id="reportsTabsBar"
+                    class="flex gap-1 sm:gap-2 mb-4 sm:mb-6 border-b border-white/10 overflow-x-auto -webkit-overflow-scrolling-touch scrollbar-hide"
+                    style="scrollbar-width: none;">
+                    <button onclick="switchReportsTab('current')" id="reportsTabCurrent"
+                        class="flex-shrink-0 px-3 sm:px-4 py-2 text-xs sm:text-sm font-bold text-turquoise border-b-2 border-turquoise transition-colors min-h-[44px]">
                         التقارير الحالية
                     </button>
-                    <button onclick="switchReportsTab('archived')" id="reportsTabArchived" class="flex-shrink-0 px-3 sm:px-4 py-2 text-xs sm:text-sm font-bold text-gray-400 border-b-2 border-transparent hover:text-white transition-colors min-h-[44px]">
+                    <button onclick="switchReportsTab('archived')" id="reportsTabArchived"
+                        class="flex-shrink-0 px-3 sm:px-4 py-2 text-xs sm:text-sm font-bold text-gray-400 border-b-2 border-transparent hover:text-white transition-colors min-h-[44px]">
                         الفترات المغلقة
                     </button>
-                    <button onclick="switchReportsTab('statistics')" id="reportsTabStatistics" class="flex-shrink-0 px-3 sm:px-4 py-2 text-xs sm:text-sm font-bold text-gray-400 border-b-2 border-transparent hover:text-white transition-colors min-h-[44px]">
+                    <button onclick="switchReportsTab('statistics')" id="reportsTabStatistics"
+                        class="flex-shrink-0 px-3 sm:px-4 py-2 text-xs sm:text-sm font-bold text-gray-400 border-b-2 border-transparent hover:text-white transition-colors min-h-[44px]">
                         الإحصائيات
                     </button>
                 </div>
-                
+
                 <!-- Current Reports Content -->
                 <div id="currentReportsContent">
-                <!-- Search and Filter -->
-                <div class="mb-6 space-y-4">
-                    <input type="text" id="reportsEmployeeSearch" placeholder="🔍 ابحث عن موظف..." 
-                        class="w-full px-4 py-3 sm:py-3 rounded-xl text-base sm:text-sm text-white placeholder-gray-300 focus:outline-none min-h-[44px]" 
-                        style="background: rgba(255, 255, 255, 0.1); border: 1px solid rgba(255, 255, 255, 0.2);" 
-                        onfocus="this.style.borderColor='rgba(64, 224, 208, 0.6)'; this.style.background='rgba(255, 255, 255, 0.15)';" 
-                        onblur="this.style.borderColor='rgba(255, 255, 255, 0.2)'; this.style.background='rgba(255, 255, 255, 0.1)';" 
-                        onkeyup="scheduleReportsFilter(this)">
-                    
-                    <!-- Branch Filter -->
-                    <div class="flex flex-wrap gap-2">
-                        <button onclick="filterReportsByBranch('الكل')" 
-                            class="filter-reports-pill active px-4 py-2 rounded-lg text-sm font-bold transition-all text-white shadow-[0_0_20px_rgba(64,224,208,0.3)]" 
-                            data-filter="الكل">
-                            الكل
-                        </button>
+                    <!-- Search and Filter -->
+                    <div class="mb-6 space-y-4">
+                        <input type="text" id="reportsEmployeeSearch" placeholder="🔍 ابحث عن موظف..."
+                            class="w-full px-4 py-3 sm:py-3 rounded-xl text-base sm:text-sm text-white placeholder-gray-300 focus:outline-none min-h-[44px]"
+                            style="background: rgba(255, 255, 255, 0.1); border: 1px solid rgba(255, 255, 255, 0.2);"
+                            onfocus="this.style.borderColor='rgba(64, 224, 208, 0.6)'; this.style.background='rgba(255, 255, 255, 0.15)';"
+                            onblur="this.style.borderColor='rgba(255, 255, 255, 0.2)'; this.style.background='rgba(255, 255, 255, 0.1)';"
+                            onkeyup="scheduleReportsFilter(this)">
+
+                        <!-- Branch Filter -->
+                        <div class="flex flex-wrap gap-2">
+                            <button onclick="filterReportsByBranch('الكل')"
+                                class="filter-reports-pill active px-4 py-2 rounded-lg text-sm font-bold transition-all text-white shadow-[0_0_20px_rgba(64,224,208,0.3)]"
+                                data-filter="الكل">
+                                الكل
+                            </button>
+                        </div>
+                    </div>
+
+                    <!-- Employees Grid -->
+                    <div id="reportsEmployeesGrid"
+                        class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-2 sm:gap-3 max-h-[70vh] overflow-y-auto">
+                        <!-- Employees cards will be populated here -->
                     </div>
                 </div>
-                
-                <!-- Employees Grid -->
-                <div id="reportsEmployeesGrid" class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-2 sm:gap-3 max-h-[70vh] overflow-y-auto">
-                    <!-- Employees cards will be populated here -->
-                </div>
-                </div>
-                
+
                 <!-- Archived Periods Content -->
                 <div id="archivedReportsContent" class="hidden">
                     <div class="mb-4 flex flex-col sm:flex-row sm:items-end gap-3">
                         <div class="flex-1 min-w-0">
                             <label class="block text-sm font-bold text-gray-300 mb-2">اختر الفترة:</label>
-                            <select id="archivedPeriodSelect" onchange="loadArchivedPeriod(this.value)" class="w-full px-4 py-3 rounded-xl text-base sm:text-sm text-white bg-white/10 border border-white/20 focus:outline-none focus:border-turquoise min-h-[44px]">
+                            <select id="archivedPeriodSelect" onchange="loadArchivedPeriod(this.value)"
+                                class="w-full px-4 py-3 rounded-xl text-base sm:text-sm text-white bg-white/10 border border-white/20 focus:outline-none focus:border-turquoise min-h-[44px]">
                                 <option value="">-- اختر فترة --</option>
                             </select>
                         </div>
-                        <button type="button" id="clearArchivedPeriodsBtn" onclick="if(typeof confirmAndClearArchivedPeriods==='function') confirmAndClearArchivedPeriods();" class="flex-shrink-0 px-4 py-3 rounded-xl text-sm font-bold text-amber-200 bg-amber-500/20 border border-amber-500/40 hover:bg-amber-500/30 transition-colors min-h-[44px]" title="يمسح: الفترات المغلقة (القائمة المنسدلة) + أرشيف الإحصائيات. لا يمسح: الرصيد التراكمي أبداً.">
+                        <button type="button" id="clearArchivedPeriodsBtn"
+                            onclick="if(typeof confirmAndClearArchivedPeriods==='function') confirmAndClearArchivedPeriods();"
+                            class="flex-shrink-0 px-4 py-3 rounded-xl text-sm font-bold text-amber-200 bg-amber-500/20 border border-amber-500/40 hover:bg-amber-500/30 transition-colors min-h-[44px]"
+                            title="يمسح: الفترات المغلقة (القائمة المنسدلة) + أرشيف الإحصائيات. لا يمسح: الرصيد التراكمي أبداً.">
                             <span>🗑️</span>
                             <span>مسح كل الفترات (بداية جديدة)</span>
                         </button>
@@ -533,14 +964,18 @@
                             <span class="font-bold text-turquoise">الفترة:</span> <span id="archivedPeriodText">-</span>
                         </p>
                         <p class="text-sm text-gray-300 mt-2">
-                            <span class="font-bold text-turquoise">تاريخ الإغلاق:</span> <span id="archivedClosedAt">-</span>
+                            <span class="font-bold text-turquoise">تاريخ الإغلاق:</span> <span
+                                id="archivedClosedAt">-</span>
                         </p>
-                        <button type="button" onclick="restoreArchivedPeriodAsCurrent()" class="hidden mt-4 w-full sm:w-auto btn-modern px-4 py-2.5 rounded-xl text-sm font-bold bg-gradient-to-r from-turquoise/80 to-teal-500/80 text-white border border-turquoise/30 flex items-center justify-center gap-2 hover:from-turquoise hover:to-teal-500 transition-all" aria-hidden="true" title="مخفي — لا يُسمح بالتعديل على الفترات المغلقة">
+                        <button type="button" onclick="restoreArchivedPeriodAsCurrent()"
+                            class="hidden mt-4 w-full sm:w-auto btn-modern px-4 py-2.5 rounded-xl text-sm font-bold bg-gradient-to-r from-turquoise/80 to-teal-500/80 text-white border border-turquoise/30 flex items-center justify-center gap-2 hover:from-turquoise hover:to-teal-500 transition-all"
+                            aria-hidden="true" title="مخفي — لا يُسمح بالتعديل على الفترات المغلقة">
                             <span>🔄</span>
                             <span>استعادة الفترة للتعديل</span>
                         </button>
                     </div>
-                    <div id="archivedReportsGrid" class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3 sm:gap-4 max-h-[70vh] overflow-y-auto">
+                    <div id="archivedReportsGrid"
+                        class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3 sm:gap-4 max-h-[70vh] overflow-y-auto">
                         <!-- Archived employees will be populated here -->
                     </div>
                 </div>
@@ -548,7 +983,8 @@
                 <!-- Statistics Content (شقيق للتقارير الحالية والفترات المغلقة — كان داخل archived فكان يُخفى معها) -->
                 <div id="statisticsReportsContent" class="hidden">
                     <!-- بانر عرض فترة أرشيف (يُظهر عند الضغط على أيقونة العين في فترة سابقة، ويُخفى عند الرجوع) -->
-                    <div id="archivedViewOnlyBanner" class="hidden mb-6 glass p-4 rounded-xl border border-amber-500/40 bg-amber-500/10">
+                    <div id="archivedViewOnlyBanner"
+                        class="hidden mb-6 glass p-4 rounded-xl border border-amber-500/40 bg-amber-500/10">
                         <div class="flex flex-wrap items-center justify-between gap-3">
                             <div class="flex items-center gap-2 flex-wrap">
                                 <span class="text-lg" aria-hidden="true">👁</span>
@@ -556,7 +992,8 @@
                                 <span id="archivedViewOnlyPeriodText" class="text-white font-medium">—</span>
                                 <span id="archivedViewOnlyClosedAt" class="text-sm text-gray-400">—</span>
                             </div>
-                            <button type="button" onclick="closeArchivedPeriodView()" class="px-4 py-2 rounded-lg text-sm font-bold bg-white/20 text-white border border-white/30 hover:bg-white/30 transition-colors min-h-[44px] flex items-center gap-2">
+                            <button type="button" onclick="closeArchivedPeriodView()"
+                                class="px-4 py-2 rounded-lg text-sm font-bold bg-white/20 text-white border border-white/30 hover:bg-white/30 transition-colors min-h-[44px] flex items-center gap-2">
                                 <span>←</span>
                                 <span>رجوع للفترة الحالية</span>
                             </button>
@@ -564,27 +1001,37 @@
                     </div>
                     <!-- الرصيد التراكمي من النقاط (يُخفى للمدير العام) -->
                     <div class="mb-8" id="cumulativePointsSection">
-                        <button type="button" onclick="toggleCumulativePoints()" class="w-full text-xl font-black text-turquoise mb-2 flex items-center gap-2 cursor-pointer hover:text-white transition-colors group">
-                            <span id="cumulativePointsArrow" class="transition-transform duration-300 text-base" style="display:inline-block;">◀</span>
+                        <button type="button" onclick="toggleCumulativePoints()"
+                            class="w-full text-xl font-black text-turquoise mb-2 flex items-center gap-2 cursor-pointer hover:text-white transition-colors group">
+                            <span id="cumulativePointsArrow" class="transition-transform duration-300 text-base"
+                                style="display:inline-block;">◀</span>
                             <span>💰</span>
                             <span>الرصيد التراكمي من النقاط</span>
-                            <span class="text-xs font-normal text-gray-400 group-hover:text-gray-300 mr-2">(اضغط للتوسيع)</span>
+                            <span class="text-xs font-normal text-gray-400 group-hover:text-gray-300 mr-2">(اضغط
+                                للتوسيع)</span>
                         </button>
                         <div id="cumulativePointsBody" style="display:none;">
                             <ul class="text-sm text-gray-300 mb-4 space-y-2 list-disc list-inside">
-                                <li><strong>المكافأة الكبرى:</strong> عند وصول الموظف إلى 100,000 نقطة تراكمية، يستحق "باكيج" التميز:</li>
+                                <li><strong>المكافأة الكبرى:</strong> عند وصول الموظف إلى 100,000 نقطة تراكمية، يستحق
+                                    "باكيج" التميز:</li>
                                 <li><strong>قسيمة مشتريات أو تذاكر أو قسائم:</strong> بما يعادل 1,500 ريال.</li>
-                                <li><strong>إقامة فاخرة:</strong> ليلة مجانية (للموظف أو لأحد ضيوفه) صالحة لمدة سنة.</li>
+                                <li><strong>إقامة فاخرة:</strong> ليلة مجانية (للموظف أو لأحد ضيوفه) صالحة لمدة سنة.
+                                </li>
                                 <li><strong>وجبة عشاء:</strong> عشاء لفردين.</li>
-                                <li><strong>نظام النقاط:</strong> تُحتسب وتُضاف النقاط للموظفين دورياً مع كل إغلاق فترة.</li>
+                                <li><strong>نظام النقاط:</strong> تُحتسب وتُضاف النقاط للموظفين دورياً مع كل إغلاق فترة.
+                                </li>
                             </ul>
                             <div class="flex flex-wrap items-center gap-3 mb-4">
-                                <button type="button" id="clearCumulativePointsBtn" onclick="if(typeof confirmAndClearCumulativePoints==='function') confirmAndClearCumulativePoints();" class="flex-shrink-0 px-4 py-2.5 rounded-xl text-sm font-bold text-amber-200 bg-amber-500/20 border border-amber-500/40 hover:bg-amber-500/30 transition-colors min-h-[40px]" title="يمسح الرصيد التراكمي من Firebase. مع «مسح كل الفترات» = بداية كاملة (ما يبقى إلا الفترة المفتوحة).">
+                                <button type="button" id="clearCumulativePointsBtn"
+                                    onclick="if(typeof confirmAndClearCumulativePoints==='function') confirmAndClearCumulativePoints();"
+                                    class="flex-shrink-0 px-4 py-2.5 rounded-xl text-sm font-bold text-amber-200 bg-amber-500/20 border border-amber-500/40 hover:bg-amber-500/30 transition-colors min-h-[40px]"
+                                    title="يمسح الرصيد التراكمي من Firebase. مع «مسح كل الفترات» = بداية كاملة (ما يبقى إلا الفترة المفتوحة).">
                                     <span>🗑️</span>
                                     <span>مسح الرصيد التراكمي</span>
                                 </button>
                             </div>
-                            <div id="cumulativePointsCards" class="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-3 mb-6">
+                            <div id="cumulativePointsCards"
+                                class="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-3 mb-6">
                                 <!-- كروت الرصيد التراكمي تُملأ ديناميكياً -->
                             </div>
                         </div>
@@ -595,31 +1042,74 @@
                                 <span>📊</span>
                                 <span id="statisticsSectionTitle">إحصائيات الفترة الحالية</span>
                             </h3>
-                            <div id="currentPeriodStats" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6 gap-4 mb-6">
+                            <div id="currentPeriodStats"
+                                class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6 gap-4 mb-6">
                                 <!-- Stats cards will be populated here -->
                             </div>
                         </div>
-                        <div class="glass p-4 rounded-xl neon-glow mt-6 relative overflow-visible" id="currentPeriodStatsTableWrap">
+                        <div class="glass p-4 rounded-xl neon-glow mt-6 relative overflow-visible"
+                            id="currentPeriodStatsTableWrap">
                             <h4 class="text-lg font-bold text-white mb-4 flex items-center gap-2 flex-wrap">
                                 <span>جدول تقييم الموظفين</span>
-                                <button type="button" id="ratingExplanationBtn" onclick="showRatingExplanationModal()" class="no-print rating-explanation-btn inline-flex items-center justify-center w-10 h-10 rounded-full bg-turquoise/25 border-2 border-turquoise/60 text-turquoise hover:bg-turquoise/40 hover:border-turquoise hover:scale-110 transition-all duration-300 shadow-[0_0_20px_rgba(64,224,208,0.4)]" title="كيفية حساب التقييم">
+                                <button type="button" id="ratingExplanationBtn" onclick="showRatingExplanationModal()"
+                                    class="no-print rating-explanation-btn inline-flex items-center justify-center w-10 h-10 rounded-full bg-turquoise/25 border-2 border-turquoise/60 text-turquoise hover:bg-turquoise/40 hover:border-turquoise hover:scale-110 transition-all duration-300 shadow-[0_0_20px_rgba(64,224,208,0.4)]"
+                                    title="كيفية حساب التقييم">
                                     <span class="text-base font-black" aria-hidden="true">ⓘ</span>
                                 </button>
-                                <button type="button" onclick="printCurrentPeriodStats()" class="no-print inline-flex items-center justify-center w-10 h-10 rounded-lg bg-turquoise/20 border border-turquoise/40 text-turquoise hover:bg-turquoise/30 hover:border-turquoise/60 transition-colors" title="طباعة إحصائيات الفترة الحالية">
-                                    <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 6 2 18 2 18 9"/><path d="M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2"/><rect x="6" y="14" width="12" height="8"/></svg>
+                                <button type="button" onclick="printCurrentPeriodStats()"
+                                    class="no-print inline-flex items-center justify-center w-10 h-10 rounded-lg bg-turquoise/20 border border-turquoise/40 text-turquoise hover:bg-turquoise/30 hover:border-turquoise/60 transition-colors"
+                                    title="طباعة إحصائيات الفترة الحالية">
+                                    <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24"
+                                        fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"
+                                        stroke-linejoin="round">
+                                        <polyline points="6 9 6 2 18 2 18 9" />
+                                        <path
+                                            d="M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2" />
+                                        <rect x="6" y="14" width="12" height="8" />
+                                    </svg>
                                 </button>
                             </h4>
                             <div class="overflow-x-auto">
-                                <table id="employeePerformanceTable" class="w-full text-sm" data-sort-key="points" data-sort-dir="desc">
+                                <table id="employeePerformanceTable" class="w-full text-sm" data-sort-key="points"
+                                    data-sort-dir="desc">
                                     <thead>
                                         <tr class="bg-white/10 border-b border-white/20">
-                                            <th class="p-3 text-right font-bold text-turquoise cursor-pointer select-none hover:bg-white/10 transition-colors rounded-tl" data-sort-key="points" title="الترتيب حسب النقاط" onclick="sortEmployeePerformanceTable(this.dataset.sortKey)"><span>الترتيب</span> <span class="sort-arrow text-xs opacity-70 mr-1">▼</span></th>
-                                            <th class="p-3 text-right font-bold text-turquoise cursor-pointer select-none hover:bg-white/10 transition-colors" data-sort-key="name" title="فرز حسب الاسم" onclick="sortEmployeePerformanceTable(this.dataset.sortKey)"><span>اسم الموظف</span> <span class="sort-arrow text-xs opacity-70 mr-1">↕</span></th>
-                                            <th class="p-3 text-center font-bold text-turquoise cursor-pointer select-none hover:bg-white/10 transition-colors" data-sort-key="branches" title="فرز حسب الفرع" onclick="sortEmployeePerformanceTable(this.dataset.sortKey)"><span>الفرع</span> <span class="sort-arrow text-xs opacity-70 mr-1">↕</span></th>
-                                            <th class="p-3 text-center font-bold text-turquoise cursor-pointer select-none hover:bg-white/10 transition-colors" data-sort-key="count" title="فرز حسب عدد الحجوزات" onclick="sortEmployeePerformanceTable(this.dataset.sortKey)"><span>عدد الحجوزات</span> <span class="sort-arrow text-xs opacity-70 mr-1">↕</span></th>
-                                            <th class="p-3 text-center font-bold text-turquoise cursor-pointer select-none hover:bg-white/10 transition-colors" data-sort-key="totalEval" title="فرز حسب التقييمات" onclick="sortEmployeePerformanceTable(this.dataset.sortKey)"><span>التقييمات</span> <span class="sort-arrow text-xs opacity-70 mr-1">↕</span></th>
-                                            <th class="p-3 text-center font-bold text-turquoise cursor-pointer select-none hover:bg-white/10 transition-colors" data-sort-key="net" title="فرز حسب الصافي" onclick="sortEmployeePerformanceTable(this.dataset.sortKey)"><span>الصافي المستحق</span> <span class="sort-arrow text-xs opacity-70 mr-1">↕</span></th>
-                                            <th class="p-3 text-center font-bold text-turquoise cursor-pointer select-none hover:bg-white/10 transition-colors rounded-tr" data-sort-key="points" title="رصيد النقاط من الفترة (صافي + مساهمة 15%). للتفاصيل اضغط على الاسم." onclick="sortEmployeePerformanceTable(this.dataset.sortKey)"><span>النقاط</span> <span class="sort-arrow text-xs opacity-70 mr-1">↕</span></th>
+                                            <th class="p-3 text-right font-bold text-turquoise cursor-pointer select-none hover:bg-white/10 transition-colors rounded-tl"
+                                                data-sort-key="points" title="الترتيب حسب النقاط"
+                                                onclick="sortEmployeePerformanceTable(this.dataset.sortKey)">
+                                                <span>الترتيب</span> <span
+                                                    class="sort-arrow text-xs opacity-70 mr-1">▼</span></th>
+                                            <th class="p-3 text-right font-bold text-turquoise cursor-pointer select-none hover:bg-white/10 transition-colors"
+                                                data-sort-key="name" title="فرز حسب الاسم"
+                                                onclick="sortEmployeePerformanceTable(this.dataset.sortKey)"><span>اسم
+                                                    الموظف</span> <span
+                                                    class="sort-arrow text-xs opacity-70 mr-1">↕</span></th>
+                                            <th class="p-3 text-center font-bold text-turquoise cursor-pointer select-none hover:bg-white/10 transition-colors"
+                                                data-sort-key="branches" title="فرز حسب الفرع"
+                                                onclick="sortEmployeePerformanceTable(this.dataset.sortKey)">
+                                                <span>الفرع</span> <span
+                                                    class="sort-arrow text-xs opacity-70 mr-1">↕</span></th>
+                                            <th class="p-3 text-center font-bold text-turquoise cursor-pointer select-none hover:bg-white/10 transition-colors"
+                                                data-sort-key="count" title="فرز حسب عدد الحجوزات"
+                                                onclick="sortEmployeePerformanceTable(this.dataset.sortKey)"><span>عدد
+                                                    الحجوزات</span> <span
+                                                    class="sort-arrow text-xs opacity-70 mr-1">↕</span></th>
+                                            <th class="p-3 text-center font-bold text-turquoise cursor-pointer select-none hover:bg-white/10 transition-colors"
+                                                data-sort-key="totalEval" title="فرز حسب التقييمات"
+                                                onclick="sortEmployeePerformanceTable(this.dataset.sortKey)">
+                                                <span>التقييمات</span> <span
+                                                    class="sort-arrow text-xs opacity-70 mr-1">↕</span></th>
+                                            <th class="p-3 text-center font-bold text-turquoise cursor-pointer select-none hover:bg-white/10 transition-colors"
+                                                data-sort-key="net" title="فرز حسب الصافي"
+                                                onclick="sortEmployeePerformanceTable(this.dataset.sortKey)">
+                                                <span>الصافي المستحق</span> <span
+                                                    class="sort-arrow text-xs opacity-70 mr-1">↕</span></th>
+                                            <th class="p-3 text-center font-bold text-turquoise cursor-pointer select-none hover:bg-white/10 transition-colors rounded-tr"
+                                                data-sort-key="points"
+                                                title="رصيد النقاط من الفترة (صافي + مساهمة 15%). للتفاصيل اضغط على الاسم."
+                                                onclick="sortEmployeePerformanceTable(this.dataset.sortKey)">
+                                                <span>النقاط</span> <span
+                                                    class="sort-arrow text-xs opacity-70 mr-1">↕</span></th>
                                         </tr>
                                     </thead>
                                     <tbody id="employeePerformanceTableBody">
@@ -641,7 +1131,7 @@
                 </div>
             </div>
         </div>
-        
+
         <!-- مؤشر مزامنة الفترة الحية (يظهر أثناء جلب البيانات من Firebase) -->
         <div id="liveSyncIndicator" class="live-sync-indicator no-print" aria-hidden="true" style="display: none;">
             <span class="live-sync-spinner" aria-hidden="true"></span>
@@ -666,49 +1156,63 @@
     </div>
 
     <!-- Conditions Modal (Moved outside container to fix z-index issue) -->
-    <div id="conditionsModal" class="fixed inset-0 z-[999] hidden flex items-center justify-center bg-black/60 backdrop-blur-sm p-2 sm:p-4" onclick="closeConditionsModal(event)" style="z-index: 999 !important;">
-        <div class="glass rounded-xl sm:rounded-2xl p-4 sm:p-6 md:p-8 max-w-2xl w-full max-h-[95vh] sm:max-h-[90vh] overflow-y-auto min-w-0" onclick="event.stopPropagation()" style="background: linear-gradient(135deg, rgba(15, 23, 41, 0.95) 0%, rgba(26, 31, 53, 0.95) 100%); border: 1px solid rgba(64, 224, 208, 0.3);">
+    <div id="conditionsModal"
+        class="fixed inset-0 z-[999] hidden flex items-center justify-center bg-black/60 backdrop-blur-sm p-2 sm:p-4"
+        onclick="closeConditionsModal(event)" style="z-index: 999 !important;">
+        <div class="glass rounded-xl sm:rounded-2xl p-4 sm:p-6 md:p-8 max-w-2xl w-full max-h-[95vh] sm:max-h-[90vh] overflow-y-auto min-w-0"
+            onclick="event.stopPropagation()"
+            style="background: linear-gradient(135deg, rgba(15, 23, 41, 0.95) 0%, rgba(26, 31, 53, 0.95) 100%); border: 1px solid rgba(64, 224, 208, 0.3);">
             <div class="flex items-center justify-between mb-4 sm:mb-6">
                 <h2 class="text-lg sm:text-xl md:text-2xl font-black text-turquoise flex items-center gap-2">
                     <span>📋</span>
                     <span>شروط الحصول على المكافآت</span>
                 </h2>
-                <button onclick="closeConditionsModal()" class="text-gray-400 hover:text-white transition-colors text-2xl sm:text-3xl font-bold min-w-[44px] min-h-[44px] flex items-center justify-center">&times;</button>
+                <button onclick="closeConditionsModal()"
+                    class="text-gray-400 hover:text-white transition-colors text-2xl sm:text-3xl font-bold min-w-[44px] min-h-[44px] flex items-center justify-center">&times;</button>
             </div>
             <!-- Dynamic content populated by populateConditionsModalContent() -->
             <div id="conditionsModalContent" class="space-y-4"></div>
-                    <div class="mt-4 sm:mt-6 flex flex-col sm:flex-row gap-2 sm:gap-3 justify-end">
-                        <button onclick="printConditions()" class="glass px-4 sm:px-6 py-2.5 sm:py-2 rounded-lg text-sm font-bold text-white hover:bg-white/10 transition-colors flex items-center justify-center gap-2 min-h-[44px]">
-                            <span>🖨️</span>
-                            <span>طباعة الشروط</span>
-                        </button>
-                        <button onclick="closeConditionsModal()" class="glass px-4 sm:px-6 py-2.5 sm:py-2 rounded-lg text-sm font-bold text-gray-300 hover:bg-white/10 transition-colors min-h-[44px]">
-                            إغلاق
-                        </button>
-                    </div>
+            <div class="mt-4 sm:mt-6 flex flex-col sm:flex-row gap-2 sm:gap-3 justify-end">
+                <button onclick="printConditions()"
+                    class="glass px-4 sm:px-6 py-2.5 sm:py-2 rounded-lg text-sm font-bold text-white hover:bg-white/10 transition-colors flex items-center justify-center gap-2 min-h-[44px]">
+                    <span>🖨️</span>
+                    <span>طباعة الشروط</span>
+                </button>
+                <button onclick="closeConditionsModal()"
+                    class="glass px-4 sm:px-6 py-2.5 sm:py-2 rounded-lg text-sm font-bold text-gray-300 hover:bg-white/10 transition-colors min-h-[44px]">
+                    إغلاق
+                </button>
+            </div>
         </div>
     </div>
 
     <!-- نافذة كيفية حساب التقييم (تظهر من صفحة الإحصائيات فقط) -->
-    <div id="ratingExplanationModal" class="fixed inset-0 z-[999] hidden flex items-center justify-center bg-black/60 backdrop-blur-sm p-2 sm:p-4" onclick="closeRatingExplanationModal(event)" style="z-index: 999 !important;">
-        <div class="glass rounded-xl sm:rounded-2xl p-4 sm:p-6 md:p-8 max-w-2xl w-full max-h-[95vh] sm:max-h-[90vh] overflow-y-auto min-w-0" onclick="event.stopPropagation()" style="background: linear-gradient(135deg, rgba(15, 23, 41, 0.95) 0%, rgba(26, 31, 53, 0.95) 100%); border: 1px solid rgba(64, 224, 208, 0.3);">
+    <div id="ratingExplanationModal"
+        class="fixed inset-0 z-[999] hidden flex items-center justify-center bg-black/60 backdrop-blur-sm p-2 sm:p-4"
+        onclick="closeRatingExplanationModal(event)" style="z-index: 999 !important;">
+        <div class="glass rounded-xl sm:rounded-2xl p-4 sm:p-6 md:p-8 max-w-2xl w-full max-h-[95vh] sm:max-h-[90vh] overflow-y-auto min-w-0"
+            onclick="event.stopPropagation()"
+            style="background: linear-gradient(135deg, rgba(15, 23, 41, 0.95) 0%, rgba(26, 31, 53, 0.95) 100%); border: 1px solid rgba(64, 224, 208, 0.3);">
             <div class="flex items-center justify-between mb-4 sm:mb-6">
                 <h2 class="text-lg sm:text-xl md:text-2xl font-black text-turquoise flex items-center gap-2">
                     <span>📊</span>
                     <span>كيفية حساب التقييم</span>
                 </h2>
-                <button type="button" onclick="closeRatingExplanationModal()" class="text-gray-400 hover:text-white transition-colors text-2xl font-bold min-w-[44px] min-h-[44px] flex items-center justify-center rounded-lg hover:bg-white/10">&times;</button>
+                <button type="button" onclick="closeRatingExplanationModal()"
+                    class="text-gray-400 hover:text-white transition-colors text-2xl font-bold min-w-[44px] min-h-[44px] flex items-center justify-center rounded-lg hover:bg-white/10">&times;</button>
             </div>
             <div class="space-y-4 text-sm text-gray-300">
                 <p class="text-gray-200 font-medium">
                     <strong class="text-turquoise">النقاط</strong> = رصيدك من الفترة (صافي + 15%).<br>
-                    <strong class="text-turquoise">مستوى الأداء</strong> = حسب ترتيبك بين الموظفين (الأعلى نقاطاً = ممتاز، الأقل = سيء).
+                    <strong class="text-turquoise">مستوى الأداء</strong> = حسب ترتيبك بين الموظفين (الأعلى نقاطاً =
+                    ممتاز، الأقل = سيء).
                 </p>
 
                 <div class="bg-turquoise/10 rounded-xl p-4 border border-turquoise/30">
                     <h3 class="text-base font-bold text-turquoise mb-2">كيف يُحسب مستوى الأداء؟</h3>
                     <ul class="space-y-1.5 list-none text-gray-200">
-                        <li>يتم ترتيب الموظفين من <strong>الأعلى</strong> إلى <strong>الأقل</strong> حسب رصيد النقاط فقط.</li>
+                        <li>يتم ترتيب الموظفين من <strong>الأعلى</strong> إلى <strong>الأقل</strong> حسب رصيد النقاط
+                            فقط.</li>
                         <li>أعلى 20% → <strong class="text-green-400">ممتاز</strong></li>
                         <li>20%–40% → <strong class="text-green-300">جيد جداً</strong></li>
                         <li>40%–60% → <strong class="text-yellow-400">جيد</strong></li>
@@ -729,7 +1233,8 @@
                 </div>
             </div>
             <div class="mt-4 sm:mt-6 flex justify-end">
-                <button type="button" onclick="closeRatingExplanationModal()" class="glass px-4 sm:px-6 py-2.5 sm:py-2 rounded-lg text-sm font-bold text-gray-300 hover:bg-white/10 transition-colors min-h-[44px]">
+                <button type="button" onclick="closeRatingExplanationModal()"
+                    class="glass px-4 sm:px-6 py-2.5 sm:py-2 rounded-lg text-sm font-bold text-gray-300 hover:bg-white/10 transition-colors min-h-[44px]">
                     إغلاق
                 </button>
             </div>
@@ -737,24 +1242,38 @@
     </div>
 
     <!-- نافذة لائحة التعليمات -->
-    <div id="instructionsModal" class="fixed inset-0 z-[1001] hidden flex items-center justify-center bg-black/70 backdrop-blur-sm p-2 sm:p-4" onclick="closeInstructionsModal(event)" style="z-index: 1001 !important;">
-        <div class="glass rounded-xl sm:rounded-2xl p-4 sm:p-6 md:p-8 max-w-3xl w-full max-h-[95vh] sm:max-h-[90vh] overflow-hidden flex flex-col min-w-0" onclick="event.stopPropagation()" style="background: linear-gradient(135deg, rgba(15, 23, 41, 0.98) 0%, rgba(26, 31, 53, 0.98) 100%); border: 1px solid rgba(64, 224, 208, 0.3);">
+    <div id="instructionsModal"
+        class="fixed inset-0 z-[1001] hidden flex items-center justify-center bg-black/70 backdrop-blur-sm p-2 sm:p-4"
+        onclick="closeInstructionsModal(event)" style="z-index: 1001 !important;">
+        <div class="glass rounded-xl sm:rounded-2xl p-4 sm:p-6 md:p-8 max-w-3xl w-full max-h-[95vh] sm:max-h-[90vh] overflow-hidden flex flex-col min-w-0"
+            onclick="event.stopPropagation()"
+            style="background: linear-gradient(135deg, rgba(15, 23, 41, 0.98) 0%, rgba(26, 31, 53, 0.98) 100%); border: 1px solid rgba(64, 224, 208, 0.3);">
             <div class="flex items-center justify-between mb-4 flex-shrink-0">
                 <h2 class="text-lg sm:text-xl font-black text-turquoise flex items-center gap-2">
                     <span>📜</span>
                     <span>لائحة تعليمات وسياسات عمل موظفي الاستقبال</span>
                 </h2>
-                <button type="button" onclick="closeInstructionsModal()" class="text-gray-400 hover:text-white transition-colors text-2xl font-bold min-w-[44px] min-h-[44px] flex items-center justify-center rounded-lg hover:bg-white/10">&times;</button>
+                <button type="button" onclick="closeInstructionsModal()"
+                    class="text-gray-400 hover:text-white transition-colors text-2xl font-bold min-w-[44px] min-h-[44px] flex items-center justify-center rounded-lg hover:bg-white/10">&times;</button>
             </div>
-            <div id="instructionsModalBody" class="overflow-y-auto flex-1 pr-1 space-y-4 text-sm text-gray-300 leading-relaxed" style="min-height: 0;">
+            <div id="instructionsModalBody"
+                class="overflow-y-auto flex-1 pr-1 space-y-4 text-sm text-gray-300 leading-relaxed"
+                style="min-height: 0;">
                 <!-- يُعبّأ من JS -->
             </div>
             <div class="mt-4 flex-shrink-0 pt-3 border-t border-white/10 flex flex-wrap gap-2 justify-end">
-                <button type="button" onclick="printInstructionsModal()" class="glass px-4 sm:px-6 py-2.5 rounded-lg text-sm font-bold text-turquoise hover:bg-turquoise/10 border border-turquoise/30 transition-colors min-h-[44px] flex items-center justify-center gap-2">
-                    <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 6 2 18 2 18 9"/><path d="M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2"/><rect x="6" y="14" width="12" height="8"/></svg>
+                <button type="button" onclick="printInstructionsModal()"
+                    class="glass px-4 sm:px-6 py-2.5 rounded-lg text-sm font-bold text-turquoise hover:bg-turquoise/10 border border-turquoise/30 transition-colors min-h-[44px] flex items-center justify-center gap-2">
+                    <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none"
+                        stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                        <polyline points="6 9 6 2 18 2 18 9" />
+                        <path d="M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2" />
+                        <rect x="6" y="14" width="12" height="8" />
+                    </svg>
                     <span>طباعة اللائحة</span>
                 </button>
-                <button type="button" onclick="closeInstructionsModal()" class="glass px-4 sm:px-6 py-2.5 rounded-lg text-sm font-bold text-gray-300 hover:bg-white/10 transition-colors min-h-[44px] w-full sm:w-auto">
+                <button type="button" onclick="closeInstructionsModal()"
+                    class="glass px-4 sm:px-6 py-2.5 rounded-lg text-sm font-bold text-gray-300 hover:bg-white/10 transition-colors min-h-[44px] w-full sm:w-auto">
                     إغلاق
                 </button>
             </div>
@@ -762,36 +1281,48 @@
     </div>
 
     <!-- Employee Report Modal (Moved outside container to fix z-index issue) -->
-    <div id="employeeReportModal" class="fixed inset-0 z-[1000] hidden flex items-center justify-center p-2 sm:p-4" onclick="closeEmployeeReportModal(event)" style="background: rgba(0, 0, 0, 0.85); backdrop-filter: blur(8px); z-index: 1000 !important;">
-        <div class="rounded-xl sm:rounded-2xl p-4 sm:p-6 md:p-8 max-w-4xl w-full max-h-[90vh] overflow-y-auto min-w-0" onclick="event.stopPropagation()" style="background: linear-gradient(135deg, rgba(15, 23, 41, 1) 0%, rgba(26, 31, 53, 1) 100%); border: 2px solid rgba(64, 224, 208, 0.6); box-shadow: 0 25px 70px rgba(0, 0, 0, 0.9), 0 0 50px rgba(64, 224, 208, 0.4);">
+    <div id="employeeReportModal" class="fixed inset-0 z-[1000] hidden flex items-center justify-center p-2 sm:p-4"
+        onclick="closeEmployeeReportModal(event)"
+        style="background: rgba(0, 0, 0, 0.85); backdrop-filter: blur(8px); z-index: 1000 !important;">
+        <div class="rounded-xl sm:rounded-2xl p-4 sm:p-6 md:p-8 max-w-4xl w-full max-h-[90vh] overflow-y-auto min-w-0"
+            onclick="event.stopPropagation()"
+            style="background: linear-gradient(135deg, rgba(15, 23, 41, 1) 0%, rgba(26, 31, 53, 1) 100%); border: 2px solid rgba(64, 224, 208, 0.6); box-shadow: 0 25px 70px rgba(0, 0, 0, 0.9), 0 0 50px rgba(64, 224, 208, 0.4);">
             <div class="flex items-center justify-between mb-6">
                 <h2 class="text-2xl font-black text-turquoise flex items-center gap-2">
                     <span>📊</span>
                     <span id="reportEmployeeName">تقرير الموظف</span>
                 </h2>
-                <button onclick="event.stopPropagation(); closeEmployeeReportModal();" class="text-gray-400 hover:text-white transition-colors text-2xl font-bold">&times;</button>
+                <button onclick="event.stopPropagation(); closeEmployeeReportModal();"
+                    class="text-gray-400 hover:text-white transition-colors text-2xl font-bold">&times;</button>
             </div>
             <div id="employeeReportContent" class="space-y-4">
                 <!-- Report content will be populated here -->
             </div>
             <div class="mt-4 sm:mt-6 flex flex-col sm:flex-row gap-2 sm:gap-3 justify-end">
-                <button onclick="printEmployeeReport()" class="glass px-4 sm:px-6 py-2.5 sm:py-2 rounded-lg text-sm font-bold text-white hover:bg-white/10 transition-colors flex items-center justify-center gap-2 min-h-[44px]">
+                <button onclick="printEmployeeReport()"
+                    class="glass px-4 sm:px-6 py-2.5 sm:py-2 rounded-lg text-sm font-bold text-white hover:bg-white/10 transition-colors flex items-center justify-center gap-2 min-h-[44px]">
                     <span>🖨️</span>
                     <span>طباعة التقرير</span>
                 </button>
-                <button onclick="event.stopPropagation(); downloadEmployeeReportPdf();" class="glass px-4 sm:px-6 py-2.5 sm:py-2 rounded-lg text-sm font-bold text-white hover:bg-white/10 transition-colors flex items-center justify-center gap-2 min-h-[44px]" title="تحميل تقرير الموظف كملف PDF">
+                <button onclick="event.stopPropagation(); downloadEmployeeReportPdf();"
+                    class="glass px-4 sm:px-6 py-2.5 sm:py-2 rounded-lg text-sm font-bold text-white hover:bg-white/10 transition-colors flex items-center justify-center gap-2 min-h-[44px]"
+                    title="تحميل تقرير الموظف كملف PDF">
                     <span>📥</span>
                     <span>تحميل PDF</span>
                 </button>
-                <button onclick="event.stopPropagation(); shareEmployeeReportViaWhatsApp();" class="glass px-4 sm:px-6 py-2.5 sm:py-2 rounded-lg text-sm font-bold text-white hover:bg-white/10 transition-colors flex items-center justify-center gap-2 min-h-[44px]" title="تحويل إلى PDF ثم مشاركة أو فتح واتساب لإرساله">
+                <button onclick="event.stopPropagation(); shareEmployeeReportViaWhatsApp();"
+                    class="glass px-4 sm:px-6 py-2.5 sm:py-2 rounded-lg text-sm font-bold text-white hover:bg-white/10 transition-colors flex items-center justify-center gap-2 min-h-[44px]"
+                    title="تحويل إلى PDF ثم مشاركة أو فتح واتساب لإرساله">
                     <span>💬</span>
                     <span>إرسال PDF على الواتساب</span>
                 </button>
-                <button onclick="event.stopPropagation(); openProgressReportPage();" class="glass px-4 sm:px-6 py-2.5 sm:py-2 rounded-lg text-sm font-bold text-white hover:bg-white/10 transition-colors flex items-center justify-center gap-2 min-h-[44px]">
+                <button onclick="event.stopPropagation(); openProgressReportPage();"
+                    class="glass px-4 sm:px-6 py-2.5 sm:py-2 rounded-lg text-sm font-bold text-white hover:bg-white/10 transition-colors flex items-center justify-center gap-2 min-h-[44px]">
                     <span>📈</span>
                     <span>قياس مستوي التقدم</span>
                 </button>
-                <button onclick="event.stopPropagation(); closeEmployeeReportModal();" class="glass px-4 sm:px-6 py-2.5 sm:py-2 rounded-lg text-sm font-bold text-gray-300 hover:bg-white/10 transition-colors min-h-[44px]">
+                <button onclick="event.stopPropagation(); closeEmployeeReportModal();"
+                    class="glass px-4 sm:px-6 py-2.5 sm:py-2 rounded-lg text-sm font-bold text-gray-300 hover:bg-white/10 transition-colors min-h-[44px]">
                     إغلاق
                 </button>
             </div>
@@ -799,19 +1330,25 @@
     </div>
 
     <!-- Close Period Modal -->
-    <div id="closePeriodModal" class="fixed inset-0 z-[1001] hidden flex items-center justify-center bg-black/70 backdrop-blur-sm p-2 sm:p-4" onclick="closeClosePeriodModal(event)" style="z-index: 1001 !important;">
-        <div class="glass rounded-xl sm:rounded-2xl p-4 sm:p-6 md:p-8 max-w-md w-full max-h-[95vh] overflow-y-auto min-w-0" onclick="event.stopPropagation()" style="background: linear-gradient(135deg, rgba(15, 23, 41, 0.95) 0%, rgba(26, 31, 53, 0.95) 100%); border: 2px solid rgba(239, 68, 68, 0.5);">
+    <div id="closePeriodModal"
+        class="fixed inset-0 z-[1001] hidden flex items-center justify-center bg-black/70 backdrop-blur-sm p-2 sm:p-4"
+        onclick="closeClosePeriodModal(event)" style="z-index: 1001 !important;">
+        <div class="glass rounded-xl sm:rounded-2xl p-4 sm:p-6 md:p-8 max-w-md w-full max-h-[95vh] overflow-y-auto min-w-0"
+            onclick="event.stopPropagation()"
+            style="background: linear-gradient(135deg, rgba(15, 23, 41, 0.95) 0%, rgba(26, 31, 53, 0.95) 100%); border: 2px solid rgba(239, 68, 68, 0.5);">
             <div class="flex items-center justify-between mb-4 sm:mb-6">
                 <h2 class="text-lg sm:text-xl md:text-2xl font-black text-red-400 flex items-center gap-2">
                     <span>🔒</span>
                     <span>إغلاق الفترة</span>
                 </h2>
-                <button onclick="closeClosePeriodModal()" class="text-gray-400 hover:text-white transition-colors text-2xl sm:text-3xl font-bold min-w-[44px] min-h-[44px] flex items-center justify-center">&times;</button>
+                <button onclick="closeClosePeriodModal()"
+                    class="text-gray-400 hover:text-white transition-colors text-2xl sm:text-3xl font-bold min-w-[44px] min-h-[44px] flex items-center justify-center">&times;</button>
             </div>
             <div class="space-y-4">
                 <div class="bg-red-500/10 rounded-xl p-4 border border-red-500/30">
                     <p class="text-sm text-gray-300 mb-2">
-                        <span class="font-bold text-red-400">تنبيه:</span> سيتم إغلاق الفترة الحالية وأرشفتها في Firebase Storage.
+                        <span class="font-bold text-red-400">تنبيه:</span> سيتم إغلاق الفترة الحالية وأرشفتها في
+                        Firebase Storage.
                     </p>
                     <p class="text-sm text-gray-300">
                         الفترة: <span id="closePeriodPeriodText" class="text-turquoise font-bold">-</span>
@@ -824,11 +1361,13 @@
                 </div>
             </div>
             <div class="mt-4 sm:mt-6 flex flex-col sm:flex-row gap-2 sm:gap-3 justify-end">
-                <button onclick="confirmClosePeriod()" class="glass px-4 sm:px-6 py-2.5 sm:py-2 rounded-lg text-sm font-bold bg-white/[0.07] text-red-300 border border-white/20 hover:bg-red-500/15 hover:border-red-400/40 hover:text-red-200 transition-all flex items-center justify-center gap-2 min-h-[44px]">
+                <button onclick="confirmClosePeriod()"
+                    class="glass px-4 sm:px-6 py-2.5 sm:py-2 rounded-lg text-sm font-bold bg-white/[0.07] text-red-300 border border-white/20 hover:bg-red-500/15 hover:border-red-400/40 hover:text-red-200 transition-all flex items-center justify-center gap-2 min-h-[44px]">
                     <span>🔒</span>
                     <span>تأكيد الإغلاق</span>
                 </button>
-                <button onclick="closeClosePeriodModal()" class="glass px-4 sm:px-6 py-2.5 sm:py-2 rounded-lg text-sm font-bold text-gray-300 hover:bg-white/10 transition-colors min-h-[44px]">
+                <button onclick="closeClosePeriodModal()"
+                    class="glass px-4 sm:px-6 py-2.5 sm:py-2 rounded-lg text-sm font-bold text-gray-300 hover:bg-white/10 transition-colors min-h-[44px]">
                     إلغاء
                 </button>
             </div>
@@ -836,14 +1375,19 @@
     </div>
 
     <!-- Employee Codes Modal -->
-    <div id="employeeCodesModal" class="fixed inset-0 z-[1002] hidden flex items-center justify-center bg-black/70 backdrop-blur-sm p-2 sm:p-4" onclick="closeEmployeeCodesModal(event)" style="z-index: 1002 !important;">
-        <div class="glass rounded-2xl p-4 sm:p-6 md:p-8 max-w-4xl w-full mx-2 sm:mx-4 max-h-[95vh] overflow-y-auto" onclick="event.stopPropagation()" style="background: linear-gradient(135deg, rgba(15, 23, 41, 0.95) 0%, rgba(26, 31, 53, 0.95) 100%); border: 2px solid rgba(64, 224, 208, 0.5);">
+    <div id="employeeCodesModal"
+        class="fixed inset-0 z-[1002] hidden flex items-center justify-center bg-black/70 backdrop-blur-sm p-2 sm:p-4"
+        onclick="closeEmployeeCodesModal(event)" style="z-index: 1002 !important;">
+        <div class="glass rounded-2xl p-4 sm:p-6 md:p-8 max-w-4xl w-full mx-2 sm:mx-4 max-h-[95vh] overflow-y-auto"
+            onclick="event.stopPropagation()"
+            style="background: linear-gradient(135deg, rgba(15, 23, 41, 0.95) 0%, rgba(26, 31, 53, 0.95) 100%); border: 2px solid rgba(64, 224, 208, 0.5);">
             <div class="flex items-center justify-between mb-4 sm:mb-6">
                 <h2 class="text-lg sm:text-xl md:text-2xl font-black text-turquoise flex items-center gap-2">
                     <span>🔑</span>
                     <span>أكواد الموظفين</span>
                 </h2>
-                <button onclick="closeEmployeeCodesModal()" class="text-gray-400 hover:text-white transition-colors text-2xl sm:text-3xl font-bold min-w-[44px] min-h-[44px] flex items-center justify-center">&times;</button>
+                <button onclick="closeEmployeeCodesModal()"
+                    class="text-gray-400 hover:text-white transition-colors text-2xl sm:text-3xl font-bold min-w-[44px] min-h-[44px] flex items-center justify-center">&times;</button>
             </div>
             <div id="employeeCodesContent" class="space-y-6">
                 <!-- Employee Codes Section -->
@@ -856,7 +1400,7 @@
                         <!-- Employee codes will be populated here -->
                     </div>
                 </div>
-                
+
                 <!-- Admin Links Section -->
                 <div class="border-t border-white/10 pt-6">
                     <h3 class="text-lg font-bold text-turquoise mb-4 flex items-center gap-2">
@@ -869,7 +1413,8 @@
                 </div>
             </div>
             <div class="mt-4 sm:mt-6 flex justify-end">
-                <button onclick="closeEmployeeCodesModal()" class="glass px-4 sm:px-6 py-2.5 sm:py-2 rounded-lg text-sm font-bold text-gray-300 hover:bg-white/10 transition-colors min-h-[44px]">
+                <button onclick="closeEmployeeCodesModal()"
+                    class="glass px-4 sm:px-6 py-2.5 sm:py-2 rounded-lg text-sm font-bold text-gray-300 hover:bg-white/10 transition-colors min-h-[44px]">
                     إغلاق
                 </button>
             </div>
@@ -877,20 +1422,26 @@
     </div>
 
     <!-- Admin Management Modal -->
-    <div id="adminManagementModal" class="fixed inset-0 z-[1004] hidden flex items-center justify-center bg-black/70 backdrop-blur-sm p-2 sm:p-4" onclick="closeAdminManagementModal(event)" style="z-index: 1004 !important;">
-            <div class="glass rounded-2xl p-4 sm:p-6 md:p-8 max-w-5xl w-full mx-2 sm:mx-4 max-h-[95vh] overflow-y-auto" onclick="event.stopPropagation()" style="background: linear-gradient(135deg, rgba(15, 23, 41, 0.95) 0%, rgba(26, 31, 53, 0.95) 100%); border: 2px solid rgba(64, 224, 208, 0.4);">
+    <div id="adminManagementModal"
+        class="fixed inset-0 z-[1004] hidden flex items-center justify-center bg-black/70 backdrop-blur-sm p-2 sm:p-4"
+        onclick="closeAdminManagementModal(event)" style="z-index: 1004 !important;">
+        <div class="glass rounded-2xl p-4 sm:p-6 md:p-8 max-w-5xl w-full mx-2 sm:mx-4 max-h-[95vh] overflow-y-auto"
+            onclick="event.stopPropagation()"
+            style="background: linear-gradient(135deg, rgba(15, 23, 41, 0.95) 0%, rgba(26, 31, 53, 0.95) 100%); border: 2px solid rgba(64, 224, 208, 0.4);">
             <div class="flex items-center justify-between mb-4 sm:mb-6">
                 <h2 class="text-lg sm:text-xl md:text-2xl font-black text-turquoise flex items-center gap-2">
                     <span>👥</span>
                     <span>إدارة الإداريين</span>
                 </h2>
-                <button onclick="closeAdminManagementModal()" class="text-gray-400 hover:text-white transition-colors text-2xl sm:text-3xl font-bold min-w-[44px] min-h-[44px] flex items-center justify-center">&times;</button>
+                <button onclick="closeAdminManagementModal()"
+                    class="text-gray-400 hover:text-white transition-colors text-2xl sm:text-3xl font-bold min-w-[44px] min-h-[44px] flex items-center justify-center">&times;</button>
             </div>
             <div id="adminManagementContent" class="space-y-6">
                 <!-- Admin management content will be populated here -->
             </div>
             <div class="mt-4 sm:mt-6 flex justify-end">
-                <button onclick="closeAdminManagementModal()" class="glass px-4 sm:px-6 py-2.5 sm:py-2 rounded-lg text-sm font-bold text-gray-300 hover:bg-white/10 transition-colors min-h-[44px]">
+                <button onclick="closeAdminManagementModal()"
+                    class="glass px-4 sm:px-6 py-2.5 sm:py-2 rounded-lg text-sm font-bold text-gray-300 hover:bg-white/10 transition-colors min-h-[44px]">
                     إغلاق
                 </button>
             </div>
@@ -898,85 +1449,119 @@
     </div>
 
     <!-- Discounts Modal -->
-    <div id="discountsModal" class="fixed inset-0 z-[1003] hidden flex items-center justify-center bg-black/70 backdrop-blur-sm p-2 sm:p-4" onclick="closeDiscountsModal(event)" style="z-index: 1003 !important;">
-        <div id="discountsModalContent" class="glass rounded-xl sm:rounded-2xl p-4 sm:p-5 max-w-3xl w-full mx-2 sm:mx-4 discounts-modal-pane" onclick="event.stopPropagation()" style="background: linear-gradient(135deg, rgba(15, 23, 41, 0.98) 0%, rgba(26, 31, 53, 0.98) 100%); border: 2px solid rgba(239, 68, 68, 0.4); box-shadow: 0 20px 60px rgba(239, 68, 68, 0.2);">
+    <div id="discountsModal"
+        class="fixed inset-0 z-[1003] hidden flex items-center justify-center bg-black/70 backdrop-blur-sm p-2 sm:p-4"
+        onclick="closeDiscountsModal(event)" style="z-index: 1003 !important;">
+        <div id="discountsModalContent"
+            class="glass rounded-xl sm:rounded-2xl p-4 sm:p-5 max-w-3xl w-full mx-2 sm:mx-4 discounts-modal-pane"
+            onclick="event.stopPropagation()"
+            style="background: linear-gradient(135deg, rgba(15, 23, 41, 0.98) 0%, rgba(26, 31, 53, 0.98) 100%); border: 2px solid rgba(239, 68, 68, 0.4); box-shadow: 0 20px 60px rgba(239, 68, 68, 0.2);">
             <!-- Header (sticky عند التمرير) -->
             <div class="flex items-center justify-between mb-4 pb-3 border-b border-white/10 discounts-modal-header">
                 <h2 class="text-lg sm:text-xl font-black text-red-400 flex items-center gap-2">
                     <span class="text-xl">💰</span>
                     <span>إدارة الخصومات</span>
                 </h2>
-                <button onclick="closeDiscountsModal()" class="text-gray-400 hover:text-white transition-colors text-2xl font-bold min-w-[36px] min-h-[36px] flex items-center justify-center hover:bg-white/10 rounded-lg" aria-label="إغلاق">&times;</button>
+                <button onclick="closeDiscountsModal()"
+                    class="text-gray-400 hover:text-white transition-colors text-2xl font-bold min-w-[36px] min-h-[36px] flex items-center justify-center hover:bg-white/10 rounded-lg"
+                    aria-label="إغلاق">&times;</button>
             </div>
-            
+
             <div class="discounts-modal-scroll flex flex-col flex-1 min-h-0 overflow-hidden">
-            <!-- نموذج إضافة خصم — توزيع منطقي: سطر1 (من + ماذا + كم) سطر2 (متى + إضافة) -->
-            <div class="discounts-form-body discounts-form-grid flex-shrink-0">
-                <!-- السطر الأول: الموظف | نوع الخصم | نسبة % -->
-                <div class="glass p-2 rounded-lg border border-white/10 min-w-0 discounts-form-card">
-                    <label class="block text-xs font-bold text-gray-200 mb-0.5 flex items-center gap-1"><span class="text-turquoise">👤</span> الموظف</label>
-                    <select id="discountEmployeeSelect" onchange="updateDiscountEmployeeInfo()" class="w-full px-2 py-1.5 rounded-lg text-xs text-white bg-white/10 border border-white/20 focus:outline-none focus:border-[#14b8a6] focus:ring-1 focus:ring-[#14b8a6]/30 min-h-[34px]">
-                        <option value="">-- اختر الموظف --</option>
-                    </select>
-                    <p class="text-[9px] text-gray-500 mt-0.5 leading-tight">كل الفروع (مثل "الكل")</p>
-                </div>
-                <div class="glass p-2 rounded-lg border border-white/10 discount-type-cell min-w-0 discounts-form-card" style="position: relative; z-index: 30;">
-                    <label class="block text-xs font-bold text-gray-200 mb-0.5 flex items-center gap-1"><span class="text-red-400">🏷️</span> نوع الخصم</label>
-                    <div class="flex gap-1.5 items-stretch">
-                        <select id="discountTypeSelect" class="discount-type-select-list flex-1 min-w-0 px-2 py-1.5 rounded-lg text-xs text-white bg-white/10 border border-white/20 focus:outline-none focus:border-[#14b8a6] focus:ring-1 focus:ring-[#14b8a6]/30 min-h-[34px] cursor-pointer" style="position: relative; z-index: 30;" aria-label="اختر نوع الخصم">
-                            <option value="">-- اختر نوع الخصم --</option>
+                <!-- نموذج إضافة خصم — توزيع منطقي: سطر1 (من + ماذا + كم) سطر2 (متى + إضافة) -->
+                <div class="discounts-form-body discounts-form-grid flex-shrink-0">
+                    <!-- السطر الأول: الموظف | نوع الخصم | نسبة % -->
+                    <div class="glass p-2 rounded-lg border border-white/10 min-w-0 discounts-form-card">
+                        <label class="block text-xs font-bold text-gray-200 mb-0.5 flex items-center gap-1"><span
+                                class="text-turquoise">👤</span> الموظف</label>
+                        <select id="discountEmployeeSelect" onchange="updateDiscountEmployeeInfo()"
+                            class="w-full px-2 py-1.5 rounded-lg text-xs text-white bg-white/10 border border-white/20 focus:outline-none focus:border-[#14b8a6] focus:ring-1 focus:ring-[#14b8a6]/30 min-h-[34px]">
+                            <option value="">-- اختر الموظف --</option>
                         </select>
-                        <button type="button" onclick="showManageDiscountTypesModal()" class="btn-modern flex-shrink-0 px-2 py-1.5 bg-white/10 text-gray-200 rounded-lg text-xs font-bold border border-white/20 hover:bg-white/15 hover:border-turquoise/40 min-h-[34px] min-w-[34px] flex items-center justify-center" title="إدارة أنواع الخصومات" style="z-index: 35 !important;">⚙️</button>
+                        <p class="text-[9px] text-gray-500 mt-0.5 leading-tight">كل الفروع (مثل "الكل")</p>
                     </div>
-                    <p class="text-[9px] text-gray-500 mt-0.5 leading-tight opacity-0 select-none" aria-hidden="true">كل الفروع</p>
+                    <div class="glass p-2 rounded-lg border border-white/10 discount-type-cell min-w-0 discounts-form-card"
+                        style="position: relative; z-index: 30;">
+                        <label class="block text-xs font-bold text-gray-200 mb-0.5 flex items-center gap-1"><span
+                                class="text-red-400">🏷️</span> نوع الخصم</label>
+                        <div class="flex gap-1.5 items-stretch">
+                            <select id="discountTypeSelect"
+                                class="discount-type-select-list flex-1 min-w-0 px-2 py-1.5 rounded-lg text-xs text-white bg-white/10 border border-white/20 focus:outline-none focus:border-[#14b8a6] focus:ring-1 focus:ring-[#14b8a6]/30 min-h-[34px] cursor-pointer"
+                                style="position: relative; z-index: 30;" aria-label="اختر نوع الخصم">
+                                <option value="">-- اختر نوع الخصم --</option>
+                            </select>
+                            <button type="button" onclick="showManageDiscountTypesModal()"
+                                class="btn-modern flex-shrink-0 px-2 py-1.5 bg-white/10 text-gray-200 rounded-lg text-xs font-bold border border-white/20 hover:bg-white/15 hover:border-turquoise/40 min-h-[34px] min-w-[34px] flex items-center justify-center"
+                                title="إدارة أنواع الخصومات" style="z-index: 35 !important;">⚙️</button>
+                        </div>
+                        <p class="text-[9px] text-gray-500 mt-0.5 leading-tight opacity-0 select-none"
+                            aria-hidden="true">كل الفروع</p>
+                    </div>
+                    <div class="glass p-2 rounded-lg border border-white/10 min-w-0 discount-pct-cell discounts-form-card"
+                        style="position: relative; z-index: 1;">
+                        <label class="block text-xs font-bold text-gray-200 mb-0.5 flex items-center gap-1"><span
+                                class="text-red-400">📊</span> نسبة %</label>
+                        <input type="number" id="discountPercentageInput" min="1" max="100" step="0.1" placeholder="5"
+                            class="w-full px-2 py-1.5 rounded-lg text-xs text-white bg-white/10 border border-white/20 focus:outline-none focus:border-[#14b8a6] focus:ring-1 focus:ring-[#14b8a6]/30 min-h-[34px]">
+                        <p class="text-[9px] text-gray-500 mt-0.5">1–100%</p>
+                    </div>
+                    <!-- السطر الثاني: تاريخ الحدث (واسع) | زر الإضافة -->
+                    <div
+                        class="glass p-2 rounded-lg border border-white/10 min-w-0 discounts-date-cell discounts-form-card">
+                        <label class="block text-xs font-bold text-gray-200 mb-0.5 flex items-center gap-1"><span
+                                class="text-red-400">📅</span> تاريخ الحدث</label>
+                        <input type="date" id="discountEventDateInput"
+                            class="w-full px-2 py-1.5 rounded-lg text-xs text-white bg-white/10 border border-white/20 focus:outline-none focus:border-[#14b8a6] focus:ring-1 focus:ring-[#14b8a6]/30 min-h-[34px]"
+                            title="تاريخ التقصير أو المخالفة">
+                    </div>
+                    <div class="flex items-center justify-center min-w-0 discounts-add-cell">
+                        <button type="button" onclick="addDiscount()"
+                            class="btn-modern w-full px-3 py-2 bg-white/[0.07] text-[#14b8a6] rounded-lg text-xs font-bold border border-white/20 hover:bg-[#14b8a6]/15 hover:border-[#14b8a6]/40 hover:text-white min-h-[34px] flex items-center justify-center gap-1.5">
+                            <span>➕</span>
+                            <span>إضافة خصم</span>
+                        </button>
+                    </div>
                 </div>
-                <div class="glass p-2 rounded-lg border border-white/10 min-w-0 discount-pct-cell discounts-form-card" style="position: relative; z-index: 1;">
-                    <label class="block text-xs font-bold text-gray-200 mb-0.5 flex items-center gap-1"><span class="text-red-400">📊</span> نسبة %</label>
-                    <input type="number" id="discountPercentageInput" min="1" max="100" step="0.1" placeholder="5" class="w-full px-2 py-1.5 rounded-lg text-xs text-white bg-white/10 border border-white/20 focus:outline-none focus:border-[#14b8a6] focus:ring-1 focus:ring-[#14b8a6]/30 min-h-[34px]">
-                    <p class="text-[9px] text-gray-500 mt-0.5">1–100%</p>
+                <div id="selectedEmployeeInfo"
+                    class="hidden glass p-2 rounded-lg border border-turquoise/30 bg-gradient-to-r from-turquoise/10 to-transparent mt-2 flex-shrink-0">
+                    <div class="flex flex-wrap justify-between items-center gap-1 text-xs text-gray-200">
+                        <p><span class="font-bold text-turquoise">الموظف:</span> <span id="selectedEmployeeName"
+                                class="text-white font-semibold">-</span></p>
+                        <p><span class="font-bold text-turquoise">الصافي المجمع:</span> <span id="selectedEmployeeNet"
+                                class="text-white font-bold">-</span> <span class="text-gray-400">ريال</span></p>
+                    </div>
                 </div>
-                <!-- السطر الثاني: تاريخ الحدث (واسع) | زر الإضافة -->
-                <div class="glass p-2 rounded-lg border border-white/10 min-w-0 discounts-date-cell discounts-form-card">
-                    <label class="block text-xs font-bold text-gray-200 mb-0.5 flex items-center gap-1"><span class="text-red-400">📅</span> تاريخ الحدث</label>
-                    <input type="date" id="discountEventDateInput" class="w-full px-2 py-1.5 rounded-lg text-xs text-white bg-white/10 border border-white/20 focus:outline-none focus:border-[#14b8a6] focus:ring-1 focus:ring-[#14b8a6]/30 min-h-[34px]" title="تاريخ التقصير أو المخالفة">
+
+                <!-- Discounts List — منطقة ذات تمرير داخلي فقط -->
+                <div
+                    class="discounts-list-section mt-4 pt-4 border-t border-white/10 min-w-0 flex flex-col flex-1 min-h-0 overflow-hidden">
+                    <h3 class="text-sm font-bold text-white mb-2 flex items-center gap-2 flex-shrink-0">
+                        <span class="text-red-400">📋</span>
+                        <span>الخصومات المطبقة</span>
+                    </h3>
+                    <div id="discountsList"
+                        class="discounts-list-inner space-y-2 overflow-y-auto overflow-x-hidden flex-1 min-h-0 pr-1">
+                        <!-- Discounts will be populated here -->
+                    </div>
                 </div>
-                <div class="flex items-center justify-center min-w-0 discounts-add-cell">
-                    <button type="button" onclick="addDiscount()" class="btn-modern w-full px-3 py-2 bg-white/[0.07] text-[#14b8a6] rounded-lg text-xs font-bold border border-white/20 hover:bg-[#14b8a6]/15 hover:border-[#14b8a6]/40 hover:text-white min-h-[34px] flex items-center justify-center gap-1.5">
-                        <span>➕</span>
-                        <span>إضافة خصم</span>
-                    </button>
-                </div>
-            </div>
-            <div id="selectedEmployeeInfo" class="hidden glass p-2 rounded-lg border border-turquoise/30 bg-gradient-to-r from-turquoise/10 to-transparent mt-2 flex-shrink-0">
-                <div class="flex flex-wrap justify-between items-center gap-1 text-xs text-gray-200">
-                    <p><span class="font-bold text-turquoise">الموظف:</span> <span id="selectedEmployeeName" class="text-white font-semibold">-</span></p>
-                    <p><span class="font-bold text-turquoise">الصافي المجمع:</span> <span id="selectedEmployeeNet" class="text-white font-bold">-</span> <span class="text-gray-400">ريال</span></p>
-                </div>
-            </div>
-            
-            <!-- Discounts List — منطقة ذات تمرير داخلي فقط -->
-            <div class="discounts-list-section mt-4 pt-4 border-t border-white/10 min-w-0 flex flex-col flex-1 min-h-0 overflow-hidden">
-                <h3 class="text-sm font-bold text-white mb-2 flex items-center gap-2 flex-shrink-0">
-                    <span class="text-red-400">📋</span>
-                    <span>الخصومات المطبقة</span>
-                </h3>
-                <div id="discountsList" class="discounts-list-inner space-y-2 overflow-y-auto overflow-x-hidden flex-1 min-h-0 pr-1">
-                    <!-- Discounts will be populated here -->
-                </div>
-            </div>
             </div>
         </div>
     </div>
 
     <!-- عرض أسباب الخصومات وتواريخها وقيمها (من كارت أكثر الموظفين خصومات) -->
-    <div id="mostDiscountsDetailModal" class="fixed inset-0 z-[1005] hidden flex items-center justify-center bg-black/70 backdrop-blur-sm" onclick="closeMostDiscountsDetailModal(event)" style="z-index: 1005 !important;">
-        <div class="glass rounded-xl sm:rounded-2xl p-4 sm:p-6 max-w-2xl w-full mx-2 sm:mx-4 max-h-[85vh] overflow-y-auto" onclick="event.stopPropagation()" style="background: linear-gradient(135deg, rgba(15, 23, 41, 0.98) 0%, rgba(26, 31, 53, 0.98) 100%); border: 2px solid rgba(239, 68, 68, 0.4);">
+    <div id="mostDiscountsDetailModal"
+        class="fixed inset-0 z-[1005] hidden flex items-center justify-center bg-black/70 backdrop-blur-sm"
+        onclick="closeMostDiscountsDetailModal(event)" style="z-index: 1005 !important;">
+        <div class="glass rounded-xl sm:rounded-2xl p-4 sm:p-6 max-w-2xl w-full mx-2 sm:mx-4 max-h-[85vh] overflow-y-auto"
+            onclick="event.stopPropagation()"
+            style="background: linear-gradient(135deg, rgba(15, 23, 41, 0.98) 0%, rgba(26, 31, 53, 0.98) 100%); border: 2px solid rgba(239, 68, 68, 0.4);">
             <div class="flex items-center justify-between mb-4 pb-3 border-b border-white/10">
                 <h2 class="text-lg sm:text-xl font-black text-red-400 flex items-center gap-2">
                     <span>💰</span>
                     <span id="mostDiscountsDetailTitle">أسباب الخصومات وتواريخها وقيمها</span>
                 </h2>
-                <button type="button" onclick="closeMostDiscountsDetailModal()" class="text-gray-400 hover:text-white transition-colors text-2xl font-bold min-w-[36px] min-h-[36px] flex items-center justify-center hover:bg-white/10 rounded-lg">&times;</button>
+                <button type="button" onclick="closeMostDiscountsDetailModal()"
+                    class="text-gray-400 hover:text-white transition-colors text-2xl font-bold min-w-[36px] min-h-[36px] flex items-center justify-center hover:bg-white/10 rounded-lg">&times;</button>
             </div>
             <div id="mostDiscountsDetailBody" class="space-y-3 text-sm text-gray-200">
                 <!-- يُعبّأ بواسطة showMostDiscountsDetail -->
@@ -985,17 +1570,22 @@
     </div>
 
     <!-- Manage Discount Types Modal -->
-    <div id="manageDiscountTypesModal" class="fixed inset-0 z-[1004] hidden flex items-center justify-center bg-black/70 backdrop-blur-sm p-2 sm:p-4" onclick="closeManageDiscountTypesModal(event)" style="z-index: 1004 !important;">
-        <div class="glass rounded-xl sm:rounded-2xl p-4 sm:p-5 md:p-6 max-w-2xl w-full mx-2 sm:mx-4 max-h-[90vh] overflow-y-auto" onclick="event.stopPropagation()" style="background: linear-gradient(135deg, rgba(15, 23, 41, 0.98) 0%, rgba(26, 31, 53, 0.98) 100%); border: 2px solid rgba(239, 68, 68, 0.4); box-shadow: 0 20px 60px rgba(239, 68, 68, 0.2);">
+    <div id="manageDiscountTypesModal"
+        class="fixed inset-0 z-[1004] hidden flex items-center justify-center bg-black/70 backdrop-blur-sm p-2 sm:p-4"
+        onclick="closeManageDiscountTypesModal(event)" style="z-index: 1004 !important;">
+        <div class="glass rounded-xl sm:rounded-2xl p-4 sm:p-5 md:p-6 max-w-2xl w-full mx-2 sm:mx-4 max-h-[90vh] overflow-y-auto"
+            onclick="event.stopPropagation()"
+            style="background: linear-gradient(135deg, rgba(15, 23, 41, 0.98) 0%, rgba(26, 31, 53, 0.98) 100%); border: 2px solid rgba(239, 68, 68, 0.4); box-shadow: 0 20px 60px rgba(239, 68, 68, 0.2);">
             <!-- Header -->
             <div class="flex items-center justify-between mb-4 sm:mb-5 pb-3 border-b border-white/10">
                 <h2 class="text-lg sm:text-xl md:text-2xl font-black text-red-400 flex items-center gap-2">
                     <span class="text-xl sm:text-2xl">⚙️</span>
                     <span>إدارة أنواع الخصومات</span>
                 </h2>
-                <button onclick="closeManageDiscountTypesModal()" class="text-gray-400 hover:text-white transition-colors text-2xl sm:text-3xl font-bold min-w-[40px] min-h-[40px] flex items-center justify-center hover:bg-white/10 rounded-lg">&times;</button>
+                <button onclick="closeManageDiscountTypesModal()"
+                    class="text-gray-400 hover:text-white transition-colors text-2xl sm:text-3xl font-bold min-w-[40px] min-h-[40px] flex items-center justify-center hover:bg-white/10 rounded-lg">&times;</button>
             </div>
-            
+
             <!-- Add New Type -->
             <div class="mb-5 glass p-3 sm:p-4 rounded-lg border border-white/10">
                 <label class="block text-xs sm:text-sm font-bold text-gray-200 mb-2 flex items-center gap-2">
@@ -1003,14 +1593,16 @@
                     <span>إضافة نوع خصم جديد:</span>
                 </label>
                 <div class="flex gap-2">
-                    <input type="text" id="newDiscountTypeInput" placeholder="أدخل نوع خصم جديد..." class="flex-1 px-3 py-2.5 rounded-lg text-sm text-white bg-white/10 border border-white/20 focus:outline-none focus:border-[#14b8a6] focus:ring-2 focus:ring-[#14b8a6]/30 transition-all min-h-[40px]">
-                    <button onclick="addDiscountType()" class="btn-modern px-4 py-2.5 bg-white/[0.07] text-[#14b8a6] rounded-lg text-xs sm:text-sm font-bold border border-white/20 hover:bg-[#14b8a6]/15 hover:border-[#14b8a6]/40 hover:text-white transition-all backdrop-blur-sm min-h-[40px] flex items-center justify-center gap-2">
+                    <input type="text" id="newDiscountTypeInput" placeholder="أدخل نوع خصم جديد..."
+                        class="flex-1 px-3 py-2.5 rounded-lg text-sm text-white bg-white/10 border border-white/20 focus:outline-none focus:border-[#14b8a6] focus:ring-2 focus:ring-[#14b8a6]/30 transition-all min-h-[40px]">
+                    <button onclick="addDiscountType()"
+                        class="btn-modern px-4 py-2.5 bg-white/[0.07] text-[#14b8a6] rounded-lg text-xs sm:text-sm font-bold border border-white/20 hover:bg-[#14b8a6]/15 hover:border-[#14b8a6]/40 hover:text-white transition-all backdrop-blur-sm min-h-[40px] flex items-center justify-center gap-2">
                         <span>➕</span>
                         <span class="action-btn-label-long hidden sm:inline">إضافة</span>
                     </button>
                 </div>
             </div>
-            
+
             <!-- Types List -->
             <div class="mb-5">
                 <h3 class="text-base sm:text-lg font-bold text-white mb-4 flex items-center gap-2">
@@ -1021,10 +1613,11 @@
                     <!-- Discount types will be populated here -->
                 </div>
             </div>
-            
+
             <!-- Footer Buttons -->
             <div class="mt-4 sm:mt-5 pt-4 border-t border-white/10 flex justify-end gap-2">
-                <button onclick="closeManageDiscountTypesModal()" class="btn-modern px-4 py-2 bg-white/10 text-gray-200 rounded-lg text-xs sm:text-sm font-bold border border-white/20 hover:bg-white/15 hover:border-gray-300/50 hover:text-white transition-all backdrop-blur-sm min-h-[40px]">
+                <button onclick="closeManageDiscountTypesModal()"
+                    class="btn-modern px-4 py-2 bg-white/10 text-gray-200 rounded-lg text-xs sm:text-sm font-bold border border-white/20 hover:bg-white/15 hover:border-gray-300/50 hover:text-white transition-all backdrop-blur-sm min-h-[40px]">
                     إغلاق
                 </button>
             </div>
@@ -1033,16 +1626,16 @@
 
     <!-- تقليل ضجيج console في الإنتاج (إبقاء console.error للأخطاء الحقيقية) -->
     <script>
-      (function() {
-        if (typeof window === 'undefined') return;
-        var h = window.location.hostname || '';
-        if (h === 'localhost' || h === '127.0.0.1' || h === '') return;
-        var noop = function() {};
-        if (typeof console !== 'undefined') {
-          if (console.log) console.log = noop;
-          if (console.warn) console.warn = noop;
-        }
-      })();
+        (function () {
+            if (typeof window === 'undefined') return;
+            var h = window.location.hostname || '';
+            if (h === 'localhost' || h === '127.0.0.1' || h === '') return;
+            var noop = function () { };
+            if (typeof console !== 'undefined') {
+                if (console.log) console.log = noop;
+                if (console.warn) console.warn = noop;
+            }
+        })();
     </script>
     <!-- البنود الـ 55 للتعليمات/أنواع الخصم (قبل أي سكربت يحتاجها) -->
     <script defer src="src/discount-clauses-55.js"></script>
