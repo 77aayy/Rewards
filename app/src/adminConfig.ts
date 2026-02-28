@@ -8,7 +8,7 @@ import { FIREBASE_CONFIG as FALLBACK_FIREBASE } from './firebase-config.generate
 
 export const ADMIN_SECRET_KEY = (import.meta.env.VITE_ADMIN_SECRET_KEY || 'ayman5255').trim();
 export const ADMIN_ALLOWED_EMAILS: string[] = (() => {
-  const v = (import.meta.env.VITE_ADMIN_ALLOWED_EMAILS || '').trim();
+  const v = (import.meta.env.VITE_ADMIN_ALLOWED_EMAILS || '77aayy@gmail.com').trim();
   return v ? v.split(',').map((e) => e.trim().toLowerCase()).filter(Boolean) : [];
 })();
 export const ADMIN_AUTH_SESSION_KEY = 'adora_admin_auth_session';
